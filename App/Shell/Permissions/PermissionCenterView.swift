@@ -1,9 +1,11 @@
 import SwiftUI
+import Carbon
 
 /// Only explicit actions request access. Reading status never opens system dialogs.
 struct PermissionCenterView: View {
     @Bindable var center: PermissionCenter
     @State private var input = InputSourceManager()
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
@@ -15,7 +17,7 @@ struct PermissionCenterView: View {
                         Spacer()
                         Chip(text: item.statusText, tone: item.status == .granted ? .ok : .neutral)
                     }
-                    Text(item.purpose).font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(.secondary)
+                    Text(item.purpose).font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(Tokens.palette(scheme).secondary)
                     if item.status != .granted {
                         HStack {
                             Button(center.requesting == item.kind ? "正在请求…" : "授权\(item.title)") {
@@ -31,7 +33,7 @@ struct PermissionCenterView: View {
             }
             if let message = center.message { Notice(text: message, tone: .warn) }
             Text("普通打字无需这些权限。授权或撤销后会自动更新状态；截图需重新触发。")
-                .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(.secondary)
+                .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(Tokens.palette(scheme).secondary)
             U4SectionTitle(title: "输入法启用与检查")
             InputSourceSettingsView(input: input)
         }.onAppear { center.refresh() }
@@ -43,6 +45,7 @@ struct InputSourceSettingsView: View {
     @State private var trial = ""
     @State private var busy = false
     @State private var inputTask: Task<Void, Never>?
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         U4Card {
@@ -53,13 +56,13 @@ struct InputSourceSettingsView: View {
                      tone: input.snapshot.addedIDs.isEmpty ? .neutral : .ok)
             }
             Text("系统设置 → 键盘 → 输入法 → 编辑 → ＋ → 简体中文，添加 RockType Pinyin 或 RockType Shuangpin。")
-                .font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(.secondary)
+                .font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(Tokens.palette(scheme).secondary)
             HStack {
                 Button("打开键盘设置") { run { await input.openKeyboardSettings() } }
                     .buttonStyle(DesignButtonStyle()).disabled(busy)
                 Button("刷新状态") { input.refresh() }.buttonStyle(DesignButtonStyle(variant: .ghost))
             }
-            if let message = input.registrationMessage { Notice(text: message, tone: .warn) }
+            if let message = input.settingsMessage { Notice(text: message, tone: .warn) }
             U4Rule()
             Notice(text: input.message, tone: input.verified ? .ok : .neutral)
             if input.isVerifying {
@@ -76,9 +79,10 @@ struct InputSourceSettingsView: View {
                 }
             }
             Text("验证只读取按键计数；试打文字不保存、不发送。")
-                .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(.secondary)
+                .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(Tokens.palette(scheme).secondary)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in input.refresh() }
+        .onReceive(DistributedNotificationCenter.default().publisher(for: Notification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String))) { _ in input.refresh() }
         .onDisappear { inputTask?.cancel(); inputTask = nil; input.stop(); busy = false; trial = "" }
     }
 

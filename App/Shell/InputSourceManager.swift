@@ -48,12 +48,9 @@ final class InputSourceManager {
     private(set) var verified = false
     private(set) var isVerifying = false
     private(set) var message = "添加输入源后，切换到 RockType，再开始试打验证。"
-    private(set) var registrationMessage: String?
-    private(set) var isRegistering = false
+    private(set) var settingsMessage: String?
     private(set) var isOpeningSettings = false
-    private var registrationAttempted = false
-    private var registeredThisSession = false
-    private let enrollment: InputSourceEnrollment
+    private let openSettings: () async -> Bool
     private var evidence: InputVerificationEvidence?
     private var attempt = UUID()
     private let generation: () async throws -> TranslationServiceClient.InputGeneration
@@ -62,8 +59,8 @@ final class InputSourceManager {
 
     init(client: TranslationServiceClient = TranslationServiceClient(),
          readSources: @escaping () -> InputSourceSnapshot = { .current() },
-         enrollment: InputSourceEnrollment = .system) {
-        self.enrollment = enrollment
+         openSettings: @escaping () async -> Bool = InputSourceManager.openSystemKeyboardSettings) {
+        self.openSettings = openSettings
         self.generation = { try await client.controllerInputGeneration() }
         self.readSources = readSources
         self.disconnect = { client.invalidate() }
@@ -72,9 +69,9 @@ final class InputSourceManager {
 
     init(readSources: @escaping () -> InputSourceSnapshot,
          disconnect: @escaping () -> Void = {},
-         enrollment: InputSourceEnrollment = .system,
+         openSettings: @escaping () async -> Bool = InputSourceManager.openSystemKeyboardSettings,
          generation: @escaping () async throws -> TranslationServiceClient.InputGeneration) {
-        self.enrollment = enrollment
+        self.openSettings = openSettings
         self.generation = generation
         self.readSources = readSources
         self.disconnect = disconnect
@@ -151,88 +148,18 @@ final class InputSourceManager {
         disconnect()
     }
 
-    /// Called only while the input-source step is visible. Registration does not add/select a source.
-    func prepareRegistration() async {
-        guard !isRegistering else { return }
-        if enrollment.isRegistered() { registrationMessage = nil; return }
-        isRegistering = true
-        defer { isRegistering = false }
-        if !registrationAttempted {
-            registrationAttempted = true
-            switch enrollment.register() {
-            case .registered:
-                registeredThisSession = true
-            case .notInstalled:
-                registrationMessage = "未找到 RockType 输入法安装文件，请先完成安装后重新打开主 App。"
-                return
-            case .failed:
-                registrationMessage = "输入源注册失败，请重新安装后打开主 App。"
-                return
-            }
-        }
-        guard registeredThisSession else { return }
-        registrationMessage = "正在向当前登录会话注册 RockType 输入源…"
-        for _ in 0..<20 {
-            guard !Task.isCancelled else { return }
-            if enrollment.isRegistered() {
-                registrationMessage = nil
-                refresh()
-                return
-            }
-            do { try await enrollment.pause() } catch { return }
-        }
-        registrationMessage = "系统尚未识别 RockType 输入源，请注销并重新登录后重试。"
-    }
-
+    /// Installation owns registration. Settings only opens the system pane on request.
     func openKeyboardSettings() async {
-        guard !isOpeningSettings, !isRegistering else { return }
+        guard !isOpeningSettings else { return }
         isOpeningSettings = true
         defer { isOpeningSettings = false }
-        if await enrollment.openSettings(registeredThisSession) {
-            registeredThisSession = false
-        } else {
-            registrationMessage = "无法刷新或打开键盘设置，请手动退出系统设置，再打开系统设置 → 键盘 → 输入法 → 编辑… → ＋ → 简体中文 → RockType。"
-        }
+        let opened = await openSettings()
+        guard !Task.isCancelled else { return }
+        settingsMessage = opened ? nil : "无法打开键盘设置，请手动前往系统设置 → 键盘 → 输入法。"
     }
-}
 
-/// Narrow system boundary keeps registration, propagation and stale Settings handling testable.
-@MainActor
-struct InputSourceEnrollment {
-    enum Registration { case registered, notInstalled, failed }
-    var isRegistered: () -> Bool
-    var register: () -> Registration
-    var pause: () async throws -> Void
-    var openSettings: (_ registeredThisSession: Bool) async -> Bool
-
-    static var system: Self {
-        Self(isRegistered: {
-            let filter = [kTISPropertyBundleID as String: Identifiers.inputMethodBundleID] as CFDictionary
-            let sources = TISCreateInputSourceList(filter, true).takeRetainedValue() as? [TISInputSource] ?? []
-            let ids = Set(sources.compactMap { InputSourceSnapshot.string($0, kTISPropertyInputSourceID) })
-            return InputSourceSnapshot.supportedIDs.isSubset(of: ids)
-        }, register: {
-            let locations = [FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Input Methods"),
-                             URL(fileURLWithPath: "/Library/Input Methods", isDirectory: true)]
-            guard let bundle = locations.map({ $0.appendingPathComponent("RockType Input.app", isDirectory: true) })
-                .first(where: { Bundle(url: $0)?.bundleIdentifier == Identifiers.inputMethodBundleID }) else { return .notInstalled }
-            return TISRegisterInputSource(bundle as CFURL) == noErr ? .registered : .failed
-        }, pause: { try await Task.sleep(for: .milliseconds(100)) }, openSettings: { registeredThisSession in
-            let url = URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")!
-            if registeredThisSession {
-                let apps = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.systempreferences")
-                // System Settings snapshots the addable list at launch. Never force-quit it.
-                for app in apps where !app.isTerminated {
-                    guard app.terminate() else { return false }
-                }
-                for _ in 0..<20 {
-                    if apps.allSatisfy(\.isTerminated) { break }
-                    do { try await Task.sleep(for: .milliseconds(100)) } catch { return false }
-                }
-                guard apps.allSatisfy(\.isTerminated) else { return false }
-            }
-            guard !Task.isCancelled else { return false }
-            return NSWorkspace.shared.open(url)
-        })
+    static func openSystemKeyboardSettings() async -> Bool {
+        guard !Task.isCancelled else { return false }
+        return NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")!)
     }
 }
