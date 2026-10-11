@@ -7,6 +7,7 @@
 
 import UserNotifications
 import AppKit
+import Carbon
 
 @MainActor
 final class SquirrelApplicationDelegate: NSObject, NSApplicationDelegate {
@@ -17,6 +18,7 @@ final class SquirrelApplicationDelegate: NSObject, NSApplicationDelegate {
   var panel: SquirrelPanel?
   var enableNotifications = false
   private let voiceServer = RoarkTVoiceServer()
+  private weak var activeInputController: SquirrelInputController?
 
   func applicationWillFinishLaunching(_ notification: Notification) {
     panel = SquirrelPanel(position: .zero)
@@ -27,6 +29,7 @@ final class SquirrelApplicationDelegate: NSObject, NSApplicationDelegate {
   func applicationWillTerminate(_ notification: Notification) {
     // swiftlint:disable:next notification_center_detachment
     NotificationCenter.default.removeObserver(self)
+    DistributedNotificationCenter.default().removeObserver(self)
     panel?.hide()
     RoarkTInputSettings.shared.stop()
   }
@@ -178,11 +181,33 @@ final class SquirrelApplicationDelegate: NSObject, NSApplicationDelegate {
       MainActor.assumeIsolated { self?.shutdownRime() }
     }
 
+    // A switch-away notification must arrive even while the IME process is inactive.
+    DistributedNotificationCenter.default().addObserver(
+      self, selector: #selector(inputSourceChanged(_:)),
+      name: .init(kTISNotifySelectedKeyboardInputSourceChanged as String),
+      object: nil, suspensionBehavior: .deliverImmediately)
   }
 
-  func inputControllerDidActivate(_ controller: SquirrelInputController) { voiceServer.activate(controller) }
+  @objc nonisolated private func inputSourceChanged(_: Notification) {
+    DispatchQueue.main.async { [weak self] in
+      guard let self, let sourceID = SquirrelInstaller().currentInputSourceID(),
+            !SquirrelInstaller.InputMode.allCases.contains(where: { $0.rawValue == sourceID }) else { return }
+      // TISSelectInputSource can skip IMK deactivation on macOS 26. Use the active
+      // controller (the panel may still reference an older client) for all cleanup.
+      self.activeInputController?.deactivateServer(nil)
+      self.panel?.hide()
+    }
+  }
+
+  func inputControllerDidActivate(_ controller: SquirrelInputController) {
+    activeInputController = controller
+    voiceServer.activate(controller)
+  }
   func inputControllerDidHandleKeyDown(_: SquirrelInputController) { voiceServer.handledInput() }
-  func inputControllerDidDeactivate(_ controller: SquirrelInputController) { voiceServer.deactivate(controller) }
+  func inputControllerDidDeactivate(_ controller: SquirrelInputController) {
+    if activeInputController === controller { activeInputController = nil }
+    voiceServer.deactivate(controller)
+  }
 
   func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
     print("Squirrel is quitting.")

@@ -157,6 +157,44 @@ struct PanelChecks {
       candidate.position = caret
       candidate.hide()
     }
+    // Exercise real drawing and hit testing across page boundaries, including
+    // disabling paging while the same view previously had both arrows.
+    let pagingConfig = SquirrelConfig()
+    precondition(pagingConfig.load(yaml: "style:\n  show_paging: true\n"))
+    let pagingPanel = SquirrelPanel(position: caret)
+    pagingPanel.load(config: pagingConfig, forDarkMode: false)
+    pagingPanel.load(config: pagingConfig, forDarkMode: true)
+    func drawPage(_ page: Int, last: Bool) throws -> SquirrelView {
+      pagingPanel.update(preedit: "", selRange: .empty, caretPos: 0,
+        candidates: ["测试", "候选"], comments: [], labels: [], highlighted: 0,
+        page: page, lastPage: last, update: true)
+      try render(pagingPanel, "paging-check")
+      return pagingPanel.contentView!.subviews.compactMap { $0 as? SquirrelView }.first!
+    }
+    func arrowPoint(in view: SquirrelView, up: Bool) -> NSPoint? {
+      for y in stride(from: 0.0, through: view.bounds.height, by: 1) {
+        for x in stride(from: 0.0, through: view.bounds.width, by: 1) {
+          let point = NSPoint(x: x, y: y)
+          if view.click(at: point).2 == up { return point }
+        }
+      }
+      return nil
+    }
+    let pagingView = try drawPage(1, last: false)
+    let upPoint = arrowPoint(in: pagingView, up: true)!
+    let downPoint = arrowPoint(in: pagingView, up: false)!
+    _ = try drawPage(0, last: false)
+    precondition(pagingView.click(at: upPoint).2 == nil, "first page removes the old up hit area")
+    _ = try drawPage(1, last: true)
+    precondition(pagingView.click(at: downPoint).2 == nil, "last page removes the old down hit area")
+    _ = try drawPage(1, last: false)
+    precondition(pagingConfig.load(yaml: "style:\n  show_paging: false\n"))
+    pagingPanel.load(config: pagingConfig, forDarkMode: false)
+    pagingPanel.load(config: pagingConfig, forDarkMode: true)
+    _ = try drawPage(1, last: false)
+    precondition(pagingView.click(at: upPoint).2 == nil && pagingView.click(at: downPoint).2 == nil,
+                 "disabled paging removes both old hit areas")
+    pagingPanel.hide()
     var forgotten = false
     let learning = RoarkTCandidateLearningMenu.make(candidate: "测试", canForget: true) { forgotten = true }
     let item = learning.items[0]
