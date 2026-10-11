@@ -90,9 +90,16 @@ public struct AIClient: Sendable {
         }
     }
 
+    /// HTTPS everywhere; plain HTTP only for a local relay on the loopback interface.
+    static func isAllowedEndpoint(_ url: URLComponents) -> Bool {
+        guard let host = url.host?.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "[]")), !host.isEmpty else { return false }
+        if url.scheme == "https" { return true }
+        return url.scheme == "http" && ["127.0.0.1", "::1", "localhost"].contains(host)
+    }
+
     private func makeRequest(text: String, apiKey: String, model: String?, imageDataURL: String?, stream: Bool) throws -> URLRequest {
         guard timeout.isFinite, timeout > 0,
-              var url = URLComponents(string: connection.baseURL), url.scheme == "https", url.host != nil,
+              var url = URLComponents(string: connection.baseURL), Self.isAllowedEndpoint(url),
               url.user == nil, url.password == nil, url.query == nil, url.fragment == nil,
               !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               !apiKey.contains("\r"), !apiKey.contains("\n") else { throw AIClientError.configuration }
