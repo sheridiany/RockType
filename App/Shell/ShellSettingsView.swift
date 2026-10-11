@@ -112,7 +112,11 @@ struct ShellSettingsView: View {
                 }))
                 Text(login.message).font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(p.secondary)
                 if login.requiresApproval { Button("打开登录项设置") { login.openSystemSettings() } }
+                toggle("在菜单栏显示 RockType", Binding(get: { settings.general.menuBarIcon ?? false },
+                                                        set: { settings.general.menuBarIcon = $0 }))
                 toggle("菜单栏显示北京时间", $settings.general.showBeijingTime)
+                Text("不显示时，可从输入法菜单的“设置…”或启动台打开 RockType。")
+                    .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(p.secondary)
                 Picker("外观", selection: $settings.general.appearance) {
                     Text("跟随系统").tag(GeneralSettings.Appearance.system)
                     Text("浅色").tag(GeneralSettings.Appearance.light)
