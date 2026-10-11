@@ -15,3 +15,4 @@
 | [SPEC-009 分发](009-m7-distribution.md) | M7 | FR-F3、F4、NFR-9 | Ready |
 | [SPEC-010 原生能力迁移](010-platform-port.md) | M2/M3 前置 | FR-C1、D3、E2、E6–E8 底层 | Ready |
 | [SPEC-011 词库优化](011-dictionary.md) | 打磨 P1 | FR-A1、A3、A5 | Ready |
+| [SPEC-014 深度打磨](014-deep-polish.md) | 打磨 P2 | 截图、AI、OCR、界面、架构 | InProgress |
