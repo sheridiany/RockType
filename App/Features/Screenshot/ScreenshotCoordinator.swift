@@ -96,9 +96,7 @@ import os
     }
     private func show(_ frames: [ScreenCapture.Frame]) {
         for frame in frames {
-            let panel = CapturePanel(contentRect: frame.rect, styleMask: [.borderless], backing: .buffered, defer: false)
-            panel.level = .screenSaver; panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-            panel.isReleasedWhenClosed = false
+            let panel = CapturePanel(captureRect: frame.rect)
             let view = CaptureCanvas(frame: CGRect(origin: .zero, size: frame.rect.size), image: frame.image, windows: frame.windows)
             let displayID = frame.displayID
             canvases[displayID] = view
@@ -233,7 +231,19 @@ import os
     }
 
 }
-private final class CapturePanel: NSPanel {
+final class CapturePanel: NSPanel {
+    /// A screenshot is shown from a background menu-bar app; it must not disappear on deactivation.
+    convenience init(captureRect: CGRect) {
+        self.init(contentRect: captureRect, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        level = .screenSaver
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        isReleasedWhenClosed = false
+        hidesOnDeactivate = false
+        isOpaque = true
+        backgroundColor = .black
+        alphaValue = 1
+        hasShadow = false
+    }
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 }

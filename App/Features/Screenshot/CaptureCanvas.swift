@@ -80,6 +80,15 @@ import os
         }
         field.removeFromSuperview(); textField = nil; updateAnnotations()
     }
+    /// AppKit can replace a layer-backed view's root when it is attached/reconfigured.
+    /// Reattach our persistent layers every time; never rely on the root created during init.
+    override func makeBackingLayer() -> CALayer {
+        let backing = super.makeBackingLayer()
+        for item in [frozenLayer, maskLayer, borderLayer, handlesLayer, labelLayer] {
+            backing.addSublayer(item)
+        }
+        return backing
+    }
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
     init(frame: CGRect, image: CGImage, windows: [CGRect] = []) {
@@ -87,7 +96,6 @@ import os
         wantsLayer = true
         frozenLayer.frame = bounds; frozenLayer.contents = image
         frozenLayer.contentsGravity = .resize
-        layer?.addSublayer(frozenLayer)
         annotationView = CaptureAnnotationView(frame: bounds, image: image)
         annotationView.wantsLayer = true
         annotationView.layer?.mask = annotationClip
@@ -99,7 +107,6 @@ import os
         handlesLayer.fillColor = NSColor.white.cgColor
         labelLayer.fontSize = 13; labelLayer.foregroundColor = NSColor.white.cgColor
         labelLayer.backgroundColor = NSColor.black.withAlphaComponent(0.7).cgColor
-        for overlay in [maskLayer, borderLayer, handlesLayer, labelLayer] { layer?.addSublayer(overlay) }
         updateSelectionLayers()
         setAccessibilityLabel("截图：拖动框选，单击选窗口，方向键微调，↩ 或 ⌘C 复制，⇧↩ 保存并复制路径，R 恢复上次选区，P 贴图，Esc 取消")
     }
@@ -109,6 +116,10 @@ import os
         displayLink?.invalidate(); displayLink = nil
         labelLayer.contentsScale = window?.backingScaleFactor ?? 2
     }
+    override func layout() {
+        super.layout()
+        updateSelectionLayers()
+    }
     private func updateAnnotations() {
         annotationView.items = history.items + (draft.map { [$0] } ?? [])
         annotationView.needsDisplay = true
@@ -117,6 +128,11 @@ import os
         guard annotationView != nil else { return }
         CATransaction.begin(); CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
+        frozenLayer.frame = bounds
+        annotationView.frame = bounds
+        // Give the compositor real drawable bounds; render(in:) alone can still paint
+        // paths outside a zero-sized layer and therefore misses this geometry error.
+        for shape in [maskLayer, borderLayer, handlesLayer] { shape.frame = bounds }
         let visible = selection.isEmpty ? (hoveredWindow ?? .zero) : selection
         let mask = CGMutablePath(); mask.addRect(bounds)
         if !visible.isEmpty { mask.addRect(visible) }
@@ -274,11 +290,13 @@ import os
     let image: CGImage
     var items: [ScreenshotAnnotation] = []
     override var isFlipped: Bool { true }
+    override var isOpaque: Bool { false }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
     init(frame: CGRect, image: CGImage) { self.image = image; super.init(frame: frame) }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override func draw(_ dirtyRect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
+        context.clear(dirtyRect)
         for item in items { ScreenshotCompositor.draw(item, image: image, size: bounds.size, context: context) }
     }
 }
