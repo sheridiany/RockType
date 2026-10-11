@@ -1,8 +1,8 @@
-// Input-method-owned insertion gate. See LICENSE.translation.txt.
+// Shared MIT insertion gate. See LICENSE.md.
 import Foundation
 
-enum VoiceInsertionPolicy {
-  static func allowsAutomaticInsertion(text: String, applicationID: String?) -> Bool {
+public enum VoiceInsertionPolicy {
+  public static func allowsAutomaticInsertion(text: String, applicationID: String?) -> Bool {
     guard let applicationID, !applicationID.isEmpty, !text.isEmpty,
           text.rangeOfCharacter(from: .controlCharacters) == nil,
           text.rangeOfCharacter(from: .newlines) == nil else { return false }

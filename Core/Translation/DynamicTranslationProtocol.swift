@@ -68,7 +68,7 @@ public enum CandidateTranslationFailure: Int, Error, CustomNSError, LocalizedErr
     }
 }
 
-// Service-side wire validation. Only protocol declarations cross the process boundary.
+// Shared MIT wire validation, compiled from this file by the service and input method.
 public struct CandidateTranslationRequest: Equatable, Sendable {
     public enum Scope: String, Sendable { case whole, segment }
     public enum ValidationError: Error { case unsupportedVersion, invalidRequest }

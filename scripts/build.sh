@@ -27,8 +27,8 @@ codesign --force --options runtime --timestamp=none --sign "$identity" "$app"
 codesign --verify --strict --deep "$app"
 print "Built $app (signed with $identity)"
 
-# Build the GPL input method as a separate process. Only protocol headers cross
-# the boundary; no input method code is linked into the MIT products.
+# Build the GPL input method separately, compiling shared MIT value types from Core.
+# No input method code is linked into the MIT products.
 for dependency in librime plum Sparkle; do
   [[ -f "$repo_dir/InputMethod/$dependency/.git" ]] || {
     print -u2 'Initialize dependencies with git submodule update --init --recursive.'; exit 1

@@ -77,7 +77,7 @@
 - 两个输入源独立声明，显示为“RoarkT（全拼）”“RoarkT（小鹤双拼）”，`setValue(_:forTag:client:)` 与新建 Rime session 分别选用 `roarkt` / `roarkt_flypy`。Xcode build phase 从根 `Rime/` 打包 YAML/Lua 和语言模型到 SharedSupport。
 - 删除旧工厂数据备份/迁移、旧签名替换兼容分支、旧设置 helper 启动和产品跨进程 DistributedNotification 通知。设置菜单按主 App Bundle ID 查找，未安装时禁用。无麦克风用途声明/entitlement，不主动申请通知权限。
 - 翻译客户端经 header search path 引用 `Shared/XPCProtocol` 的共享头，无头文件副本，只调用 v2 `translateCandidate` / `cancel` / `recordControllerInput`。语音端点通过 `registerDictationEndpoint` 注册，导出 `RoarkTDictationXPCProtocol` 的 capture/commit/cancel，按主 App Team ID + identifier 鉴权；翻译服务连接也校验服务签名。所有 ticket/焦点状态访问在主队列，安全输入/有预编辑内容时拒绝获取上下文，按一次性 ticket、调用方连接、前台应用、选择区、activation、deadline 约束填入，拒绝控制字符。语音录音/worker/UI 仍属 M5。
-- 本地请求值类型、ticket 和填入策略在输入法独立编译；原 MIT 授权保留于 `InputMethod/LICENSE.translation.txt`。MIT 产品不 import/link 输入法代码。
+- 按 Claude 验收修订，输入法与服务直接编译同一份 `Core/Translation/DynamicTranslationProtocol.swift` 和 `Core/Identifiers.swift`，删除输入法副本；原项目 Core 的 ticket/填入策略迁到 `Core/Voice/`，输入法与 Core target 引用同一源码。原 MIT 授权保留于 `Core/Voice/LICENSE.md` 与 `InputMethod/LICENSE.translation.txt`。允许 MIT 源码编入 GPL 输入法，MIT 产品不反向 import/link 输入法代码。
 - `build.sh` 生成并签名主 App、服务、输入法和注册工具；`install-dev.sh` 安装到当前用户目录，加载指向本 worktree `dist/RoarkT.app` helper 的 LaunchAgent，然后注册/查询两输入源；`uninstall-dev.sh` 逆操作并保留 Rime 用户数据。安装不启用或选择输入源。TIS 无公开注销 API，移除 bundle 后系统缓存项可能需重新登录消失。
 
 | 检查 | 结果 | 证据 / 限制 |
@@ -95,6 +95,10 @@
 | 真实键盘、候选翻译、语音端点真实 XPC 往返、密码框、macOS 14 运行 | 待人工 / T4 验证 | 不自动选择输入源；编译、服务单测和 ticket 测试不能替代真实 IMK/语音填入验收。 |
 
 交接给 Claude：调整根测试脚本的词库误报（本任务没有该文件所有权）并复跑；执行 T4。当前保留 `~/Library/Input Methods/RoarkT Input.app` 与 `~/Library/LaunchAgents/com.roarkist.roarkt.translation.plist` 供验收，输入源未启用/选中，Rime 用户数据未修改。LaunchAgent 指向此 worktree 的 `dist/`，合并后需从目标 checkout 重新构建/安装；在此之前不要删除此 worktree。
+
+#### Claude 合并前修订
+
+1. **共享源码：完成（待验收）**。删除输入法翻译校验副本；Xcode 直接引用 Core 的翻译校验、标识符、语音 ticket 与填入策略；ticket 检查入口同步路径。`scripts/build.sh` 构建及签名通过；`swift build`、`InputMethod/scripts/test-ticket.sh` 通过；`scripts/test.sh` 中 38 项测试与 Rime 部署通过，旧词库守卫失败由修订 2 处理。
 
 ### T4 端到端验收（Claude）
 

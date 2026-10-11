@@ -1,4 +1,4 @@
-// Input-method-owned ticket state. See LICENSE.translation.txt.
+// Shared MIT ticket state. See LICENSE.md.
 import Foundation
 
 /// Single-use permission to insert into one unchanged native input context.
