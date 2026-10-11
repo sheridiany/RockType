@@ -12,8 +12,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let connection = ShellConnectionModel()
     private let panel = MenuBarPanelController()
     private let diagnostics = DiagnosticExportController()
+    private let permissions = PermissionCenter()
+    private lazy var hotkeys = HotkeyCenter(
+        read: { [unowned self] in self.store.settings.shortcuts },
+        write: { [unowned self] in self.store.settings.shortcuts = $0 },
+        showSettings: { [weak self] in self?.showSettings() })
+    private lazy var onboarding = OnboardingWindowController(
+        store: store,
+        permissions: { [unowned self] in AnyView(PermissionCenterView(center: self.permissions)) },
+        aiConnection: { [unowned self] in
+            AnyView(ShellConnectionView(model: self.connection,
+                settings: Binding(get: { self.store.settings.ai }, set: { self.store.settings.ai = $0 })))
+        },
+        showSettings: { [weak self] in self?.showSettings() })
     private lazy var settingsWindow: SettingsWindowController = {
-        let window = SettingsWindowController(store: store, login: login, connection: connection)
+        let window = SettingsWindowController(store: store, login: login, connection: connection,
+            sections: ShellSettingsSections(permissions: permissions, hotkeys: hotkeys,
+                showOnboarding: { [weak self] in self?.onboarding.rerun() }))
         window.exportDiagnostics = { [weak self] in self?.diagnostics.export() }
         return window
     }()
@@ -41,17 +56,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 status: store.persistenceError == nil ? .succeeded : .failed,
                 failure: store.persistenceError == nil ? nil : .storage))
         }
-        if CommandLine.arguments.contains("--gallery") { gallery.show() }
-        if CommandLine.arguments.contains("--show-settings") { showSettings() }
+        if CommandLine.arguments.contains("--gallery") {
+            gallery.show()
+        } else {
+            permissions.start()
+            hotkeys.start()
+        }
+        onboarding.applicationDidFinishLaunching()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        showSettings()
-        return true
+        onboarding.applicationShouldHandleReopen()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         connection.cancel()
+        hotkeys.stop()
+        permissions.stop()
         clock.stop()
         panel.stop()
         store.flush()

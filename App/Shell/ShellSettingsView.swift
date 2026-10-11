@@ -6,7 +6,7 @@ struct ShellSettingsView: View {
     @Binding var settings: AppSettings
     let login: LoginItemController
     let connection: ShellConnectionModel
-    let sections: any ShellSettingsSections
+    let sections: ShellSettingsSections
     let persistenceMessage: String
     let exportDiagnostics: () -> Void
     @State var section: SettingsSection = .general

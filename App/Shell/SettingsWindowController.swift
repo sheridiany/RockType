@@ -8,13 +8,15 @@ final class SettingsWindowController {
     private let store: SettingsStore
     private let login: LoginItemController
     private let connection: ShellConnectionModel
-    var sections: any ShellSettingsSections = PendingShellSettingsSections()
+    private let sections: ShellSettingsSections
     var exportDiagnostics: () -> Void = {}
 
-    init(store: SettingsStore, login: LoginItemController, connection: ShellConnectionModel) {
+    init(store: SettingsStore, login: LoginItemController, connection: ShellConnectionModel,
+         sections: ShellSettingsSections) {
         self.store = store
         self.login = login
         self.connection = connection
+        self.sections = sections
     }
 
     func show() {
@@ -43,7 +45,7 @@ private struct SettingsRoot: View {
     @Bindable var store: SettingsStore
     let login: LoginItemController
     let connection: ShellConnectionModel
-    let sections: any ShellSettingsSections
+    let sections: ShellSettingsSections
     let export: () -> Void
     private var persistenceMessage: String {
         if let error = store.persistenceError { return error }
