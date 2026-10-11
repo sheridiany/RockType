@@ -1,5 +1,6 @@
 """Synthetic fixtures only. Invoked by the SPM test target and scripts/test.sh."""
 import fcntl
+from collections import Counter
 import importlib.util
 import json
 import os
@@ -18,6 +19,8 @@ spec = importlib.util.spec_from_file_location('personal', SCRIPTS / 'build-perso
 personal = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(personal)
 from personal_common import Refusal, digest
+from candidate_quality import NUMBER, chinese_candidates
+from english_prose import EnglishCounts, english_occurrences
 
 
 def invoke(script, args, env=None):
@@ -148,6 +151,66 @@ Tildebird
         words = {line.split('\t')[0] for line in generated.splitlines()}
         self.assertEqual(words, {'Herdr', 'Magpie', 'RockType', 'MLX', 'LLM'})
         self.assertNotIn('Herdr', result.stdout + result.stderr)
+
+    def test_english_case_merging_and_sentence_initials(self):
+        english = EnglishCounts()
+        prose = ('Matchers work. ' * 12 + 'the matchers work. ' * 3 +
+                 'the Assertions work. ' * 4 + 'the assertions work. ' * 2 +
+                 'Workflow works. ' * 8 + 'the workflow works. ' * 3 +
+                 'the ehr works. ' * 2 + 'the EHR works. ' * 5 +
+                 '# Novelties\n' * 4 + 'the Herdr works. ' * 3)
+        for word, initial in english_occurrences(prose):
+            english.add(word, initial)
+        merged = english.merged()
+        for word, count in [('matchers', 15), ('Assertions', 6), ('workflow', 11),
+                            ('EHR', 7), ('novelties', 4), ('Herdr', 3)]:
+            self.assertEqual(merged[word], count)
+        self.assertEqual(len({word.casefold() for word in merged}), len(merged))
+        self.assertNotIn('Matchers', merged)
+        self.assertNotIn('Workflow', merged)
+
+    def test_chinese_numbers_composition_and_context_threshold(self):
+        numerals = ['第五十七', '百五十一', '一十四', '第一百零四', '第十二章',
+                    '三百万人', '二十分钟', '两千多项', '上十']
+        for word in numerals:
+            self.assertIsNotNone(NUMBER.fullmatch(word))
+        known = {'平台', '发行', '类型', '测试', '星', '澜', '英伟达', '超伟达'}
+        counts = Counter(dict.fromkeys(numerals + ['和平台', '开发行', '类型化',
+                         '平台类型测试', '星澜', '伟达'], 10))
+        contexts = Counter({('伟达', '英', ''): 8, ('伟达', '', ''): 2})
+        self.assertEqual(chinese_candidates(counts, contexts, known, 3), {'星澜': 10})
+        # 70% containment leaves real standalone usage; exactly 80% removes it.
+        contexts = Counter({('伟达', '英', ''): 7, ('伟达', '', ''): 3})
+        self.assertIn('伟达', chinese_candidates(counts, contexts, known, 3))
+        # Unrelated parents must not be summed into a fictitious 80% parent.
+        contexts = Counter({('伟达', '英', ''): 4, ('伟达', '超', ''): 4, ('伟达', '', ''): 2})
+        self.assertIn('伟达', chinese_candidates(counts, contexts, known, 3))
+        # A longer new candidate, not only a known dictionary word, also counts.
+        counts['星澜计划'] = 8
+        contexts = Counter({('星澜', '', '计划'): 8, ('星澜', '', ''): 2})
+        result = chinese_candidates(counts, contexts, known, 3)
+        self.assertNotIn('星澜', result)
+        self.assertIn('星澜计划', result)
+
+    def test_quality_filters_in_generated_dictionaries(self):
+        self.source.joinpath('note.md').write_text(
+            ('第五十七 第十二章 第一百零四 和平台 类型化\n') * 4 +
+            'Matchers work. ' * 8 + 'the matchers work. ' * 3 +
+            'the EHR works. ' * 5 + 'the ehr works. ' * 3)
+        self.source.joinpath('code.swift').unlink()
+        with (self.dicts / 'roarkt_zh.dict.yaml').open('a') as stream:
+            stream.write('平台\tping tai\n类型\tlei xing\n')
+        result = invoke('build-personal-dict.py', self.args + ['--apply', '--offline'])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        english = (self.target / 'roarkt_personal_en.dict.yaml').read_text().split('...\n')[1]
+        rows = {fields[0]: int(fields[2]) for line in english.splitlines() if (fields := line.split('\t'))}
+        self.assertEqual(rows['matchers'], 11)
+        self.assertEqual(rows['EHR'], 8)
+        self.assertNotIn('Matchers', rows)
+        self.assertNotIn('ehr', rows)
+        chinese = (self.target / 'roarkt_personal.dict.yaml').read_text().split('...\n')[1]
+        for word in ['第五十七', '第十二章', '第一百零四', '和平台', '类型化']:
+            self.assertNotIn(word, chinese)
 
     def test_source_lexer(self):
         text = personal.swift_text('let CodeToken = 0\n/* outer /* inner */ tail */\nlet a = #"raw word"#\nlet b = """multi\nline"""\nlet c = "skip \\(SecretCode)"')
