@@ -8,6 +8,7 @@ struct ScreenshotAnnotation {
     var number = 1
     var color: NSColor = NSColor(Tokens.palette(.light).danger)
     var width: CGFloat = Tokens.Size.focusRing
+    var textMaxWidth: CGFloat?
     var rect: CGRect {
         guard let first = points.first, let last = points.last else { return .zero }
         return CGRect(x: min(first.x, last.x), y: min(first.y, last.y),
@@ -16,10 +17,31 @@ struct ScreenshotAnnotation {
 }
 struct ScreenshotAnnotationHistory {
     private(set) var items: [ScreenshotAnnotation] = []
-    private(set) var undone: [ScreenshotAnnotation] = []
-    mutating func append(_ item: ScreenshotAnnotation) { items.append(item); undone.removeAll() }
-    mutating func undo() { if let last = items.popLast() { undone.append(last) } }
-    mutating func redo() { if let last = undone.popLast() { items.append(last) } }
+    private var past: [[ScreenshotAnnotation]] = []
+    private var future: [[ScreenshotAnnotation]] = []
+    var canUndo: Bool { !past.isEmpty }
+    var canRedo: Bool { !future.isEmpty }
+    private mutating func checkpoint() { past.append(items); future.removeAll() }
+    mutating func append(_ item: ScreenshotAnnotation) {
+        if item.tool == .text && ScreenshotText.isEmpty(item.text) { return }
+        checkpoint(); items.append(item)
+    }
+    mutating func commitText(_ item: ScreenshotAnnotation, replacing index: Int?) {
+        guard let index else { append(item); return }
+        guard items.indices.contains(index) else { return }
+        if items[index].text == item.text && items[index].textMaxWidth == item.textMaxWidth { return }
+        checkpoint()
+        if ScreenshotText.isEmpty(item.text) { items.remove(at: index) }
+        else { items[index] = item }
+    }
+    mutating func undo() {
+        guard let previous = past.popLast() else { return }
+        future.append(items); items = previous
+    }
+    mutating func redo() {
+        guard let next = future.popLast() else { return }
+        past.append(items); items = next
+    }
 }
 
 enum ScreenshotCompositor {
@@ -60,7 +82,7 @@ enum ScreenshotCompositor {
             c.addLine(to: CGPoint(x: end.x - length * cos(angle + .pi / 6), y: end.y - length * sin(angle + .pi / 6)))
             c.strokePath()
         case .text:
-            (a.text as NSString).draw(at: start, withAttributes: [.font: NSFont.systemFont(ofSize: max(16, a.width * 6)), .foregroundColor: a.color])
+            ScreenshotTextLayout(annotation: a).draw(at: start)
         case .number:
             let r: CGFloat = max(12, a.width * 4)
             c.fillEllipse(in: CGRect(x: start.x - r, y: start.y - r, width: r * 2, height: r * 2))
