@@ -35,7 +35,7 @@
 
 | # | 任务 | 执行 | 状态 |
 | --- | --- | --- | --- |
-| P1 | Placement + ScreenGeometry + 单元测试（迁移 `placement_test.go` 的全部用例） | pi | 未开始 |
+| P1 | Placement + ScreenGeometry + 单元测试（迁移 `placement_test.go` 的全部用例） | pi | 完成（待验收） |
 | P2 | Clipboard（含复制回退）、SecureInput、Accessibility、SelectionReader | pi | 未开始 |
 | P3 | OCR（用 `../RoarkTools/internal/platform/testdata/ocr-sample.png` 复制到 `Tests/PlatformTests/Fixtures/` 做测试）、Keychain（测试用独立服务名并清理） | pi | 未开始 |
 | P4 | GlobalHotkeys、FnKeyMonitor、Permissions | pi | 未开始 |
@@ -45,7 +45,7 @@
 
 | 项 | 方法 | 结果 | 证据 |
 | --- | --- | --- | --- |
-| Placement 用例全部通过 | `swift test` | 未运行 | |
+| Placement 用例全部通过 | `swift test` | 通过 | P1：原 placement_test.go 全部 4 个场景，另测 right/edge/panel 与上方副屏坐标；scripts/test.sh 通过（3 个 XCTest + 2 个 Core 测试）。超大浮窗由调用方限制尺寸。 |
 | OCR 样例识别出预期文字 | `swift test` | 未运行 | |
 | Keychain 读写删 | `swift test` | 未运行 | |
 | 复制回退不覆盖用户新剪贴板 | 单元测试（模拟 changeCount）+ 手工 | 未运行 | |
