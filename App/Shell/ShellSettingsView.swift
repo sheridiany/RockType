@@ -13,7 +13,6 @@ struct ShellSettingsView: View {
     var inputMethodSyncMessage: String? = nil
     var retryInputMethodSync: () -> Void = {}
     @FocusState private var focusedSection: SettingsSection?
-    @State private var keyboardNavigation = false
     var clearCurrentContent: () -> Void = {}
     @Binding var section: SettingsSection
     @State private var language = LanguagePackModel()
@@ -38,9 +37,12 @@ struct ShellSettingsView: View {
                     }.buttonStyle(.plain)
                         .focused($focusedSection, equals: item)
                         .focusEffectDisabled()
+                        .accessibilityLabel(item.title + "设置")
+                        .accessibilityHint("按空格或回车打开此分区")
+                        .onKeyPress(.return) { section = item; return .handled }
                         .overlay {
                             RoundedRectangle(cornerRadius: Tokens.Radius.control)
-                                .stroke(keyboardNavigation && focusedSection == item ? p.focus : .clear,
+                                .stroke(focusedSection == item ? p.focus : .clear,
                                         lineWidth: Tokens.Size.focusRing)
                                 .allowsHitTesting(false)
                         }
@@ -50,8 +52,9 @@ struct ShellSettingsView: View {
                 Text("修改自动保存")
                     .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(p.secondary)
                     .padding(Tokens.Space.sm)
-            }.padding(Tokens.Space.md).frame(width: Tokens.U4.sidebarWidth)
+            }.padding(Tokens.Space.md).frame(width: Tokens.Size.sidebarWidth)
                 .background(p.cardSecondary)
+                .accessibilityElement(children: .contain).accessibilityLabel("设置分区")
             Rectangle().fill(p.line).frame(width: Tokens.Size.stroke)
             VStack(alignment: .leading, spacing: Tokens.Space.lg) {
                 SettingsPageHeading(section: section)
@@ -75,13 +78,6 @@ struct ShellSettingsView: View {
             .frame(minWidth: Tokens.Size.settingsWidth, minHeight: Tokens.Size.settingsHeight)
             .background(p.background)
             .buttonStyle(DesignButtonStyle())
-            .background(SettingsSidebarInteraction { keyboard in
-                keyboardNavigation = keyboard
-                if !keyboard { focusedSection = nil }
-            })
-            .onChange(of: focusedSection) { _, focused in
-                if keyboardNavigation, let focused { section = focused }
-            }
     }
 
     @ViewBuilder private var content: some View {
@@ -107,14 +103,14 @@ struct ShellSettingsView: View {
     private func field(_ title: String, _ value: Binding<String>) -> some View {
         SettingsControlRow(title) {
             TextField(title, text: value).textFieldStyle(.roundedBorder)
-                .frame(width: Tokens.U4.fieldWidth).accessibilityLabel(title)
+                .frame(width: Tokens.Size.fieldWidth).accessibilityLabel(title)
         }
     }
     private func settingsPicker<Value: Hashable, Content: View>(_ title: String, selection: Binding<Value>,
                                                                @ViewBuilder content: @escaping () -> Content) -> some View {
         SettingsControlRow(title) {
             Picker(title, selection: selection, content: content).labelsHidden()
-                .frame(width: Tokens.U4.fieldWidth).accessibilityLabel(title)
+                .frame(width: Tokens.Size.fieldWidth).accessibilityLabel(title)
         }
     }
     private func optional(_ value: Binding<String?>) -> Binding<String> {
@@ -233,7 +229,7 @@ struct ShellSettingsView: View {
                 toggle("功能窗口跟随工具栏", $settings.selection.followToolbar)
                 toggle("点击外部自动关闭", $settings.selection.automaticallyClose)
                 toggle("自动置顶", $settings.selection.automaticallyPin)
-                HStack { Text("透明度"); Slider(value: $settings.selection.windowOpacity, in: 0.5...1)
+                HStack { Text("透明度"); Slider(value: $settings.selection.windowOpacity, in: 0.5...1).accessibilityLabel("结果窗口透明度")
                     Text(settings.selection.windowOpacity, format: .percent.precision(.fractionLength(0))).monospacedDigit().frame(width: 40, alignment: .trailing) }
                 field("助手模型（空为默认）", optional($settings.selection.assistantModel))
             }
@@ -266,7 +262,7 @@ struct ShellSettingsView: View {
                         Spacer()
                         Button { settings.selection.toolbarActions.swapAt(index, index - 1) } label: { Image(systemName: "arrow.up") }
                             .disabled(index == 0).accessibilityLabel("上移" + (settings.templates.first(where: { $0.id == id })?.name ?? id))
-                        U4Toggle(title: "启用操作", isOn: Binding(get: { !settings.selection.disabledActions.contains(id) }, set: {
+                        U4Toggle(title: "启用" + (settings.templates.first(where: { $0.id == id })?.name ?? (id == "search" ? "搜索" : id)), isOn: Binding(get: { !settings.selection.disabledActions.contains(id) }, set: {
                             settings.selection.disabledActions.removeAll { $0 == id }
                             if !$0 { settings.selection.disabledActions.append(id) }
                         }))

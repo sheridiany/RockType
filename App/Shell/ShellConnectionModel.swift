@@ -264,7 +264,7 @@ struct ShellConnectionView: View {
     private func field(_ title: String, _ text: Binding<String>) -> some View {
         SettingsControlRow(title) {
             TextField(title, text: text).textFieldStyle(.roundedBorder)
-                .frame(width: Tokens.U4.fieldWidth).accessibilityLabel(title)
+                .frame(width: Tokens.Size.fieldWidth).accessibilityLabel(title)
         }
     }
 }

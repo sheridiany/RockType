@@ -44,7 +44,7 @@ struct CandidateView: View {
                         .accessibilityHint("继续输入无需等待")
                 }
             }
-        }.font(Tokens.Typography.font()).frame(width: Tokens.U4.candidateWidth)
+        }.font(Tokens.Typography.font()).frame(width: Tokens.Size.candidateWidth)
     }
 
     private var translationRow: some View {
