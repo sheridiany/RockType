@@ -57,7 +57,7 @@
 | 设置目录 | `~/Library/Application Support/RoarkT/` |
 | 钥匙串服务名 | `com.roarkist.roarkt.ai` |
 | Rime 方案 ID | `roarkt`（全拼）、`roarkt_flypy`、`roarkt_en` |
-| Rime 用户目录 | `~/Library/Rime`（方案名区分，不碰其他方案） |
+| Rime 用户目录 | `~/Library/Application Support/RoarkT/Rime`（`Identifiers.rimeUserDirectory(home:)`；与其他输入法完全隔离） |
 
 ## 安装位置（发布）
 

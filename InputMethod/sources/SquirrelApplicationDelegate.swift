@@ -72,7 +72,12 @@ final class SquirrelApplicationDelegate: NSObject, NSApplicationDelegate {
   }
 
   func setupRime() {
-    createDirIfNotExist(path: SquirrelApp.userDir)
+    do {
+      try Identifiers.prepareRimeDirectory()
+    } catch {
+      // Do not initialize librime with a missing or unwritable profile.
+      Foundation.exit(EXIT_FAILURE)
+    }
     createDirIfNotExist(path: SquirrelApp.logDir)
     // swiftlint:disable identifier_name
     let notification_handler: @convention(c) (UnsafeMutableRawPointer?, RimeSessionId, UnsafePointer<CChar>?, UnsafePointer<CChar>?) -> Void = notificationHandler

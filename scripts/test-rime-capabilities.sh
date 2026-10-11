@@ -3,6 +3,8 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 runtime="$root/InputMethod"
 temporary=$(mktemp -d "${TMPDIR:-/tmp}/roarkt-rime-capabilities.XXXXXX")
+# lsof reports canonical paths (macOS /var is a symlink).
+temporary=$(cd "$temporary" && pwd -P)
 trap 'rm -rf "$temporary"' EXIT
 mkdir -p "$temporary/bin" "$temporary/shared" "$temporary/bootstrap" "$temporary/build"
 cp "$runtime/bin/rime_deployer" "$temporary/bin/"
@@ -20,7 +22,7 @@ deploy() {
 }
 deploy
 xcrun swiftc -import-objc-header "$root/Tests/InputMethodTests/RimeBridge.h" -I "$runtime/librime/src" \
-  "$runtime/sources/BridgingFunctions.swift" "$root/Tests/InputMethodTests/RimeChecks.swift" \
+  "$root/Core/Identifiers.swift" "$runtime/sources/BridgingFunctions.swift" "$root/Tests/InputMethodTests/RimeChecks.swift" \
   "$runtime/lib/librime.1.dylib" "$runtime/lib/rime-plugins/librime-lua.dylib" \
   -Xlinker -rpath -Xlinker "$runtime/lib" -Xlinker -rpath -Xlinker "$runtime/lib/rime-plugins" \
   -o "$temporary/check"
@@ -46,3 +48,44 @@ for schema in roarkt roarkt_flypy; do
   run "$schema-learning" "$other" forgotten
 done
 printf '%s\n' 'Rime capabilities passed in isolated profiles; no production user data accessed.'
+
+# Both runtimes use the same schema/userdb names, but different profiles under a fake home.
+# Keep both processes alive while inspecting actual LevelDB handles.
+other="$temporary/home/Library/Rime"
+private=$("$temporary/check" --private-directory "$temporary/home")
+mkdir -p "$other"
+"$temporary/check" "$temporary/shared" "$private" "$temporary/build" roarkt sync-path
+mkfifo "$temporary/other.pipe" "$temporary/private.pipe"
+exec 3<>"$temporary/other.pipe"
+exec 4<>"$temporary/private.pipe"
+"$temporary/check" "$temporary/shared" "$other" "$temporary/build" roarkt isolation <&3 >"$temporary/other.log" 2>&1 &
+other_pid=$!
+"$temporary/check" "$temporary/shared" "$private" "$temporary/build" roarkt isolation <&4 >"$temporary/private.log" 2>&1 &
+private_pid=$!
+cleanup_isolation() {
+  kill "$other_pid" "$private_pid" 2>/dev/null || true
+  rm -rf "$temporary"
+}
+trap cleanup_isolation EXIT
+for ((attempt=0; attempt<200; attempt++)); do
+  [[ -f "$other/ready" && -f "$private/ready" ]] && break
+  kill -0 "$other_pid" && kill -0 "$private_pid" || { cat "$temporary/"*.log; exit 1; }
+  sleep 0.1
+done
+[[ -f "$other/ready" && -f "$private/ready" ]]
+/usr/sbin/lsof -a -p "$other_pid" -Fn > "$temporary/other.handles"
+/usr/sbin/lsof -a -p "$private_pid" -Fn > "$temporary/private.handles"
+for db in roarkt_zh roarkt_en; do
+  grep -F "n$other/$db.userdb/LOCK" "$temporary/other.handles"
+  grep -F "n$private/$db.userdb/LOCK" "$temporary/private.handles"
+done
+if grep -F "n$private/" "$temporary/other.handles" || grep -F "n$other/" "$temporary/private.handles"; then
+  printf '%s\n' 'A librime process opened the other profile.' >&2
+  exit 1
+fi
+printf 'release\n' >&3
+printf 'release\n' >&4
+wait "$other_pid"
+wait "$private_pid"
+trap 'rm -rf "$temporary"' EXIT
+printf '%s\n' 'Concurrent librime isolation passed: each process opens only its own Chinese/English userdb.'

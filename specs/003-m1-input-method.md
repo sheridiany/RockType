@@ -39,6 +39,7 @@
 | I-1 | 候选窗、译文栏、模式提示恢复旧产品视觉 | pi-ime | 恢复完成、离屏对照通过；待 Claude 视觉/人工验收 |
 | I-2 | 能力复核测试迁移与补齐，接入 `scripts/test.sh` | pi-ime | 自动化通过，已接入统一测试入口 |
 | I-3 | 真实打字验收 | 用户 + Claude | 未开始 |
+| I-4 | 隔离 Rime 用户目录，消除其他输入法争用 LevelDB 锁 | pi-ime | 已实现，测试与签名构建通过；待 Claude 搬迁与真实打字验收 |
 
 **文件所有权**：`InputMethod/sources` 中候选窗、面板、主题相关文件，`InputMethod/scripts`、`scripts/test-*.sh` 新增项、`Tests/`。另一个 agent（pi-ui）正在 `InputMethod/sources` 中做设置同步（读取 settings.json、redeploy 通知），避免修改其涉及的文件；如必须修改同一文件，改动集中并在汇报中列出。
 
@@ -170,3 +171,25 @@
 - **通过**：最终源码与旧源码差异复核仅为改名、Swift 6 隔离、保留行为/可访问性与 HUD 进度文案适配；未新增视觉设计。无新增语言运行时。
 - **未运行 / 待人工**：安装、注册、worktree App/输入法启动、真实 Fn/麦克风/键盘/权限/VoiceOver 与跨应用视觉验收。本次从未执行安装/卸载、输入法启动或 LaunchAgent 加载；旧安装仅只读资源。由 Claude 从 main 执行 I-3。
 - 所有实现与文档在 `agent/ime` 提交；未 push、未合并到 main。worktree 与证据保留供 Claude 验收；无运行中的协作 Worker。构建/测试临时源码与旧命名产物已清理。
+
+### I-4 Rime 用户目录隔离（2026-10-11）
+
+- 根因：共享用户目录使其他 Squirrel 系输入法打开同名 userdb，RockType 因 LevelDB 锁冲突反复恢复数据库。用户已用 sample 确认；本次未对真实进程采样或访问用户数据。
+- Core 唯一路径入口：`Identifiers.rimeUserDirectory(home:)`，默认 `~/Library/Application Support/<Identifiers.applicationSupportFolder>/Rime`，当前为 `RoarkT/Rime`。输入法与独立清理 helper 直接编译同一 MIT 文件，未扩大 GPL 依赖。
+- 输入法初始化、命令行部署、菜单打开目录/日志使用独立目录；build/user.yaml/userdb 随 librime user_data_dir 隔离。首次创建目录，并在初始化前生成仅含独立 sync_dir 的 installation.yaml，随后由 librime 填充安装身份；已有安装元数据保留。SharedSupport 不变，无旧数据迁移逻辑。
+- 主 App 的设置 patch writer 使用同一路径；卸载整体删除独立 Rime 目录并保留其他输入法数据，提示文字同步。仓库诊断代码无旧 Rime 路径引用。PRD、架构标识表、设置/分发/词库规格的现行路径已更新。
+- 回归测试：临时 home 验证路径不等于共享目录、首次目录与 metadata 创建、设置写入、卸载删除整个目录且保留另一输入法同名文件；真实 librime API 检查 sync 路径；两个并行 librime 进程读取工厂中文/英文候选，lsof 检查双方都持有自己 roarkt_zh / roarkt_en 的 LOCK 且没有打开对方目录。测试 home、资料和进程均隔离，不启动 IMK 输入法。
+- 实现提交：`eed0f41`（输入法/Core/App/卸载与回归测试）。
+- **通过**：最终 `scripts/test.sh` 真实退出码 **0**；40 XCTest、158 Swift Testing、Rime 部署与能力检查（含并行数据库句柄隔离）、AppShell 检查。日志 `.build/rime-directory-tests.log`，退出码 `.build/rime-directory-tests.exit`。
+- **通过**：最终 `scripts/build.sh` 真实退出码 **0**；主 App、输入法与 helper 构建签名完成，既有 voice MLX / XPC smoke 通过。日志 `.build/rime-directory-build.log`，退出码 `.build/rime-directory-build.exit`。
+- **通过**：独立卸载 helper 以构建安装器的相同源码列表编译成功（未运行）；`git diff --check`；业务代码及脚本的剩余 `Library/Rime` 引用仅为临时目录的隔离对照。上游 changelog 历史记录与子模块未改。
+- 首轮新增句柄测试因 macOS `/var` → `/private/var` 路径别名比对失败，规范化临时路径后通过；最终全量测试无失败。已有 `Core/Voice/LICENSE.md` 的 SPM 资源警告保留。
+- **未运行 / 待人工验证**：安装、注册、真实输入法启动、真实数据搬迁、首次 IMK 部署、真实菜单/同步交互、并行使用两种输入法的按键延迟。未触碰用户真实共享/独立 Rime 目录；构建产物和 worktree 留给 Claude 合并验收。
+
+#### Claude 合并后的本机搬迁与验收
+
+1. 从 main 合并和构建，切到系统输入法，退出 RockType 和其他占用共享 Rime 数据库的输入法；用 lsof 确认两个 userdb 已无占用，再做文件复制。不要在活动 LevelDB 上删除 LOCK 或执行 RepairDB。
+2. 在用户确认的备份位置备份源数据。创建 `~/Library/Application Support/RoarkT/Rime`，只复制要保留的 `roarkt_zh.userdb` / `roarkt_en.userdb` 完整目录和需要的个人词表/自定义补丁，保留源数据以便人工回退。数据库若已损坏，先单独评估备份/导出，不自动修复。
+3. 不复制共享 `build/`、`user.yaml`、`installation.yaml`、`sync/` 或 `lost/`；由新版本生成自身安装身份、同步目录和新部署产物。审核 custom.yaml 中任何绝对路径，确认不再指向共享目录。
+4. 由 Claude 从 main 安装并启动，验证首次部署、全拼/双拼/英文输入和学习持久化、设置同步、菜单打开目录/日志、同步操作；并行启动另一输入法后检查双方只打开自身 userdb，RockType 无持续 UserDbRecoveryTask / RepairDB 和按键卡顿。
+5. pi-platform 的 `scripts/personal/` 本次未修改（本 checkout 尚无该目录）。脚本默认目标改为上述新路径；Swift 调用 `Identifiers.rimeUserDirectory(home:)`，脚本保留显式路径注入，并以 `Identifiers.applicationSupportFolder` 为内部目录名来源。个人词表、备份和导入目标一起调整，测试只注入临时目录。

@@ -19,8 +19,8 @@
 ## 规则
 
 - postinstall：以登录用户身份 `TISRegisterInputSource` 注册（`launchctl asuser`），加载 LaunchAgent，启动主 App（首次引导会处理“添加输入源”）。**不 enable/select 输入源**，不写 HIToolbox 偏好，不重启系统代理（见 RoType 研究文档）。
-- 升级（同为 RoarkT）：退出旧输入法与主 App 进程后替换，保留用户数据（`~/Library/Rime`、`Application Support/RoarkT`、语音模型、钥匙串）。
-- 卸载：设置 → 关于 → “卸载 RoarkT…”（已有入口）：确认对话 → 停用并移除输入源注册、bootout LaunchAgent、删除三处程序文件（需管理员授权，用 `NSAppleScript` 的 `with administrator privileges` 或 SMJobBless 以外的最简可靠方式）；勾选“同时删除我的数据”时再删除用户数据（Rime 中仅删 roarkt 相关文件与 RoarkT 生成的 custom.yaml）。
+- 升级（同为 RoarkT）：退出旧输入法与主 App 进程后替换，保留用户数据（`~/Library/Application Support/RoarkT/Rime`、`Application Support/RoarkT`、语音模型、钥匙串）。
+- 卸载：设置 → 关于 → “卸载 RoarkT…”（已有入口）：确认对话 → 停用并移除输入源注册、bootout LaunchAgent、删除三处程序文件（需管理员授权，用 `NSAppleScript` 的 `with administrator privileges` 或 SMJobBless 以外的最简可靠方式）；勾选“同时删除我的数据”时再删除用户数据（删除整个 `Identifiers.rimeUserDirectory(home:)` 目录，包含自定义配置、build、日志、sync 与学习数据库；其他输入法目录不变）。
 - 公证：`notarytool submit --wait` + `stapler staple`；凭据用钥匙串 profile（名称经环境变量 `ROARKT_NOTARY_PROFILE` 传入），脚本不含任何凭据。
 - Sparkle：主 App 集成 Sparkle 2（SPM 依赖，固定版本），`SUFeedURL` 指向 GitHub Releases 上的 appcast（URL 用占位常量，待用户确定仓库）；EdDSA 公钥写入 Info.plist，私钥只在用户钥匙串；`scripts/make-appcast.sh` 生成 appcast。更新后需重启输入法进程（安装后脚本处理）。输入法自身不再内嵌 Sparkle 更新逻辑（若 InputMethod 中仍有，移除其更新入口，子模块可保留）。
 - 第三方声明：`THIRD_PARTY_NOTICES.md` 完整覆盖 librime、plum、Squirrel（GPL）、MLX 等；pkg 内附 `Licenses/`；附 GPL 源码获取说明。
@@ -115,3 +115,7 @@
 3. 确认 TIS 无公开 unregister API 时，以停用 + 删除 bundle + 注销登录清缓存作为注册移除验收。取消授权或中途失败可能已停用输入源/登录项，人工验收需覆盖重试。
 4. 核实预编译 librime / Lua / Octagram / Predict 的完整构建来源与静态依赖，及 essay 数据的精确修订；现有源码无法证明全部二进制来源。建议取得原构建记录，或从固定源码重建后发布。`LICENSES/GPL-SOURCE.md` 已列对应源码包材料；正式源代码下载 URL 和源码包尚未发布，NFR-9 不标记完成。
 5. 本实现遵循 SPEC-009 的 `/Library/LaunchAgents/` 系统位置；架构表仍写 `~/Library/LaunchAgents/`，请统一文档口径。
+
+### Rime 独立目录修订（2026-10-11）
+
+- 本节替代上文历史证据中的共享 Rime 文件归属清理规则：Rime 用户数据现在位于 `~/Library/Application Support/RoarkT/Rime`，卸载勾选删除数据时整体删除该目录。其他输入法的用户目录完全保留；不再按文件名或 custom.yaml 标记选择删除。
