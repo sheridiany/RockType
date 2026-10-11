@@ -356,9 +356,9 @@ extension SquirrelPanel {
     translationPanel.onActivate = { [weak self] in self?.inputController?.performTranslationAction() }
     let theme = view.currentTheme
     let style = RoarkTTranslationPanel.Style(background: theme.backgroundColor, border: theme.borderColor,
-      highlight: theme.highlightedBackColor, candidate: theme.attrs, comment: theme.commentAttrs,
-      label: theme.labelAttrs, cornerRadius: theme.cornerRadius,
-      shortcutCornerRadius: theme.hilitedCornerRadius, alpha: theme.alpha)
+      candidate: theme.attrs, comment: theme.commentAttrs,
+      cornerRadius: theme.cornerRadius,
+      alpha: theme.alpha)
     translationPanel.show(state, beside: self, style: style)
   }
 

@@ -15,6 +15,11 @@ struct SessionTests {
     precondition(drained, "main queue failed to drain")
   }
   static func main() {
+    for identifier in [ROARKT_APP_BUNDLE_ID, ROARKT_TRANSLATION_SERVICE_NAME, Identifiers.inputMethodBundleID] {
+      let previous = "anchor apple generic and certificate leaf[subject.OU] = \"\(ROARKT_TEAM_ID)\" and identifier \"\(identifier)\""
+      precondition(Identifiers.codeRequirement(for: identifier) == previous,
+                   "centralizing XPC requirements must preserve the exact signing identity")
+    }
 
     var session = RoarkTCandidateTranslationSession()
     let first = RoarkTCandidateSnapshot(

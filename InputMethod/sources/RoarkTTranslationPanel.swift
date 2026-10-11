@@ -5,12 +5,9 @@ final class RoarkTTranslationPanel: NSPanel {
   struct Style {
     let background: NSColor
     let border: NSColor?
-    let highlight: NSColor?
     let candidate: [NSAttributedString.Key: Any]
     let comment: [NSAttributedString.Key: Any]
-    let label: [NSAttributedString.Key: Any]
     let cornerRadius: CGFloat
-    let shortcutCornerRadius: CGFloat
     let alpha: CGFloat
 
     func actionAttributes(ready: Bool, appearance: NSAppearance) -> [NSAttributedString.Key: Any] {
@@ -67,7 +64,6 @@ final class RoarkTTranslationPanel: NSPanel {
     level = parent.level
     alphaValue = style.alpha
     surface.layer?.cornerRadius = style.cornerRadius
-    shortcutLabel.layer?.cornerRadius = style.shortcutCornerRadius
     // Resolve dynamic AppKit colors under the same appearance as the candidate window.
     effectiveAppearance.performAsCurrentDrawingAppearance {
       surface.layer?.backgroundColor = style.background.cgColor
