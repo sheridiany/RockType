@@ -37,6 +37,21 @@ private final class VoiceSamples: @unchecked Sendable {
     }
 }
 
+/// AVAudioConverter consumes this input synchronously during convert(). The buffer is
+/// retained and read-only for that call; the one-shot flag is protected for its Sendable callback.
+private final class VoiceConversionInput: @unchecked Sendable {
+    private let buffer: AVAudioPCMBuffer
+    private let lock = NSLock()
+    private var supplied = false
+    init(_ buffer: AVAudioPCMBuffer) { self.buffer = buffer }
+    func provide(_ state: UnsafeMutablePointer<AVAudioConverterInputStatus>) -> AVAudioBuffer? {
+        lock.lock(); defer { lock.unlock() }
+        if supplied { state.pointee = .noDataNow; return nil }
+        supplied = true; state.pointee = .haveData
+        return buffer
+    }
+}
+
 @MainActor final class VoiceAudioCapture: VoiceRecording {
     private var engine: AVAudioEngine?
     private var samples: VoiceSamples?
@@ -54,11 +69,10 @@ private final class VoiceSamples: @unchecked Sendable {
         input.installTap(onBus: 0, bufferSize: 2048, format: format) { buffer, _ in
             let capacity = AVAudioFrameCount(ceil(Double(buffer.frameLength) * 16_000 / format.sampleRate)) + 32
             guard let converted = AVAudioPCMBuffer(pcmFormat: output, frameCapacity: capacity) else { return }
-            var supplied = false
+            let source = VoiceConversionInput(buffer)
             var error: NSError?
             let status = converter.convert(to: converted, error: &error) { _, state in
-                if supplied { state.pointee = .noDataNow; return nil }
-                supplied = true; state.pointee = .haveData; return buffer
+                source.provide(state)
             }
             if error == nil, status != .error { samples.append(converted) }
         }
