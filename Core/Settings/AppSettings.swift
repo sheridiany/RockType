@@ -101,6 +101,8 @@ public struct ScreenshotSettings: Codable, Equatable, Sendable {
     public enum Format: String, Codable, Sendable { case png, jpeg }
     public var format: Format = .png
     public var ocrLanguages = ["zh-Hans", "en-US"]
+    /// nil uses ~/Pictures/RockType. Set only through the directory picker.
+    public var saveDirectory: String? = nil
     public init() {}
 }
 
