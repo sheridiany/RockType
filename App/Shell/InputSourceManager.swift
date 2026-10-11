@@ -106,7 +106,7 @@ final class InputSourceManager {
         } catch {
             guard attempt == id else { return }
             isVerifying = false
-            message = "验证服务不可用，请确认主 App 与翻译服务已安装并重试。"
+            message = "无法验证试打。请重新打开 RockType，然后重新开始验证。"
         }
     }
 

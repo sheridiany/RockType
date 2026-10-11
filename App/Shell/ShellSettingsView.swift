@@ -205,7 +205,7 @@ struct ShellSettingsView: View {
             }
             DesignSectionTitle(title: "离线语言包")
             DesignCard { LanguagePackStepView(model: language) }
-            Notice(text: "动态离线翻译需要 macOS 26 和语言包。候选静态词条按原文精确匹配；开启候选 AI 后，候选文字可能发送到所配置的服务商。")
+            Notice(text: "动态离线翻译需要 macOS 26 和语言包。候选静态词条按原文精确匹配；主动触发输入法 AI 时，当前文字会发送到所配置的服务商。")
         }
     }
     private var voice: some View {
@@ -337,7 +337,7 @@ struct ShellSettingsView: View {
                 Text("版本 " + AboutDocuments.version(Bundle.main.infoDictionary ?? [:]))
                 Text("macOS 14 及以上 · Apple Silicon")
                 DesignRule()
-                Text("主 App：MIT · 输入法：GPL v3")
+                Text("主程序：MIT · 输入法：GPL v3")
                     .font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(p.secondary)
                 UpdateSettingsView()
             }

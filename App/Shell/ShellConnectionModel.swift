@@ -120,7 +120,7 @@ final class ShellConnectionModel {
     func saveKey(_ secret: String) -> Bool {
         verifiedImages[configuration.id] = nil
         guard !secret.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            message = "密钥不能为空。"
+            message = "请填写密钥。"
             return false
         }
         invalidateResults()
@@ -228,14 +228,14 @@ struct ShellConnectionView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
             if !model.configured {
-                Notice(text: "填写服务地址、默认模型并设置密钥，即可开始使用 AI。未配置时，中文输入与本地 OCR 仍可使用。")
+                Notice(text: "填写服务地址、默认模型并设置密钥，即可开始使用 AI。未配置时，中文输入与本机文字识别仍可使用。")
             }
             DesignSectionTitle(title: "服务商连接")
             DesignCard {
                 field("服务名称", $settings.name)
-                field("Base URL", $settings.baseURL)
+                field("服务地址（Base URL）", $settings.baseURL)
                 HStack {
-                    Text("API Key"); Spacer(); Chip(text: model.hasKey ? "已设置" : "未设置")
+                    Text("密钥（API Key）"); Spacer(); Chip(text: model.hasKey ? "已设置" : "未设置")
                     Button(model.hasKey ? "更换" : "设置") { secret = ""; editingKey = true }
                     if model.hasKey { Button("删除") { model.deleteKey() } }
                 }
@@ -273,8 +273,8 @@ struct ShellConnectionView: View {
         }
         .sheet(isPresented: $editingKey, onDismiss: { secret = "" }) {
             VStack(alignment: .leading, spacing: Tokens.Space.lg) {
-                Text("设置 API Key").font(Tokens.Typography.font(Tokens.Typography.input, weight: .semibold))
-                SecureField("API Key", text: $secret).textFieldStyle(.roundedBorder)
+                Text("设置密钥").font(Tokens.Typography.font(Tokens.Typography.input, weight: .semibold))
+                SecureField("密钥", text: $secret).textFieldStyle(.roundedBorder)
                 Text("仅存系统钥匙串，不会写入设置文件或日志。")
                 Text(model.message).font(Tokens.Typography.font(Tokens.Typography.caption))
                 HStack {

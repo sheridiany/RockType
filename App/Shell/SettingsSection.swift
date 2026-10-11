@@ -24,7 +24,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .voice: "按住 Fn 录音，松开识别并填入，不自动发送。"
         case .selection: "选中文字，在原位置完成阅读与处理。"
         case .screenshot: "主动框选、本地识别，按需交给 AI。"
-        case .ai: "一个服务商连接，供翻译、总结与润色使用。"
+        case .ai: "管理服务商、模型和连接测试。"
         case .templates: "模板只定义提示词与输出形式。"
         case .shortcuts: "集中管理快捷键，冲突时明确提示。"
         case .permissions: "按需授权，随时可以在系统设置中撤销。"
