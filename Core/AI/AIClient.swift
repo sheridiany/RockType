@@ -2,7 +2,7 @@ import Foundation
 
 public enum AIClientError: Error, Equatable, Sendable {
     case configuration, network, unauthorized, modelNotFound, rateLimited, server
-    case decoding, timeout, cancelled, http(Int), responseTooLarge
+    case decoding, timeout, cancelled, http(Int), responseTooLarge, emptyResponse, outputLimit
 }
 
 /// Stateless OpenAI Chat Completions transport. Credentials exist only for the duration of a call.
@@ -12,7 +12,7 @@ public struct AIClient: Sendable {
     public let timeout: TimeInterval
     private static let limit = 2 * 1024 * 1024
 
-    public init(connection: AIConnectionSettings, session: URLSession = AIClient.makeSession(), timeout: TimeInterval = 30) {
+    public init(connection: AIConnectionSettings, session: URLSession = AIClient.makeSession(), timeout: TimeInterval = 90) {
         self.connection = connection; self.session = session; self.timeout = timeout
     }
 
@@ -25,22 +25,43 @@ public struct AIClient: Sendable {
     }
 
     public func complete(text: String, apiKey: String, model: String? = nil, imageDataURL: String? = nil) async throws -> String {
-        try await perform(text: text, apiKey: apiKey, model: model, imageDataURL: imageDataURL, stream: false) { _ in }
+        try await perform(text: text, apiKey: apiKey, model: model, imageDataURL: imageDataURL, stream: false, onThinking: {}) { _ in }
     }
 
     /// Runs in the caller's task: cancellation terminates the underlying URLSession request.
-    /// Deltas may be empty (role/usage frames). No request or response content is logged.
-    public func stream(text: String, apiKey: String, model: String? = nil,
-                       onDelta: @Sendable (String) async -> Void) async throws -> String {
-        try await perform(text: text, apiKey: apiKey, model: model, imageDataURL: nil, stream: true, onDelta: onDelta)
+    /// Role/usage frames are ignored; reasoning emits only a status callback, never its text.
+    public func stream(text: String, apiKey: String, model: String? = nil, imageDataURL: String? = nil,
+                       onThinking: @escaping @Sendable () async -> Void = {},
+                       onDelta: @escaping @Sendable (String) async -> Void) async throws -> String {
+        try await perform(text: text, apiKey: apiKey, model: model, imageDataURL: imageDataURL, stream: true, onThinking: onThinking, onDelta: onDelta)
     }
 
     private func perform(text: String, apiKey: String, model: String?, imageDataURL: String?, stream: Bool,
-                         onDelta: @Sendable (String) async -> Void) async throws -> String {
+                         onThinking: @escaping @Sendable () async -> Void,
+                         onDelta: @escaping @Sendable (String) async -> Void) async throws -> String {
+        guard timeout.isFinite, timeout > 0 else { throw AIClientError.configuration }
+        return try await withThrowingTaskGroup(of: String.self) { group in
+            group.addTask {
+                try await performAttempt(text: text, apiKey: apiKey, model: model, imageDataURL: imageDataURL,
+                                         stream: stream, onThinking: onThinking, onDelta: onDelta)
+            }
+            group.addTask {
+                try await Task.sleep(for: .seconds(timeout))
+                throw AIClientError.timeout
+            }
+            defer { group.cancelAll() }
+            do { return try await group.next()! }
+            catch { if Task.isCancelled { throw AIClientError.cancelled }; throw error }
+        }
+    }
+
+    private func performAttempt(text: String, apiKey: String, model: String?, imageDataURL: String?, stream: Bool,
+                                onThinking: @escaping @Sendable () async -> Void,
+                                onDelta: @escaping @Sendable (String) async -> Void) async throws -> String {
         do {
             try Task.checkCancellation()
             let request = try makeRequest(text: text, apiKey: apiKey, model: model, imageDataURL: imageDataURL, stream: stream)
-            let (bytes, response) = try await session.bytes(for: request, delegate: NoAIRedirects())
+            let (bytes, response) = try await open(request)
             defer { bytes.task.cancel() }
             guard let http = response as? HTTPURLResponse else { throw AIClientError.network }
             guard (200..<300).contains(http.statusCode) else { throw Self.httpError(http.statusCode) }
@@ -53,23 +74,31 @@ public struct AIClient: Sendable {
                 }
                 try Task.checkCancellation()
                 guard let reply = try? JSONDecoder().decode(Completion.self, from: data),
-                      let content = reply.choices.first?.message.content else { throw AIClientError.decoding }
-                return content
+                      let choice = reply.choices.first else { throw AIClientError.decoding }
+                if choice.finish_reason == "length" { throw AIClientError.outputLimit }
+                return try Self.answer(choice.message.content ?? "")
             }
             var parser = SSEParser()
             var output = ""
             var received = 0
+            var thinkingSignalled = false
             for try await byte in bytes {
                 try Task.checkCancellation()
                 received += 1
                 guard received <= Self.limit else { throw AIClientError.responseTooLarge }
                 if let event = try parser.append(byte) {
-                    if event == "[DONE]" { return output }
+                    if event == "[DONE]" { return try Self.answer(output) }
                     guard let chunk = try? JSONDecoder().decode(Chunk.self, from: Data(event.utf8)) else {
                         throw AIClientError.decoding
                     }
                     for choice in chunk.choices where choice.index == 0 {
-                        if let delta = choice.delta.content {
+                        if choice.finish_reason == "length" { throw AIClientError.outputLimit }
+                        if output.isEmpty, !thinkingSignalled, choice.delta.reasoning_content?.isEmpty == false {
+                            thinkingSignalled = true
+                            await onThinking()
+                            try Task.checkCancellation()
+                        }
+                        if let delta = choice.delta.content, !delta.isEmpty {
                             output += delta
                             await onDelta(delta)
                             try Task.checkCancellation()
@@ -88,6 +117,32 @@ public struct AIClient: Sendable {
             }
             throw AIClientError.network
         }
+    }
+
+    private static func answer(_ text: String) throws -> String {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw AIClientError.emptyResponse }
+        return text
+    }
+
+    /// Retry once only when the server rejects before any response content is consumed.
+    /// Never replay a partial answer, an authentication failure or an ambiguous network failure.
+    private func open(_ request: URLRequest) async throws -> (URLSession.AsyncBytes, URLResponse) {
+        for attempt in 0...1 {
+            try Task.checkCancellation()
+            let pair = try await session.bytes(for: request, delegate: NoAIRedirects())
+            guard attempt == 0, let response = pair.1 as? HTTPURLResponse,
+                  response.statusCode == 429 || (500...599).contains(response.statusCode) else { return pair }
+            let delay: Double
+            if let header = response.value(forHTTPHeaderField: "Retry-After") {
+                // A date or a long server-requested delay is left for an explicit user retry.
+                guard let seconds = Double(header) else { return pair }
+                delay = seconds
+            } else { delay = 0.5 }
+            guard delay.isFinite, delay >= 0, delay <= 2 else { return pair }
+            pair.0.task.cancel()
+            try await Task.sleep(for: .seconds(delay))
+        }
+        throw AIClientError.server
     }
 
     /// HTTPS everywhere; plain HTTP only for a local relay on the loopback interface.
@@ -127,7 +182,7 @@ public struct AIClient: Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(stream ? "text/event-stream" : "application/json", forHTTPHeaderField: "Accept")
         request.httpBody = try JSONSerialization.data(withJSONObject: [
-            "model": selectedModel, "messages": [["role": "user", "content": content]], "stream": stream,
+            "max_tokens": 8192, "model": selectedModel, "messages": [["role": "user", "content": content]], "stream": stream,
         ])
         return request
     }
@@ -142,11 +197,11 @@ public struct AIClient: Sendable {
         }
     }
     private struct Completion: Decodable {
-        struct Choice: Decodable { struct Message: Decodable { let content: String? }; let message: Message }
+        struct Choice: Decodable { struct Message: Decodable { let content: String? }; let message: Message; let finish_reason: String? }
         let choices: [Choice]
     }
     private struct Chunk: Decodable {
-        struct Choice: Decodable { struct Delta: Decodable { let content: String? }; let index: Int; let delta: Delta }
+        struct Choice: Decodable { struct Delta: Decodable { let content: String?; let reasoning_content: String? }; let index: Int; let delta: Delta; let finish_reason: String? }
         let choices: [Choice]
     }
 }

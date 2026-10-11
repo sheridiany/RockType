@@ -40,8 +40,11 @@ import RoarkTPlatform
          recognize: ((Data) async throws -> String)? = nil,
          sendImage: @escaping (AIConnectionSettings, String, Data) async throws -> String = { connection, model, data in
              let key = try Keychain().get(account: connection.id) ?? ""
-             return try await AIClient(connection: connection).complete(text: "请用中文解释这张图片。", apiKey: key,
-                 model: model, imageDataURL: "data:image/png;base64," + data.base64EncodedString())
+             let service = ScreenshotAIService(client: AIClient(connection: connection),
+                 recognize: { try await OCR().recognize($0).text },
+                 isAllowed: { SecureInput.status() == .allowed })
+             return try await service.run(action: .explain, png: data, model: model,
+                 imageCapabilityVerified: true, apiKey: key)
          }) {
         self.image = image; self.origin = origin; self.settings = settings; self.verified = verified
         self.ocrLanguages = settings().screenshot.ocrLanguages

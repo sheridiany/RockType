@@ -110,7 +110,7 @@ final class ResultWindowController: NSObject {
 
     func setPinned() { state.pinned.toggle(); updateWindowStyle() }
     func beginQuestion() {
-        guard panel.isVisible, state.request != nil, !state.isBusy else { return }
+        guard panel.isVisible, state.request != nil, state.canAsk else { return }
         guard aiConfigured() else { feedback("请前往设置配置 AI 连接后追问。"); return }
         panel.acceptsKeyboard = true; panel.makeKeyAndOrderFront(nil)
         state.asking = true

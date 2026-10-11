@@ -37,7 +37,11 @@ final class ShellConnectionModel {
     @ObservationIgnored var runTests: (AIConnectionSettings, String) async -> [String] = { settings, secret in
         do {
             let result = try await AIConnectionTester(client: AIClient(connection: settings)).run(apiKey: secret)
-            return [result.text, result.streaming, result.image, result.cancellation].map(ShellConnectionModel.label)
+            var labels = [result.text, result.streaming, result.image, result.cancellation].map(ShellConnectionModel.label)
+            if result.text == .available, let latency = result.textLatency {
+                labels[0] += String(format: " · %.2f 秒", latency)
+            }
+            return labels
         } catch { return Array(repeating: "未验证", count: 4) }
     }
 
@@ -54,7 +58,9 @@ final class ShellConnectionModel {
             case .modelNotFound: reason = "模型不存在"
             case .rateLimited: reason = "限流，请稍后重试"
             case .server: reason = "服务异常"
-            case .decoding: reason = "响应格式不兼容"
+            case .decoding: reason = "响应格式不兼容或中途断开"
+            case .emptyResponse: reason = "模型未生成正文"
+            case .outputLimit: reason = "输出预算不足，请换模型或缩短内容"
             case .timeout: reason = "请求超时"
             case .cancelled: reason = "请求已取消"
             case .http(let code): reason = "HTTP \(code)"
