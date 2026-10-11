@@ -44,11 +44,12 @@ import os
     private var dragging = false
     private static let timing = Logger(subsystem: Identifiers.appBundleID, category: "ScreenshotTiming")
     private var toolbar: NSHostingView<CaptureToolbar>?
-    private var textField: NSTextField?
-    private var textPoint = CGPoint.zero
+    private var textEditor: CaptureTextView?
+    private var editingTextIndex: Int?
+    var isEditingText: Bool { textEditor != nil }
     private func complete(_ output: Output = .copy) {
         guard allowed() else { onCancel(); return }
-        commitText()
+        finishTextEditing()
         guard let result = ScreenshotCompositor.render(image: image, size: bounds.size, selection: selection, annotations: history.items) else { return }
         switch output {
         case .copy: onComplete(result)
@@ -59,10 +60,10 @@ import os
     }
     private func updateToolbar() {
         guard !selection.isEmpty else { toolbar?.isHidden = true; return }
-        let root = CaptureToolbar(tool: tool, canUndo: !history.items.isEmpty, canRedo: !history.undone.isEmpty,
-            select: { [weak self] in self?.commitText(); self?.tool = $0; self?.updateToolbar() },
-            undo: { [weak self] in self?.history.undo(); self?.updateAnnotations(); self?.updateToolbar() },
-            redo: { [weak self] in self?.history.redo(); self?.updateAnnotations(); self?.updateToolbar() },
+        let root = CaptureToolbar(tool: tool, canUndo: history.canUndo, canRedo: history.canRedo,
+            select: { [weak self] in self?.finishTextEditing(); self?.tool = $0; self?.updateToolbar() },
+            undo: { [weak self] in self?.finishTextEditing(); self?.history.undo(); self?.updateAnnotations(); self?.updateToolbar() },
+            redo: { [weak self] in self?.finishTextEditing(); self?.history.redo(); self?.updateAnnotations(); self?.updateToolbar() },
             cancel: { [weak self] in self?.onCancel() }, complete: { [weak self] in self?.complete() }, preview: { [weak self] in self?.complete(.preview) })
         let view: NSHostingView<CaptureToolbar>
         if let toolbar { view = toolbar; view.rootView = root }
@@ -73,12 +74,52 @@ import os
                             y: min(max(8, selection.maxY + 12), bounds.height - 56), width: width, height: 48)
 
     }
-    private func commitText() {
-        guard let field = textField else { return }
-        if !field.stringValue.isEmpty {
-            history.append(ScreenshotAnnotation(tool: .text, points: [textPoint], text: field.stringValue))
+    @discardableResult func finishTextEditing() -> Bool {
+        guard let editor = textEditor else { return false }
+        guard allowed() else {
+            discardTextEditor(); onCancel(); return true
         }
-        field.removeFromSuperview(); textField = nil; updateAnnotations()
+        editor.unmarkText()
+        var annotation = editor.annotation
+        annotation.text = editor.string
+        history.commitText(annotation, replacing: editingTextIndex)
+        discardTextEditor()
+        updateAnnotations(); updateSelectionLayers(); updateToolbar()
+        return true
+    }
+    private func discardTextEditor() {
+        guard let editor = textEditor else { return }
+        textEditor = nil; editingTextIndex = nil
+        editor.onCommit = {}
+        if window?.firstResponder === editor { window?.makeFirstResponder(self) }
+        editor.removeFromSuperview()
+    }
+    func finishTextEditingIfOutside(_ event: NSEvent) {
+        guard let editor = textEditor else { return }
+        if event.window === window, editor.bounds.contains(editor.convert(event.locationInWindow, from: nil)) { return }
+        finishTextEditing()
+    }
+    private func beginTextEditing(at point: CGPoint, replacing index: Int? = nil) {
+        guard allowed() else { onCancel(); return }
+        var annotation = index.map { history.items[$0] } ?? ScreenshotAnnotation(tool: .text, points: [point])
+        let origin = annotation.points.first ?? point
+        let available = CGSize(width: max(1, selection.maxX - origin.x), height: max(1, selection.maxY - origin.y))
+        annotation.textMaxWidth = min(annotation.textMaxWidth ?? available.width, available.width)
+        let editor = CaptureTextView(annotation: annotation, availableSize: available)
+        editingTextIndex = index; textEditor = editor
+        editor.onCommit = { [weak self] in self?.finishTextEditing() }
+        addSubview(editor)
+        updateAnnotations(); updateSelectionLayers()
+        window?.makeFirstResponder(editor)
+        editor.setSelectedRange(NSRange(location: (editor.string as NSString).length, length: 0))
+    }
+    private func textAnnotation(at point: CGPoint) -> Int? {
+        history.items.indices.reversed().first { index in
+            let annotation = history.items[index]
+            guard annotation.tool == .text, let origin = annotation.points.first else { return false }
+            return CGRect(origin: origin, size: ScreenshotTextLayout(annotation: annotation).size)
+                .intersection(selection).contains(point)
+        }
     }
     /// AppKit can replace a layer-backed view's root when it is attached/reconfigured.
     /// Reattach our persistent layers every time; never rely on the root created during init.
@@ -121,7 +162,9 @@ import os
         updateSelectionLayers()
     }
     private func updateAnnotations() {
-        annotationView.items = history.items + (draft.map { [$0] } ?? [])
+        annotationView.items = history.items.enumerated().compactMap { index, annotation in
+            index == editingTextIndex ? nil : annotation
+        } + (draft.map { [$0] } ?? [])
         annotationView.needsDisplay = true
     }
     private func updateSelectionLayers() {
@@ -150,7 +193,7 @@ import os
         handlesLayer.path = handles
         labelLayer.isHidden = false
         let pixels = CaptureGeometry.pixels(visible, image: image, size: bounds.size)
-        labelLayer.string = notice ?? (selection.isEmpty
+        labelLayer.string = notice ?? (isEditingText ? "↩ 换行 · Esc 结束文字编辑 · 点击别处提交" : selection.isEmpty
             ? "单击选窗口 · 拖动框选 · R 恢复上次选区 · Esc 取消"
             : "\(Int(pixels.width)) × \(Int(pixels.height)) · ↩/⌘C 复制 · ⇧↩ 保存路径 · R 恢复 · P 贴图 · Esc 取消")
         labelLayer.frame = CGRect(x: max(8, min(visible.minX, bounds.width - 670)),
@@ -182,23 +225,23 @@ import os
     override func mouseEntered(with event: NSEvent) { mouseMoved(with: event) }
     override func mouseExited(with event: NSEvent) { if !dragging { hoveredWindow = nil } }
     override func mouseDown(with event: NSEvent) {
+        finishTextEditing()
         window?.makeKey(); window?.makeFirstResponder(self)
-        commitText()
+        anchor = convert(event.locationInWindow, from: nil); original = selection
+        didDrag = false; freeSelecting = false; clickWindow = windows.first { $0.contains(anchor) }
+        if selection.contains(anchor) {
+            if let index = textAnnotation(at: anchor) {
+                if event.clickCount >= 2 { beginTextEditing(at: anchor, replacing: index) }
+                return
+            }
+            if tool == .text { beginTextEditing(at: anchor); return }
+        }
         dragging = true; lastFrame = nil; frameTotal = 0; frameCount = 0
         displayLink?.invalidate()
         displayLink = displayLink(target: self, selector: #selector(recordFrame(_:)))
         displayLink?.add(to: .main, forMode: .common)
-        anchor = convert(event.locationInWindow, from: nil); original = selection
-        didDrag = false; freeSelecting = false; clickWindow = windows.first { $0.contains(anchor) }
         if let tool, selection.contains(anchor) {
-            if tool == .text {
-                textPoint = anchor
-                let field = NSTextField(frame: CGRect(x: anchor.x, y: anchor.y, width: min(240, bounds.maxX - anchor.x), height: 28))
-                field.placeholderString = "输入标注，Enter 确认"; field.target = self; field.action = #selector(finishText)
-                addSubview(field); textField = field; window?.makeFirstResponder(field)
-            } else {
-                draft = ScreenshotAnnotation(tool: tool, points: [anchor, anchor], number: history.items.filter { $0.tool == .number }.count + 1)
-            }
+            draft = ScreenshotAnnotation(tool: tool, points: [anchor, anchor], number: history.items.filter { $0.tool == .number }.count + 1)
             return
         }
         if tool != nil { return }
@@ -213,6 +256,7 @@ import os
         }
     }
     override func mouseDragged(with event: NSEvent) {
+        guard dragging, textEditor == nil else { return }
         let p = convert(event.locationInWindow, from: nil)
         if hypot(p.x - anchor.x, p.y - anchor.y) >= 3 { didDrag = true }
         if freeSelecting && !didDrag { return }
@@ -229,7 +273,6 @@ import os
         else if moving { selection = CaptureGeometry.moved(original, by: delta, bounds: bounds) }
         else { selection = CaptureGeometry.selection(from: anchor, to: p, bounds: bounds) }
     }
-    @objc private func finishText() { commitText(); window?.makeFirstResponder(self); updateToolbar() }
     override func mouseUp(with event: NSEvent) {
         if freeSelecting && !didDrag { selection = clickWindow ?? .zero }
         freeSelecting = false; clickWindow = nil
@@ -240,15 +283,15 @@ import os
     }
     func showNotice(_ message: String) { notice = message; updateSelectionLayers() }
     func restore(_ rect: CGRect) {
-        textField?.removeFromSuperview(); textField = nil
+        discardTextEditor()
         tool = nil; draft = nil; history = ScreenshotAnnotationHistory()
         hoveredWindow = nil
         selection = CaptureGeometry.restored(rect, bounds: bounds)
         updateAnnotations(); updateToolbar()
     }
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        // The field editor owns copy/undo while entering a text annotation.
-        guard textField == nil else { return super.performKeyEquivalent(with: event) }
+        // NSTextView owns copy/undo and input-method composition while editing.
+        guard textEditor == nil else { return super.performKeyEquivalent(with: event) }
         let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
         if modifiers == .command, event.charactersIgnoringModifiers?.lowercased() == "c" {
             complete(); return true
@@ -260,7 +303,7 @@ import os
         return super.performKeyEquivalent(with: event)
     }
     override func keyDown(with event: NSEvent) {
-        if event.keyCode == 53 { onCancel(); return }
+        if event.keyCode == 53 { if !finishTextEditing() { onCancel() }; return }
         let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
         if event.keyCode == 36 || event.keyCode == 76, modifiers.isEmpty || modifiers == .shift {
             complete(modifiers == .shift ? .save : .copy); return

@@ -18,7 +18,7 @@ struct CaptureToolbar: View {
             ForEach(ScreenshotEditorModel.Tool.allCases, id: \.self) { item in
                 Button { select(item) } label: { Image(systemName: item.symbol) }
                     .background(tool == item ? p.selected : .clear, in: RoundedRectangle(cornerRadius: Tokens.Radius.control))
-                    .help(item.title).accessibilityLabel(item.title)
+                    .help(item == .text ? "文字：点击输入，↩ 换行，Esc 提交，双击文字再编辑" : item.title).accessibilityLabel(item.title)
             }
             Divider().frame(height: Tokens.Size.compact)
             Button(action: undo) { Image(systemName: "arrow.uturn.backward") }.disabled(!canUndo).help("撤销 ⌘Z")

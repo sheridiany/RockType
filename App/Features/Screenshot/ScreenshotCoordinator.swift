@@ -73,12 +73,14 @@ import os
         previousApp = frontmost?.processIdentifier == ProcessInfo.processInfo.processIdentifier ? nil : frontmost
         hidden = (NSApp?.windows ?? []).filter { $0.isVisible && $0.level != .normal }
         hidden.forEach { $0.orderOut(nil) }
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == 53 { self?.cancel(); return nil }
-            return event
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .rightMouseDown]) { [weak self] event in
+            guard let self else { return event }
+            return self.routeCanvasEvent(event)
         }
         globalKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == 53 { self?.cancel() }
+            guard event.keyCode == 53, let self else { return }
+            // IME candidate windows can belong to another process. Never close an active text edit here.
+            if !self.canvases.values.contains(where: \.isEditingText) { self.cancel() }
         }
         protectionTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -102,6 +104,18 @@ import os
                 else if !(error is CancellationError) { self.onNotice("无法截取屏幕，请检查屏幕录制权限后重试。") }
             }
         }
+    }
+    /// Keep native NSTextView/IME key handling ahead of the screenshot's Escape shortcut.
+    func routeCanvasEvent(_ event: NSEvent) -> NSEvent? {
+        if event.type == .keyDown, event.keyCode == 53 {
+            if event.window?.firstResponder is CaptureTextView || canvases.values.contains(where: \.isEditingText) { return event }
+            cancel(); return nil
+        }
+        if event.type == .leftMouseDown || event.type == .rightMouseDown,
+           event.window?.contentView is CaptureCanvas {
+            for canvas in canvases.values { canvas.finishTextEditingIfOutside(event) }
+        }
+        return event
     }
     private func show(_ frames: [ScreenCapture.Frame]) {
         for frame in frames {
