@@ -14,7 +14,8 @@ struct OnboardingTests {
         var fails = false
         var suspended: CheckedContinuation<TranslationServiceClient.InputGeneration, Error>?
         var suspendNext = false
-        let manager = InputSourceManager(readSources: { source }, generation: {
+        var disconnects = 0
+        let manager = InputSourceManager(readSources: { source }, disconnect: { disconnects += 1 }, generation: {
             calls += 1
             if fails { throw TranslationServiceClient.Failure.disconnected }
             if suspendNext {
@@ -61,10 +62,10 @@ struct OnboardingTests {
         let oldVerification = Task { await manager.verify() }
         suspended = nil
         while suspended == nil { await Task.yield() }
-        manager.cancel()
+        manager.stop()
         suspended?.resume(returning: .init(connectionID: counter.connectionID, value: 200))
         await oldVerification.value
-        check(!manager.verified, "late verification after closing must be ignored")
+        check(!manager.verified && disconnects == 1, "closing must release connection and ignore late verification")
     }
 
     func check(_ condition: @autoclosure () -> Bool, _ message: String) {

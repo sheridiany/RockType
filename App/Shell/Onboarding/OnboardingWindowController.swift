@@ -72,7 +72,7 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
-        input.cancel()
+        input.stop()
         // Release the SwiftUI tree so its tasks stop even when an NSWindow is retained.
         window?.contentView = nil
         window = nil

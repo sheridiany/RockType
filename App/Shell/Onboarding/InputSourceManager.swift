@@ -52,18 +52,22 @@ final class InputSourceManager {
     private var attempt = UUID()
     private let generation: () async throws -> TranslationServiceClient.InputGeneration
     private let readSources: () -> InputSourceSnapshot
+    private let disconnect: () -> Void
 
     init(client: TranslationServiceClient = TranslationServiceClient(),
          readSources: @escaping () -> InputSourceSnapshot = { .current() }) {
         self.generation = { try await client.controllerInputGeneration() }
         self.readSources = readSources
+        self.disconnect = { client.invalidate() }
         refresh()
     }
 
     init(readSources: @escaping () -> InputSourceSnapshot,
+         disconnect: @escaping () -> Void = {},
          generation: @escaping () async throws -> TranslationServiceClient.InputGeneration) {
         self.generation = generation
         self.readSources = readSources
+        self.disconnect = disconnect
         refresh()
     }
 
@@ -130,6 +134,11 @@ final class InputSourceManager {
         evidence = nil
         verified = false
         isVerifying = false
+    }
+
+    func stop() {
+        cancel()
+        disconnect()
     }
 
     func openKeyboardSettings() {
