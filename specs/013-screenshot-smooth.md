@@ -9,7 +9,7 @@
 
 | # | 任务 | 执行 | 状态 |
 | --- | --- | --- | --- |
-| S-1 | 顺畅：① 启动后预热 `SCShareableContent` 并在后台刷新（屏幕/窗口变化时），⌃1 不再现查；多屏并行截取。② 选区画布改为图层：冻结底图作为 `CALayer.contents` 只设置一次；遮罩、选区框、手柄、尺寸标签用 `CAShapeLayer`/`CATextLayer`，拖动只改 path（关闭隐式动画）；标注单独一层，只在标注变化时重绘，不再每次拖动整屏 `draw` 和合成。③ 工具栏只创建一次，之后只移动/更新状态。④ App 启动后在后台预热 Vision OCR。⑤ 计时日志（只记数字，`privacy: .public`）：⌃1→遮罩可见毫秒数；拖动期间平均帧间隔 | pi-xpc | 已实现，待人工验证 |
+| S-1 | 顺畅：① 启动后预热 `SCShareableContent` 并在后台刷新（屏幕/窗口变化时），⌃1 不再现查；多屏并行截取。② 选区画布改为图层：冻结底图作为 `CALayer.contents` 只设置一次；遮罩、选区框、手柄、尺寸标签用 `CAShapeLayer`/`CATextLayer`，拖动只改 path（关闭隐式动画）；标注单独一层，只在标注变化时重绘，不再每次拖动整屏 `draw` 和合成。③ 工具栏只创建一次，之后只移动/更新状态。④ App 启动后在后台预热 Vision OCR。⑤ 计时日志（只记数字，`privacy: .public`）：⌃1→遮罩可见毫秒数；拖动期间平均帧间隔 | pi-xpc | 渲染修复已实现，待安装复测 |
 | S-2 | 悬停选窗口：遮罩出现后鼠标悬停高亮所在窗口（用截图时刻的窗口列表，排除自身、Dock、桌面、菜单栏小窗口、透明/屏幕外窗口），单击即选中该窗口区域；拖动仍为自由框选；结果从冻结底图裁剪，不重新截图 | pi-xpc | 已实现，待人工验证 |
 | S-3 | AI 开发输出：↩ 复制图片并关闭（现状保留，⌘C 同效）；⇧↩ 保存 PNG 并复制文件路径（默认 `~/Pictures/RockType`，设置 → 截图可改；文件名 `RockType-yyyyMMdd-HHmmss.png`）；R 恢复上次选区（仅本次运行期内存，不落盘） | pi-surfaces 提供保存/路径服务与设置；pi-xpc 在画布接键 | 服务、设置与画布接键已实现；待人工验收 |
 | S-4 | 贴图：P 把当前选区（含标注）钉在屏幕最上层；可拖动、触控板/滚轮缩放、⌘C 复制、双击或 Esc 关闭；可同时多张；不落盘 | pi-surfaces | 面板与画布接键已实现；待人工验收 |
@@ -99,3 +99,15 @@ PinnedImageController.shared.closeAll()
 - 新增测试：P 输出确实包含标注像素、Retina 裁剪尺寸、安全输入拒绝输出、负坐标副屏全局坐标；同时运行 surfaces 的贴图缩放边界与拒绝创建测试。
 - 通过：最终 `scripts/test.sh` 真实退出码 **0**，`scripts/build.sh` 真实退出码 **0**（包含 App/输入法/语音产物签名与语音 XPC smoke），`git diff --check` **0**。所有任务的最终整合版本已覆盖。
 - 待人工验证：安装版 ⌃1/拖动/悬停窗口、150 ms/17 ms 指标、工具栏及图层方向、真实 ↩/⌘C/⇧↩/R/P、保存路径粘贴、跨屏恢复/贴图、多张贴图的焦点/缩放/关闭、安全输入切换。未安装、注册或从 worktree 启动输入法；未启动主 App 冒烟。
+
+### S-1 可见性修复（pi-xpc，2026-10-11）
+
+- 验收反馈：安装版 ⌃1 无可见遮罩；截图成功与 `overlay_ms` 52–124 日志不能证明窗口已显示。此前的几何/对象复用测试没有检查最终像素。
+- 已复现的代码缺陷：冻结底图与覆盖图层仅在 init 挂到当时的 AppKit backing layer。显式重建 backing layer 后，原画布渲染为全透明，底图、遮罩、尺寸/快捷键标签和边框全部丢失。普通挂载在本机未复现空白；重建是确定可复现的触发条件，不能据此声称已还原用户现场的全部时序。
+- 修复：通过 `CaptureCanvas.makeBackingLayer()` 在每次根层创建时重新挂载原有图层，底图 contents 仍只赋值一次；给遮罩/边框/手柄设置实际 bounds 并跟随布局更新。标注视图明确透明，重绘先清理脏区，不填充不透明背景。
+- 截图专用 `CapturePanel(captureRect:)` 明确使用 nonactivating panel、`hidesOnDeactivate = false`、alpha 1、不透明黑色窗口背景和无阴影；截图与测试共享这条构造路径，不改变预览面板配置。
+- 真实渲染回归：`Tests/ScreenshotTests/CanvasRenderingTests.swift` 创建真实 CapturePanel + CaptureCanvas，放在屏幕外、orderFront 后处理 AppKit 显示，再用 `layer.render(in:)` 读取合成像素。全程仅使用合成图，不激活主 App、不发送按键、不读取用户屏幕；结束立即关闭测试面板。
+- 覆盖：纯绿底图在无选区时以 48% 黑遮罩暗化，标签含可见白色文字；有选区时内部保留原色、外部仍暗化、边框实际绘制；不对称选区和红/蓝方向条验证 top-left 坐标；同样断言在 backing layer 重建后仍成立，并确认空标注层不遮挡底图。
+- 红灯：修复前 `swift test --filter CanvasRenderingTests` 真实退出码 **1**；最终测试再次对照 HEAD 的原版 CaptureCanvas，重建用例 **7 个像素断言失败**，其余正常挂载/方向用例通过。
+- 绿灯：修复后相同测试 3 项通过，真实退出码 **0**；完整 `scripts/test.sh`、`scripts/build.sh` 真实退出码均为 **0**（包含签名与语音 XPC smoke）；`git diff --check` 退出码 **0**。
+- 待人工验证：由 Claude 从 main 安装后复测真实 ⌃1 遮罩、框选、跨屏、键盘焦点及原有 S-3/S-4；未从此 worktree 启动主 App、安装/注册/启动输入法或模拟全局按键。屏幕外像素测试不等于用户当前桌面上的可见性验收。
