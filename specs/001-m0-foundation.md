@@ -28,7 +28,7 @@
 | --- | --- | --- | --- |
 | T1 | Rime 方案迁移 | pi | 完成（Claude 已验收 2026-10-11） |
 | T2 | 翻译 XPC 协议与服务迁移 | pi | 完成（Claude 已验收 2026-10-11；服务测试已并入根 Package.swift） |
-| T3 | 输入法迁移与开发安装 | pi | 进行中（非 XPC 部分完成；T2 已合并，正在联调） |
+| T3 | 输入法迁移与开发安装 | pi | 完成（待验收；根测试脚本的词库误报需 Claude 处理） |
 | T4 | 端到端验收 | Claude | 未开始 |
 
 ### T1 Rime 方案迁移
@@ -70,32 +70,31 @@
 
 ### T3 验收证据（2026-10-11，agent/ime）
 
-实现提交：`d9e2135`（输入法迁移与子模块）、`e0426b1`（构建、开发安装/卸载及注册工具）。开始时已执行 `git merge main`，快进至 T1 提交 `5c89b5a`。未 push、未合并回 main、未修改其他 worktree。
+状态：**完成（待验收）**。T2 已通过 `git merge main` 合入（main 当时为 `53ed599`；合并提交 `e16bb2d`），不再等待 T2。实现提交：`d9e2135`、`e0426b1`、`add8a31`。未 push、未合并回 main、未修改其他 worktree。
 
-已完成（待验收）：
-
-- `InputMethod/` 迁入 Squirrel 源码、资源及 arm64 预编译 librime；所有产品源码与资源引用改为 RoarkT。三个子模块为 gitlink，提交分别为 `a251145d3aafa33871824a40bbec04c966bd8b56`、`4c28f11f451facef809b380502874a48ba964ddb`、`41847a58cdef7506b257591fcca6f9495df591d4`，URL 与来源相同。无构建目录入库。
-- Xcode target/scheme 保留上游名 `Squirrel`，Swift 6 / macOS 14，产物 `RoarkT Input.app`，Bundle ID 与连接名改为新产品。全拼和小鹤输入源在 `Info.plist` 独立声明，`setValue(_:forTag:client:)` 与新建 Rime session 将它们映射到 `roarkt` / `roarkt_flypy`。默认不启用输入源。
-- 删除工厂文件备份/迁移、旧签名替换兼容分支、旧设置 helper 启动和跨进程通知握手。设置菜单按主 App Bundle ID 查找，未安装时禁用。语音服务/填入实现留在 M5，不迁入当前运行路径；输入法没有麦克风权限声明或 entitlement，不主动申请通知权限。
-- 候选翻译仅调用 v2 `translateCandidate` / `cancel` / `recordControllerInput`，通过 header search path 引用 `Shared/XPCProtocol/include/RoarkTTranslationXPCProtocol.h`，无共享头副本。客户端要求翻译服务具有规定 Team ID 与 identifier。请求值类型在输入法独立编译，保留原 MIT 许可证于 `InputMethod/LICENSE.translation.txt`；MIT 产品不 import/link 输入法代码。
-- Xcode build phase 从仓库根 `Rime/` 打包 YAML/Lua 及八股文模型到 SharedSupport。`lib/` + `bin/` 约 12 MB；`data/plum/` 约 52 MB，其中约 40 MB 为全拼/小鹤所需八股文语言模型，非构建产物。未携带无用的预编译 Sparkle framework。
-- `scripts/build.sh` 增加 Release 输入法构建、嵌套 dylib/工具与 bundle 同身份签名、注册工具构建。`install-dev.sh` 安装到用户 Input Methods，生成指向当前 `dist/RoarkT.app` helper 的 LaunchAgent 并加载，然后注册和查询两个输入源；`uninstall-dev.sh` 禁用本产品输入源、退出本产品进程、移除开发安装与 LaunchAgent，保留 Rime 用户数据。均不静默启用/选择输入源。TIS 无公开注销 API，卸载后系统缓存条目可能需重新登录消失。
+- 输入法源码、Xcode 工程、资源及 arm64 预编译 librime 已迁入。产品为 `RoarkT Input.app`，Bundle ID 为 `com.roarkist.inputmethod.RoarkT`；上游 target/scheme 名 `Squirrel` 保留。Swift 6 / macOS 14；IMK 同步回调用主线程断言进入 MainActor，Rime 通知转交主队列，XPC 回调以连接 token 防止迟到回调影响新连接。
+- librime / plum / Sparkle 均为 gitlink，固定提交为 `a251145d3aafa33871824a40bbec04c966bd8b56` / `4c28f11f451facef809b380502874a48ba964ddb` / `41847a58cdef7506b257591fcca6f9495df591d4`，URL 与来源相同。无构建目录入库。`lib/` + `bin/` 约 12 MB；`data/plum/` 约 52 MB，其中约 40 MB 是全拼/小鹤所需八股文模型，非构建产物。未携带无用的预编译 Sparkle framework。
+- 两个输入源独立声明，显示为“RoarkT（全拼）”“RoarkT（小鹤双拼）”，`setValue(_:forTag:client:)` 与新建 Rime session 分别选用 `roarkt` / `roarkt_flypy`。Xcode build phase 从根 `Rime/` 打包 YAML/Lua 和语言模型到 SharedSupport。
+- 删除旧工厂数据备份/迁移、旧签名替换兼容分支、旧设置 helper 启动和产品跨进程 DistributedNotification 通知。设置菜单按主 App Bundle ID 查找，未安装时禁用。无麦克风用途声明/entitlement，不主动申请通知权限。
+- 翻译客户端经 header search path 引用 `Shared/XPCProtocol` 的共享头，无头文件副本，只调用 v2 `translateCandidate` / `cancel` / `recordControllerInput`。语音端点通过 `registerDictationEndpoint` 注册，导出 `RoarkTDictationXPCProtocol` 的 capture/commit/cancel，按主 App Team ID + identifier 鉴权；翻译服务连接也校验服务签名。所有 ticket/焦点状态访问在主队列，安全输入/有预编辑内容时拒绝获取上下文，按一次性 ticket、调用方连接、前台应用、选择区、activation、deadline 约束填入，拒绝控制字符。语音录音/worker/UI 仍属 M5。
+- 本地请求值类型、ticket 和填入策略在输入法独立编译；原 MIT 授权保留于 `InputMethod/LICENSE.translation.txt`。MIT 产品不 import/link 输入法代码。
+- `build.sh` 生成并签名主 App、服务、输入法和注册工具；`install-dev.sh` 安装到当前用户目录，加载指向本 worktree `dist/RoarkT.app` helper 的 LaunchAgent，然后注册/查询两输入源；`uninstall-dev.sh` 逆操作并保留 Rime 用户数据。安装不启用或选择输入源。TIS 无公开注销 API，移除 bundle 后系统缓存项可能需重新登录消失。
 
 | 检查 | 结果 | 证据 / 限制 |
 | --- | --- | --- |
-| `scripts/build.sh` | 阻塞（输入法编译失败） | 主 App / 翻译服务构建签名通过；输入法当前只报共享协议缺少 `translateCandidate`、`cancel`、`recordControllerInput` 四处成员错误。T2 尚未合入，不添加假协议绕过。完整签名输入法未生成。 |
-| `codesign -dv dist/RoarkT.app/Contents/Helpers/RoarkTTranslationService` | 通过 | Identifier `com.roarkist.roarkt.translation`，TeamIdentifier `DF7J2VBQD8`。输入法签名尚未验证。 |
-| `scripts/test.sh` | 失败（旧标识守卫误报） | Swift Testing 2/2 通过；Rime 三方案部署通过。最后 grep 命中 `InputMethod/librime/data/minimal/essay.txt`、`InputMethod/data/plum/essay.txt`、`InputMethod/data/plum/terra_pinyin.dict.yaml` 的“巴洛克”“夏洛克”等普通词条，并非旧产品引用。为保持词库原文和固定子模块提交未篡改词条。`scripts/test.sh` 不属 T3 文件所有权，需 Claude 调整守卫的产品标识判定或第三方词库扫描边界。 |
-| 产品源码旧标识检查 | 通过 | `git grep -n -E 'RoType|洛克|Luoke|im\.roarkai|RoarkTools' -- InputMethod ':!InputMethod/data/plum/*' ':!InputMethod/LICENSE*' ':!InputMethod/README.md'` 无结果（gitlink 不递归进入上游源码）。 |
-| `plutil -lint` | 通过 | `InputMethod/resources/Info.plist`、`Squirrel.entitlements`、`Squirrel.xcodeproj/project.pbxproj`。 |
-| Shell 语法 | 通过 | `zsh -n scripts/build.sh scripts/install-dev.sh scripts/uninstall-dev.sh`；`bash -n InputMethod/scripts/package-rime.sh`。 |
-| 注册工具 Swift 6 编译与拒绝无效 bundle | 通过 | `xcrun swiftc -swift-version 6 -parse-as-library Core/Identifiers.swift Installer/tools/RegisterInputSource.swift -o /tmp/RoarkTRegisterInputSource`；`register /tmp/nonexistent-roarkt.app` 返回 1，明确拒绝错误 Bundle ID。 |
-| 安装前置检查 | 通过 | 缺少输入法产物时 `scripts/install-dev.sh` 返回 1，提示先运行 build，不写入用户安装目录或加载服务。 |
-| Rime 资源打包 smoke check | 通过 | 在临时目录设置 `TARGET_BUILD_DIR`、`CONTENTS_FOLDER_PATH`、`SRCROOT` 运行 `InputMethod/scripts/package-rime.sh`；逐字节比较所有根 Rime YAML/Lua 与打包副本及八股文模型，一致；两个输入源方案映射与默认禁用断言通过。 |
-| 实际安装/卸载、TIS 列出两个已安装输入源 | 阻塞 / 未运行 | 等待 T2 合并并生成可执行输入法后运行。未改变当前系统输入源。 |
-| 真实键盘、候选翻译、设置菜单、密码框/安全输入、macOS 14 运行 | 待人工验证 | 留给 T4；资源静态检查不能替代 IMK 端到端验收。继承的 AppKit actor 隔离编译警告也需后续结合真实输入线程验证。 |
+| `scripts/build.sh` | 通过 | Swift 6 Release 编译、主 App / 服务 / 输入法 / 注册工具签名及 bundle `codesign --verify --strict --deep` 成功。仅保留 Xcode 的“无 AppIntents 依赖，跳过 metadata”提示。 |
+| 签名身份 | 通过 | `codesign -dv 'dist/RoarkT Input.app'`：Identifier `com.roarkist.inputmethod.RoarkT`，TeamIdentifier `DF7J2VBQD8`；服务 Identifier `com.roarkist.roarkt.translation`，同 Team ID。 |
+| `scripts/test.sh` | **失败：词库守卫误报** | Swift Testing **38/38 通过**，Rime 三方案临时部署通过；末尾 grep 把上游词库中的“巴洛克”“夏洛克”等普通词条识别成旧产品。命中 `InputMethod/librime/data/minimal/essay.txt`、`InputMethod/data/plum/essay.txt`、`InputMethod/data/plum/terra_pinyin.dict.yaml`，以及构建后 SharedSupport 中的两份词库副本。保留原始词库与固定子模块提交，未篡改自然语言词条。`scripts/test.sh` 不在 T3 所有权内，需 Claude 调整产品标识判定和第三方词库/构建产物扫描边界。 |
+| `InputMethod/scripts/test-ticket.sh` | 通过 | 实际 ticket 类型的重放拒绝、应用/光标/activation 变化、取消、过期、deadline、NaN、后请求替代前请求；实际填入策略的空文本/控制字符/缺失应用拒绝。 |
+| 产品源码旧标识检查 | 通过 | 对 git 跟踪的 `InputMethod` 文件排除上游词库、许可证及上游 README 后，旧产品标识 grep 无结果；不递归 gitlink。共享头只引用，不复制。 |
+| Plist / shell 语法 | 通过 | `plutil -lint` 检查 Info.plist、entitlements、pbxproj；`zsh -n scripts/build.sh scripts/install-dev.sh scripts/uninstall-dev.sh`；`bash -n InputMethod/scripts/package-rime.sh InputMethod/scripts/test-ticket.sh`。 |
+| Rime 资源打包 | 通过 | 临时目录运行 `package-rime.sh`，逐字节比较根 Rime YAML/Lua、语言模型与打包副本一致；输入源/方案映射与默认禁用断言通过。最终 bundle 含同一打包资源。 |
+| 注册工具失败路径 | 通过 | Swift 6 独立编译成功；`register /tmp/nonexistent-roarkt.app` 返回 1，拒绝错误 bundle。安装产物缺失时安装脚本在写用户目录前退出。 |
+| 实际安装、查询、卸载、重新安装 | **通过** | `scripts/install-dev.sh`、`dist/RoarkTRegisterInputSource list`、`scripts/uninstall-dev.sh`、再次安装均返回 0。卸载后用户 bundle/LaunchAgent 文件消失、`launchctl print` 确认服务已卸载；重新安装后两源均可查询，LaunchAgent 指向当前 worktree 的服务。 |
+| 不静默启用/选择 | **通过** | TIS 查询得到两源正确中文显示名，均 `enabled=false`、`selected=false`。安装后的 bundle 深度签名校验通过。 |
+| 真实键盘、候选翻译、语音端点真实 XPC 往返、密码框、macOS 14 运行 | 待人工 / T4 验证 | 不自动选择输入源；编译、服务单测和 ticket 测试不能替代真实 IMK/语音填入验收。 |
 
-剩余工作：Claude 合并 T2 后重新运行 `scripts/build.sh`，核对共享头实际 Swift selector 与输入法本地 v2 请求值类型一致；如编译继续暴露错误再修复。调整词库守卫后运行 `scripts/test.sh`，然后执行开发安装、TIS 双输入源查询、卸载与 T4 真实输入验收。当前按任务指令在 T2 依赖处停止。
+交接给 Claude：调整根测试脚本的词库误报（本任务没有该文件所有权）并复跑；执行 T4。当前保留 `~/Library/Input Methods/RoarkT Input.app` 与 `~/Library/LaunchAgents/com.roarkist.roarkt.translation.plist` 供验收，输入源未启用/选中，Rime 用户数据未修改。LaunchAgent 指向此 worktree 的 `dist/`，合并后需从目标 checkout 重新构建/安装；在此之前不要删除此 worktree。
 
 ### T4 端到端验收（Claude）
 
@@ -106,9 +105,9 @@
 | 项 | 方法 | 结果 | 证据 |
 | --- | --- | --- | --- |
 | 骨架构建 | `swift build`、`scripts/test.sh`、`scripts/build.sh` | 通过 | 2026-10-11 Claude 本机运行 |
-| 无旧标识 | `scripts/test.sh` 守卫 | 未运行 | |
+| 无旧标识 | `scripts/test.sh` 守卫 | 失败（词库误报） | T3 产品源码检查通过；上游词库自然语言词条误报，见 T3 证据。 |
 | Rime 部署 | `scripts/test-rime.sh` | 通过 | 2026-10-11：`scripts/test.sh` 调用 `scripts/test-rime.sh`，临时目录部署 `roarkt` / `roarkt_flypy` / `roarkt_en` 成功，生成 `roarkt_zh.table.bin`、`roarkt_zh.prism.bin`、`roarkt_flypy.prism.bin`、`roarkt_en.table.bin`、`roarkt_en.prism.bin`。`grep -ri rotype Rime/` 无结果。未验证真实键盘打字（属 T3/T4）。Claude 复核：重跑通过；4 个未迁入 Lua 均为旧版退休空壳，方案未引用。已知问题：部署器暂借 `../RoType`，T3 后改用 `InputMethod/bin`。 |
 | XPC 鉴权：输入法可翻译、伪造客户端被拒 | 服务测试 + 手工 | 未运行 | |
-| 输入源注册 | `install-dev.sh` 后列出输入源 | 未运行 | |
+| 输入源注册 | `install-dev.sh` 后列出输入源 | 通过 | 2026-10-11 T3：全拼/小鹤均可查询、显示名正确、未启用/选中；卸载和重新安装通过。 |
 | 选中 RoarkT 打出中文、候选翻译出现 | 用户在系统设置添加输入源后试打 | 待人工验证 | |
 | 许可证边界 | MIT 目录不引用 `InputMethod/` | 未运行 | |
