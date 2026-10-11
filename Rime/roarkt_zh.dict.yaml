@@ -3,11 +3,12 @@
 
 ---
 name: roarkt_zh
-version: "0.1.0"
+version: "0.6.0"
 sort: by_weight
 use_preset_vocabulary: true
 import_tables:
   - luna_pinyin
+  - roarkt_ai
 ...
 
 你好	ni hao	100000

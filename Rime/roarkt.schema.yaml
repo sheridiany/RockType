@@ -4,9 +4,9 @@
 schema:
   schema_id: roarkt
   name: RockType
-  version: "0.3.0"
+  version: "0.6.0"
   author:
-    - RoarkT contributors
+    - RockType contributors
   description: >-
     中文拼音与英文原词候选；双向翻译显示在独立操作栏。
   dependencies:

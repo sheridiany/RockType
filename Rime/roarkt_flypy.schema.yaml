@@ -8,11 +8,11 @@
 schema:
   schema_id: roarkt_flypy
   name: RockType Shuangpin
-  version: "0.3.0"
+  version: "0.6.0"
   author:
     - double pinyin layout by 鹤
     - Rime schema by 佛振
-    - adapted for RoarkT by RoarkT contributors
+    - adapted for RockType by RockType contributors
   description: 小鹤双拼与英文原词候选；双向翻译显示在独立操作栏。
   dependencies:
     - roarkt_en

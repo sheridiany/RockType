@@ -15,9 +15,10 @@ let package = Package(
     ],
     targets: [
         .testTarget(name: "InputMethodChecks", path: "Tests/InputMethodTests",
-                    exclude: ["SessionChecks.swift", "ModifierChecks.swift", "PanelChecks.swift", "RimeChecks.swift", "RimeBridge.h", "PanelBridge.h"]),
+                    exclude: ["SessionChecks.swift", "ModifierChecks.swift", "PanelChecks.swift", "RimeChecks.swift", "RimeBridge.h", "PanelBridge.h", "CandidateEvaluation.swift", "Fixtures"]),
         .testTarget(name: "MenuIconTests", path: "Tests/MenuIcon",
                     exclude: ["test-menu-icon.swift", "SystemRendererProbe.m", "CompareScreenshot.swift"]),
+        .testTarget(name: "RoarkTCandidateEvaluationTests", path: "Tests/CandidateEvaluationTests"),
         .target(
             name: "RoarkTXPCProtocol",
             path: "Shared/XPCProtocol",

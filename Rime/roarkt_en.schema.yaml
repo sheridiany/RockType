@@ -4,10 +4,10 @@
 schema:
   schema_id: roarkt_en
   name: RockType English Dictionary
-  version: "0.1.0"
+  version: "0.2.0"
   author:
-    - RoarkT contributors
-  description: RoarkT 主方案的英文词典编译依赖，不单独显示在方案列表。
+    - RockType contributors
+  description: RockType 主方案的英文词典编译依赖，不单独显示在方案列表。
 
 engine:
   processors:
