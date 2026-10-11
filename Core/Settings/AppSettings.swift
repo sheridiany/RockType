@@ -103,6 +103,8 @@ public struct ScreenshotSettings: Codable, Equatable, Sendable {
     public var ocrLanguages = ["zh-Hans", "en-US"]
     /// nil uses ~/Pictures/RockType. Set only through the directory picker.
     public var saveDirectory: String? = nil
+    /// Missing in existing settings: each tool uses its own built-in default.
+    public var annotationStyles: [String: ScreenshotAnnotationStyle]? = nil
     public init() {}
 }
 
@@ -160,4 +162,13 @@ public struct InputAISettings: Codable, Equatable, Sendable {
     public var shortcut: Shortcut? = Shortcut(key: "tab", modifiers: .option)
     public var timeout: TimeInterval = 30
     public init() {}
+}
+
+/// Preferences only: never contains annotation text, geometry or captured pixels.
+public struct ScreenshotAnnotationStyle: Codable, Equatable, Sendable {
+    public var colorHex: String
+    public var width: Double
+    public init(colorHex: String = "D84A2F", width: Double = 5) {
+        self.colorHex = colorHex; self.width = width
+    }
 }
