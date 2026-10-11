@@ -341,7 +341,7 @@ final class SquirrelInputController: IMKInputController, @unchecked Sendable {
       logDir.target = self
       let setting = NSMenuItem(title: NSLocalizedString("Settings...", comment: "Menu item"), action: #selector(openRimeFolder), keyEquivalent: "")
       setting.target = self
-      let roarkTSettings = NSMenuItem(title: "打开RoarkT设置…", action: #selector(openRoarkTSettings), keyEquivalent: "")
+      let roarkTSettings = NSMenuItem(title: "RoarkT 设置…", action: #selector(openRoarkTSettings), keyEquivalent: "")
       roarkTSettings.target = self
       roarkTSettings.isEnabled = NSWorkspace.shared.urlForApplication(withBundleIdentifier: ROARKT_APP_BUNDLE_ID) != nil
 
@@ -380,6 +380,13 @@ final class SquirrelInputController: IMKInputController, @unchecked Sendable {
     let configuration = NSWorkspace.OpenConfiguration()
     configuration.activates = false
     configuration.arguments = ["--show-settings"]
+    // Arguments only reach a newly launched process. An existing main app receives
+    // the standard reopen event and routes it to its settings window.
+    configuration.appleEvent = NSAppleEventDescriptor(
+      eventClass: AEEventClass(kCoreEventClass), eventID: AEEventID(kAEReopenApplication),
+      targetDescriptor: nil, returnID: AEReturnID(kAutoGenerateReturnID),
+      transactionID: AETransactionID(kAnyTransactionID)
+    )
     NSWorkspace.shared.openApplication(at: appURL, configuration: configuration)
   }
 

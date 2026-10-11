@@ -31,6 +31,7 @@
 | S3 | 权限中心与全局快捷键接线 | pi-platform | S1 的 Settings 模型 | 未开始 |
 | S3 | 权限中心与全局快捷键接线 | pi-platform | S1 的 Settings 模型 | 完成（待验收） |
 | S4 | 首次引导与输入法“设置”入口 | pi-ime | S1 的 Settings 模型 | 未开始 |
+| S4 | 首次引导与输入法“设置”入口 | pi-ime | S1 的 Settings 模型 | 完成（待验收） |
 | S5 | 集成验收 | Claude | S1–S4 | 未开始 |
 
 ### S1（pi-xpc，分支 agent/xpc）
@@ -84,6 +85,13 @@
 | 输入法菜单“设置…”拉起主 App | 手工 | 待人工验证 | |
 | Gallery 仍可渲染全部状态 | `scripts/render-gallery.sh` | 渲染通过；视觉待人工验收 | 当前分支产出 `dist/gallery/` 共 134 张 PNG；未宣称 UI 设计验收通过 |
 | `scripts/test.sh`、`scripts/build.sh` | 命令 | 测试通过；全量构建阻塞 | 60 个 Swift tests + Rime 部署/标识检查通过；主 App、翻译服务 release 构建与签名通过；输入法因未初始化子模块停止（exit 1），未修改 S1 之外目录 |
+| 权限四态显示与跳转 | 手工 | 待人工验证 | |
+| `⌃1` 注册、冲突提示、重设 | 手工 | 待人工验证 | |
+| 引导：输入源真实按键验证、语言包状态 | 手工 | 待人工验证 | S4：检测两种输入源；同一来源、同一 XPC 连接内计数递增才通过；macOS 26 检查中英双向并显式准备下载。真实试打与系统下载弹窗未运行，须先完成下方 S5 接线。 |
+| 输入法菜单“设置…”拉起主 App | 手工 | 待人工验证 | S4：保留 Bundle ID 查找、未安装禁用与 `--show-settings`；补标准 reopen AppleEvent。主 App 的 AppDelegate 接线归 S2/S5。 |
+| Gallery 仍可渲染全部状态 | `scripts/render-gallery.sh` | 通过（S4 分支） | 2026-10-11：134 张 PNG，`dist/gallery/`；这仅验证现有 Gallery，真实引导窗口的视觉与键盘走查待人工验证。 |
+| `scripts/test.sh`、`scripts/build.sh` | 命令 | 通过（S4 分支） | 2026-10-11：50 项 Swift 测试、Rime 部署、标识检查通过；主 App、翻译服务、输入法与注册工具构建及 Developer ID 签名验证通过。 |
+| S4 引导持久化与 XPC 生命周期 | 自动化测试 | 通过 | `Tests/SettingsStoreTests/OnboardingTests.swift`、`OnboardingXPCTests.swift`：跳过全部步骤、跳到末步不漏步骤、保存失败与重试、重新引导、启动参数优先级、来源切换、计数复位、迟到结果、关闭断连；匿名 XPC 实测发现、取消、4 秒超时、下次调用重建。 |
 
 ## 进度
 
@@ -101,6 +109,16 @@ Settings 模型已提交：f87c60a。`Core/Settings/AppSettings.swift` 为公共
 - 诊断入口：`try await DiagnosticLog.shared.record(DiagnosticEvent(...))`；保存面板选择路径后 `try await DiagnosticLog.shared.exportZIP(to:)`。日志只接受枚举字段，不传选中文字、URL、密钥或原始错误描述。
 - 验证日志在本工作树任务的 `/tmp/roarkt-s1-test.log`、`/tmp/roarkt-s1-build.log`、`/tmp/roarkt-s1-gallery.log`；构建产物和截图未纳入提交。
 - 未验证：真实 AI 服务/凭据、设置窗口接线与退出保存、钥匙串接线、真实权限/快捷键/输入法、完整输入法构建、UI 人工验收。无 push、无合并、未修改其他 worktree。
+
+### S4 交付（2026-10-11）
+
+- 状态“完成（待验收）”指 S4 所有权内的模块交付；首次启动、设置中的重跑入口、权限与 AI 表单需 S2/S5 接线后才可作端到端验收，当前分支的 AppDelegate 尚未调用引导控制器。
+- 依赖：快进接入 S1 模型 `f87c60a`，经合并提交 `3402178` 接入 S1 存储 `84f3818`；未手改 S1 的模型、存储或 Package.swift。
+- S4 实现提交：`6faf167`（输入源验证 / XPC）、`2769599`（引导 / 语言包 / 持久化与测试）、`1af7659`（输入法设置菜单 reopen）。末次交付提交补充关闭窗口释放验证连接与本节证据。
+- 新增 `App/Shell/Onboarding/` 五个文件及 `App/Shell/TranslationServiceClient.swift`；沿用 U4 设计变量与组件，保留 `App/Surfaces/`、Mock 与 Gallery 不变。
+- 权限与 AI 表单由构造参数注入相同的设置视图，不另建权限实例、密钥存储或连接测试。语音模型明确显示“即将推出”，只有跳过入口。
+- 完成或全部跳过后同步 `SettingsStore.flush()`；保存失败留在引导中，可重试。关闭未完成的窗口不写完成标记；设置中重跑不清除已保存的首次启动标记。
+- 人工验证未运行：安装/选中输入源与真实试打，翻译服务被杀后的签名连接恢复，语言包已安装/缺失/下载取消/失败与 macOS 14–25 降级，权限四态与 AI 四项测试，首次/重复启动设置路由，浅深色、VoiceOver、纯键盘走查。
 
 ## 问题
 
@@ -189,3 +207,10 @@ swiftc -swift-version 6 -parse-as-library -module-name RoarkTApp \
 - S3 → Claude/S2：`App/Info.plist` 尚无 `NSMicrophoneUsageDescription`。请 S2 补充准确用途说明后，在签名主 App 验收请求；S3 在缺失说明时返回错误，避免系统终止进程。
 - S3 → Claude：请确认 S2 按上述接口接入实时权限/快捷键分区并管理生命周期；当前 S3 的完成范围是所拥有目录的可编译模块，真实窗口集成待 S5 验收。
 - S3 → Claude：当前 worktree 未初始化输入法子模块，完整构建阻塞；请在集成 worktree 运行完整构建。Fn 与系统听写/切换输入源的冲突无法由 Carbon 注册结果证明，界面已提示，仍需人工确认系统键盘设置。
+### S4 → Claude/S5 接线交接（文件归属限制，未越界修改）
+1. S2 的 `AppDelegate` 保留一个 `OnboardingWindowController(store:permissions:aiConnection:showSettings:)`，`store` 必须是设置窗口的同一个 `SettingsStore`；`permissions` 与 `aiConnection` 是返回 `AnyView` 的闭包，分别嵌入 S3 权限中心视图和共享的 AI 连接表单/四项测试。
+2. `applicationDidFinishLaunching` 在窗口控制器就绪后调用其同名方法；该方法使 `--show-settings` 优先于首次引导，且跳过 Gallery 模式。传入的 `showSettings` 必须显示并激活设置窗口。
+3. `AppDelegate.applicationShouldHandleReopen(_:hasVisibleWindows:)` 转发到 `onboarding.applicationShouldHandleReopen()`。已运行进程不重新读取启动参数；输入法菜单明确发送标准 reopen 事件。
+4. 设置 → 通用 的“重新运行引导”按钮调用 `onboarding.rerun()`。
+5. 请 Claude 确认 AI 表单最终提供者：S4 原文称“S1 的连接表单”，但 S1 所有权是客户端/存储，表单接线归 S2。本实现按复用 S2 的同一表单设计，避免重复状态。S3 权限中心的 start/stop 仍由共享外壳管理。
+以上接线未完成前，FR-E5 与输入法打开设置的端到端验收仍为阻塞；自动化通过不代表这些功能已集成。
