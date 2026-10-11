@@ -7,30 +7,34 @@ import RoarkTPlatform
 @MainActor @Observable final class ScreenshotSession {
     private(set) var image: CGImage?
     let origin: String
-    var text = ""
+    let visual: ScreenshotVisualAI
+    let translation: ScreenshotTranslation
+    private var textWasEdited = false
+    var text = "" { didSet { if text != oldValue { textWasEdited = true; translation.clear(); visual.clear() } } }
+    enum OCRPhase { case idle, running, done, empty, failed, cancelled }
+    private(set) var ocrPhase: OCRPhase = .idle
     private(set) var ocrFinished = false
     private(set) var ocrLines: [OCR.Line] = []
     var ocrLanguages: [String]
     var mergeParagraphs = false
-    private(set) var busy = false
-    private(set) var result = ""
-    private(set) var engine = ""
+    private var localBusy = false
+    var busy: Bool { localBusy || visual.isBusy }
+    var result: String { visual.output }
+    var engine: String { visual.model }
     var notice: String?
-    var confirmingImage = false
+    var confirmingImage: Bool { visual.phase == .confirming }
     var onClose: () -> Void = {}
     var performText: (OperationRequest) -> Void = { _ in }
     var imageCompleted: (OperationResult, OperationTemplate) -> Void = { _, _ in }
     var configureVision: () -> Void = {}
+    @ObservationIgnored private let rememberImageConfirmation: (Bool) -> Void
     @ObservationIgnored private let settings: () -> AppSettings
     @ObservationIgnored private let verified: (AIConnectionSettings, String) -> Bool
     @ObservationIgnored private let allowed: () -> Bool
     @ObservationIgnored private let recognize: ((Data) async throws -> String)?
-    @ObservationIgnored private let sendImage: ((AIConnectionSettings, String, Data) async throws -> String)?
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var protection: Task<Void, Never>?
     @ObservationIgnored private var generation = 0
-    @ObservationIgnored private var pendingConnection: AIConnectionSettings?
-    @ObservationIgnored private var pendingModel: String?
     @ObservationIgnored private var savePanel: NSSavePanel?
     @ObservationIgnored private var closed = false
 
@@ -38,10 +42,18 @@ import RoarkTPlatform
          verified: @escaping (AIConnectionSettings, String) -> Bool,
          allowed: @escaping () -> Bool = { SecureInput.status() == .allowed },
          recognize: ((Data) async throws -> String)? = nil,
-         sendImage: ((AIConnectionSettings, String, Data) async throws -> String)? = nil) {
+         translationRunner: (any OperationRunner)? = nil,
+         rememberImageConfirmation: @escaping (Bool) -> Void = { _ in },
+         sendVisual: ScreenshotVisualAI.Send? = nil) {
+        self.rememberImageConfirmation = rememberImageConfirmation
+        self.visual = ScreenshotVisualAI(settings: settings, verified: verified, allowed: allowed,
+            remember: rememberImageConfirmation, send: sendVisual)
+        self.translation = ScreenshotTranslation(runner: translationRunner ?? DefaultOperationRunner(
+            offline: TextTranslationXPCClient(), apiKey: { try Keychain().get(account: settings().ai.id) ?? "" },
+            isAllowed: allowed, providerKey: { try Keychain().get(account: $0) ?? "" }), allowed: allowed)
         self.image = image; self.origin = origin; self.settings = settings; self.verified = verified
         self.ocrLanguages = settings().screenshot.ocrLanguages
-        self.allowed = allowed; self.recognize = recognize; self.sendImage = sendImage
+        self.allowed = allowed; self.recognize = recognize
     }
     func start() {
         guard protection == nil, !closed else { return }
@@ -54,14 +66,15 @@ import RoarkTPlatform
         }
     }
     func cancel() {
-        generation += 1; task?.cancel(); task = nil; busy = false
-        confirmingImage = false; pendingConnection = nil; pendingModel = nil
+        translation.cancel(); visual.cancel()
+        if ocrPhase == .running { ocrPhase = .cancelled; notice = "识别已取消，可以重新开始。" }
+        generation += 1; task?.cancel(); task = nil; localBusy = false
     }
     func close() {
         guard !closed else { return }
-        closed = true; cancel(); protection?.cancel(); protection = nil
+        closed = true; cancel(); translation.clear(); visual.clear(); protection?.cancel(); protection = nil
         savePanel?.cancel(nil); savePanel = nil
-        image = nil; ocrLines = []; text = ""; result = ""; notice = nil; onClose()
+        image = nil; ocrLines = []; text = ""; notice = nil; onClose()
     }
     private func check(_ current: Int? = nil) -> Bool {
         !closed && allowed() && (current == nil || current == generation)
@@ -88,15 +101,15 @@ import RoarkTPlatform
             self.savePanel = nil
             guard response == .OK, self.check(), let url = panel.url, let image = self.image else { return }
             do {
-                guard let data = NSBitmapImageRep(cgImage: image).representation(using: format == .png ? .png : .jpeg,
-                    properties: format == .jpeg ? [.compressionFactor: 0.9] : [:]) else { throw PlatformReadError.writeFailed }
+                guard let data = ScreenshotExport.encode(image, jpeg: format == .jpeg) else { throw PlatformReadError.writeFailed }
                 try data.write(to: url, options: .atomic); self.notice = "图片已保存"
             } catch { self.notice = "无法保存图片，请选择其他位置后重试。" }
         }
     }
-    func runOCR(copyAfter: Bool = false) {
+    func runOCR(copyAfter: Bool = false, thenVisual action: ScreenshotAIService.Action? = nil, forceConfirmation: Bool = false) {
         guard check(), let data = png() else { return }
-        cancel(); let current = generation; busy = true; notice = "本机识别中…"; ocrFinished = false
+        cancel(); let current = generation; localBusy = true; notice = "本机识别中…"; ocrFinished = false
+        translation.clear(); visual.clear(); ocrPhase = .running
         let languages = ocrLanguages, paragraphs = mergeParagraphs
         task = Task { [weak self] in
             guard let self else { return }
@@ -107,14 +120,20 @@ import RoarkTPlatform
                 let output = recognized.formatted(paragraphs: paragraphs)
                 guard !Task.isCancelled, self.check(current) else { return }
                 self.ocrLines = recognized.lines
-                self.text = output; self.ocrFinished = true; self.busy = false
+                self.ocrPhase = output.isEmpty ? .empty : .done
+                self.text = output; self.ocrFinished = true; self.localBusy = false
                 self.notice = output.isEmpty ? "没有识别到文字，可输入文字或换用更清晰的图片。" : nil
                 if copyAfter && !output.isEmpty { self.copyText(output) }
+                if let action { self.prepareImage(action: action, forceConfirmation: forceConfirmation) }
             } catch {
                 guard self.check(current), !Task.isCancelled else { return }
-                self.busy = false; self.notice = "本机识别失败，请重试。"
+                self.localBusy = false; self.ocrPhase = .failed; self.notice = "本机识别失败，请重试。"
             }
         }
+    }
+    func translate() {
+        guard check(), !busy else { return }
+        translation.run(text: text, settings: settings())
     }
     /// Reads the edited value at click time, never the uncorrected OCR result.
     func runText(templateID: String) {
@@ -128,81 +147,30 @@ import RoarkTPlatform
             applicationName: "截图 OCR"), method: .screenshotOCR)
         performText(OperationRequest(session: OperationSession(snapshot: snapshot), template: template, settings: config))
     }
-    var visionModel: String? {
-        guard let route = try? AIProviderRouting.resolve(settings(), task: .image) else { return nil }
-        let connection = route.connection
-        let model = route.model
-        guard !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, verified(connection, model) else { return nil }
-        return model
-    }
-    func prepareImage() {
-        guard check(), let model = visionModel else { notice = "当前连接的图片能力尚未验证可用，请配置并测试视觉模型。"; return }
-        cancel(); pendingConnection = try? AIProviderRouting.resolve(settings(), task: .image).connection; pendingModel = model; confirmingImage = true
-    }
-    func confirmImage() {
-        guard check(), confirmingImage, let connection = pendingConnection, let model = pendingModel,
-              connection == (try? AIProviderRouting.resolve(settings(), task: .image).connection), model == visionModel, let data = png() else {
-            confirmingImage = false; notice = "连接或模型已变化，请重新预览并确认。"; return
+    var visionModel: String? { visual.visionModel }
+    func prepareImage(action: ScreenshotAIService.Action = .explain, forceConfirmation: Bool = false) {
+        guard check(), visionModel != nil else { notice = "请先配置并测试视觉模型的图片能力。"; return }
+        if !ocrFinished && !textWasEdited {
+            runOCR(thenVisual: action, forceConfirmation: forceConfirmation); return
         }
-        cancel(); let current = generation; busy = true; result = ""; engine = model; notice = nil
-        task = Task { [weak self] in
-            guard let self else { return }
-            do {
-                // Confirmation and task execution can be separated by a settings/key change.
-                guard self.check(current), connection == (try? AIProviderRouting.resolve(self.settings(), task: .image).connection), model == self.visionModel else {
-                    self.busy = false
-                    self.notice = "连接、模型或密钥测试状态已变化，请重新预览并确认。"
-                    return
-                }
-                let answer: String
-                if let sendImage = self.sendImage { answer = try await sendImage(connection, model, data) }
-                else {
-                    let key = try Keychain().get(account: connection.id) ?? ""
-                    let service = ScreenshotAIService(client: AIClient(connection: connection),
-                        recognize: { try await OCR().recognize($0).text }, isAllowed: { SecureInput.status() == .allowed })
-                    let fallbackVerified = connection.fallbackModel.map { self.verified(connection, $0) } ?? false
-                    answer = try await service.run(action: .explain, png: data,
-                        correctedText: self.ocrFinished ? self.text : nil, model: model, imageCapabilityVerified: true,
-                        apiKey: key, fallbackImageCapabilityVerified: fallbackVerified,
-                        onModel: { [weak self] actual in await self?.updateModel(actual, generation: current) })
-                }
-                guard !Task.isCancelled, self.check(current) else { return }
-                self.result = answer; self.busy = false
-                if answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    self.notice = "模型未返回内容，请重试。"
-                } else {
-                    // History retains the explanation, never image bytes. Follow-ups use completed text only.
-                    let template = Self.imageTemplate
-                    let snapshot = ContentSnapshot(text: "图片理解：追问基于已完成的文字解释，原图不保留在对话中。",
-                        source: .init(pid: ProcessInfo.processInfo.processIdentifier, applicationName: self.origin), method: .screenshotOCR)
-                    let session = OperationSession(snapshot: snapshot,
-                        turns: [OperationTurn(question: "请用中文解释这张图片。", answer: answer)])
-                    self.imageCompleted(OperationResult(session: session, templateID: template.id, text: answer, engine: self.engine), template)
-                }
-            } catch {
-                guard !Task.isCancelled, self.check(current) else { return }
-                self.busy = false; self.notice = Self.message(.ai(error as? AIClientError ?? .network))
-            }
-        }
+        cancel(); notice = nil
+        guard let data = png() else { return }
+        visual.prepare(action: action, png: data, text: text, forceConfirmation: forceConfirmation)
     }
-    private func updateModel(_ model: String, generation: Int) {
-        guard check(generation), !Task.isCancelled else { return }
-        engine = model
+    func confirmImage(skipFuture: Bool = false) {
+        guard check() else { return }
+        visual.confirm(skipFuture: skipFuture)
     }
-    static let imageTemplate = OperationTemplate(id: "screenshot-image-explanation", name: "图片理解", icon: "photo",
-        prompt: "请根据已完成的图片文字解释回答问题。你无法查看原图；需要图片细节时请说明并请用户重新打开图片。")
+    func restoreImageConfirmation() { rememberImageConfirmation(false); notice = "已恢复每次发送前确认。" }
+    func retryImage() { prepareImage(action: visual.action, forceConfirmation: true) }
+    func openImageFollowup() {
+        guard check(), let (result, template) = visual.completedResult(origin: origin) else { return }
+        imageCompleted(result, template)
+    }
+    static let imageTemplate = ScreenshotVisualAI.template(.explain)
+    static func imageTemplate(forID id: String) -> OperationTemplate? {
+        [ScreenshotAIService.Action.translate, .summarize, .explain].map(ScreenshotVisualAI.template).first { $0.id == id }
+    }
 
-    private static func message(_ failure: OperationFailure) -> String {
-        switch failure {
-        case .inputTooLong(let limit): "文字超出输入预算（\(limit) 字节），请缩短后重试。"
-        case .protectedInput: "安全输入已启用，操作已停止。"
-        case .ai(.unauthorized): "AI 认证失败，请检查密钥和模型权限。"
-        case .ai(.modelNotFound): "模型不可用，请检查模型名称。"
-        case .ai(.rateLimited): "请求过于频繁，请稍后重试。"
-        case .ai(.configuration): "请先配置 AI 连接与模型。"
-        case .ai(.timeout): "请求超时，请重试。"
-        default: "操作失败，请检查连接后重试。"
-        }
-    }
     isolated deinit { task?.cancel(); protection?.cancel() }
 }

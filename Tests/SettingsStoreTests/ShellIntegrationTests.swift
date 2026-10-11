@@ -50,10 +50,8 @@ import RoarkTCore
 }
 
 @MainActor @Test func galleryWinsOverSettingsAndFirstLaunch() {
-    for completed in [true, false] {
-        #expect(OnboardingWindowController.launchAction(arguments: ["--gallery", "--show-settings"], completed: completed) == .none)
-        #expect(OnboardingWindowController.launchAction(arguments: ["--render-gallery", "/tmp/gallery", "--show-settings"], completed: completed) == .none)
-    }
+    #expect(SettingsLaunchPolicy.action(arguments: ["--gallery", "--show-settings"]) == .none)
+    #expect(SettingsLaunchPolicy.action(arguments: ["--render-gallery", "/tmp/gallery", "--show-settings"]) == .none)
 }
 
 @MainActor @Test func selectionHotkeysForwardAndRejectStaleOrProtectedEvents() throws {

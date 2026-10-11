@@ -3,7 +3,7 @@ import RoarkTCore
 import Testing
 @testable import RoarkTApp
 
-struct OnboardingTests {
+struct InputSourceVerificationTests {
     @MainActor @Test func inputVerificationRejectsStaleEvidence() async {
         let pinyin = Identifiers.pinyinInputSourceID
         let flypy = Identifiers.flypyInputSourceID
@@ -71,52 +71,4 @@ struct OnboardingTests {
     func check(_ condition: @autoclosure () -> Bool, _ message: String) {
         #expect(condition(), Comment(rawValue: message))
     }
-}
-
-@MainActor @Test func onboardingSkipPersistsAndRerunDoesNotResetFirstLaunch() throws {
-    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: directory) }
-    let persistence = SettingsPersistence(fileURL: directory.appendingPathComponent("settings.json"))
-    let store = SettingsStore(persistence: persistence)
-    let flow = OnboardingFlow(store: store)
-    #expect(flow.shouldPresentAutomatically)
-    // Jumping to the last step must not silently complete the other four.
-    flow.select(.ai)
-    flow.resolve(.skipped)
-    #expect(!flow.finished && flow.step == .input)
-    for _ in 0..<4 { flow.resolve(.skipped) }
-    #expect(flow.finished && !flow.shouldPresentAutomatically)
-    #expect(try persistence.load().settings.general.onboardingCompleted)
-    flow.restart()
-    #expect(!flow.finished && flow.step == .input && flow.resolutions.isEmpty)
-    #expect(!flow.shouldPresentAutomatically)
-    let reloaded = OnboardingFlow(store: SettingsStore(persistence: persistence))
-    #expect(!reloaded.shouldPresentAutomatically)
-}
-
-@MainActor @Test func onboardingSaveFailureDoesNotClaimCompletionAndCanRetry() throws {
-    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: directory) }
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    let blocker = directory.appendingPathComponent("blocked")
-    try Data().write(to: blocker) // A file cannot be the settings parent directory.
-    let persistence = SettingsPersistence(fileURL: blocker.appendingPathComponent("settings.json"))
-    let store = SettingsStore(persistence: persistence)
-    let flow = OnboardingFlow(store: store)
-    for _ in 0..<5 { flow.resolve(.skipped) }
-    #expect(!flow.finished && flow.errorMessage != nil && flow.shouldPresentAutomatically)
-    try FileManager.default.removeItem(at: blocker)
-    flow.resolve(.skipped)
-    #expect(flow.finished)
-    #expect(try persistence.load().settings.general.onboardingCompleted)
-}
-
-@MainActor @Test func settingsLaunchTakesPriorityAndGalleryDoesNotOpenOnboarding() {
-    typealias Controller = OnboardingWindowController
-    #expect(Controller.launchAction(arguments: [], completed: false) == .onboarding)
-    #expect(Controller.launchAction(arguments: [], completed: true) == .none)
-    #expect(Controller.launchAction(arguments: ["--show-settings"], completed: false) == .settings)
-    #expect(Controller.launchAction(arguments: ["--show-settings"], completed: true) == .settings)
-    #expect(Controller.launchAction(arguments: ["--gallery"], completed: false) == .none)
-    #expect(Controller.launchAction(arguments: ["--render-gallery", "/tmp/gallery"], completed: false) == .none)
 }

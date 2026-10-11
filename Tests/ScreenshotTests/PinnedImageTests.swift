@@ -144,3 +144,23 @@ extension PinnedImageTests {
         XCTAssertEqual(panel.alphaValue, 0.4)
     }
 }
+
+extension PinnedImageTests {
+    func testChangingHistoryLimitImmediatelyEvictsOldestAndZeroStopsRetention() throws {
+        let image = try syntheticImage()
+        var history = PinnedImageHistory()
+        for n in 0..<4 {
+            history.append(.init(image: image, frame: CGRect(x: n * 10, y: 0, width: 20, height: 10), opacity: 1, locked: false))
+        }
+        history.setLimit(2)
+        XCTAssertEqual(history.entries.map(\.frame.minX), [20, 30])
+        let retained = try XCTUnwrap(history.entries.last)
+        history.setLimit(0)
+        history.append(retained)
+        XCTAssertTrue(history.entries.isEmpty)
+        history.setLimit(1000)
+        XCTAssertEqual(history.limit, 50)
+        history.setLimit(-1)
+        XCTAssertEqual(history.limit, 0)
+    }
+}

@@ -145,8 +145,9 @@ final class TextAnnotationTests: XCTestCase {
         try toolbar(canvas).complete()
         XCTAssertFalse(canvas.isEditingText)
         let actual = try XCTUnwrap(image)
-        let composed = try XCTUnwrap(ScreenshotCompositor.render(image: canvas.image, size: canvas.bounds.size,
+        let rectangular = try XCTUnwrap(ScreenshotCompositor.render(image: canvas.image, size: canvas.bounds.size,
             selection: canvas.selection, annotations: [expected]))
+        let composed = try XCTUnwrap(ScreenshotExport.render(image: rectangular, pointSize: canvas.selection.size, roundedCorners: true))
         XCTAssertEqual(NSBitmapImageRep(cgImage: actual).representation(using: .png, properties: [:]),
             NSBitmapImageRep(cgImage: composed).representation(using: .png, properties: [:]))
     }

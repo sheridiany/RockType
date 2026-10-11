@@ -20,7 +20,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         coordinator.readSettings = { [unowned self] in self.store.settings }
         coordinator.onNotice = { [weak self] in self?.comingSoon.show(message: $0) }
         coordinator.onPermissionRequired = { [weak self] in
-            self?.panel.close(); self?.settingsWindow.show(section: .permissions)
+            self?.panel.close()
+            self?.comingSoon.show(message: "截图需要屏幕录制权限。授权后请重新按下截图快捷键。")
+            self?.permissions.openSettings(.screenRecording)
         }
         coordinator.configureVision = { [weak self] in
             self?.panel.close(); self?.settingsWindow.show(section: .ai)
@@ -62,24 +64,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if !available { self.voice.stop() }
             return available
         })
-    private lazy var onboarding = OnboardingWindowController(
-        store: store,
-        permissions: { [unowned self] in AnyView(PermissionCenterView(center: self.permissions)) },
-        aiConnection: { [unowned self] in
-            AnyView(OnboardingConnectionRoot(store: self.store, connection: self.connection))
-        },
-        showSettings: { [weak self] in self?.showSettings() })
     private lazy var settingsWindow: SettingsWindowController = {
         let window = SettingsWindowController(store: store, login: login, connection: connection,
-            sections: ShellSettingsSections(permissions: permissions, hotkeys: hotkeys,
-                showOnboarding: { [weak self] in self?.onboarding.rerun() }))
+            sections: ShellSettingsSections(permissions: permissions, hotkeys: hotkeys))
         window.clearCurrentContent = { [weak self] in self?.clearCurrentContent() }
         window.exportDiagnostics = { [weak self] in self?.diagnostics.export() }
         return window
     }()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // The design gallery has no production listeners, preference writes or onboarding.
+        // The design gallery has no production listeners, preference writes or permission requests.
         if CommandLine.arguments.contains("--gallery") { gallery.show(); return }
         updateStatusItemVisibility()
         clock.didRefresh = { [weak self] in self?.refreshStatus() }
@@ -99,15 +93,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         permissions.start()
         operationsEnvironment.start()
         selectionController.start()
+        PinnedImageController.shared.setHistoryLimit(store.settings.screenshot.pinHistoryLimit ?? 10)
         screenshot.start()
         hotkeys.screenshotAction = { [weak self] in self?.captureScreenshot() }
         hotkeys.start()
-        onboarding.applicationDidFinishLaunching()
+        if SettingsLaunchPolicy.action(arguments: CommandLine.arguments) == .settings { showSettings() }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if CommandLine.arguments.contains("--gallery") { gallery.show(); return false }
-        return onboarding.applicationShouldHandleReopen()
+        showSettings()
+        return false
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -129,6 +125,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func settingsChanged(_ notification: Notification) {
+        PinnedImageController.shared.setHistoryLimit(store.settings.screenshot.pinHistoryLimit ?? 10)
         connection.refresh(store.settings.ai)
         operations.settingsChanged()
         refreshStatus()
@@ -181,6 +178,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 LiveMenuRoot(screenshot: screenshot, capture: { [weak self] in self?.captureScreenshot() }, store: store, clock: clock, connection: connection, recent: operationsEnvironment.recent,
                              reopen: { [weak self] result in self?.panel.close(); self?.operations.reopen(result) },
                              clear: { [weak self] in self?.clearCurrentContent() },
+                             prepareImageAction: { [weak self] in self?.panel.close() },
+                             restorePin: { [weak self] in self?.restorePinnedImage() },
+                             exitPinPassthrough: { [weak self] in self?.exitPinnedPassthrough() },
                              showSettings: { [weak self] in self?.showSettings() },
                              quit: { NSApp.terminate(nil) })
             }
@@ -198,12 +198,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func captureScreenshot() { panel.close(); screenshot.capture() }
 
+    @objc private func restorePinnedImage() {
+        panel.close()
+        if !PinnedImageController.shared.restoreLast() { comingSoon.show(message: "暂无可恢复的贴图，或安全输入保护已开启。") }
+    }
+    @objc private func exitPinnedPassthrough() {
+        panel.close(); PinnedImageController.shared.exitMousePassthrough()
+    }
+    @objc private func recognizeClipboardImage() { panel.close(); screenshot.openClipboardImage(recognize: true) }
+    @objc private func previewClipboardImage() { panel.close(); screenshot.openClipboardImage() }
+    @objc private func recognizeImageFiles() { panel.close(); screenshot.openImageFiles() }
+
     @objc func showSettings() { panel.close(); settingsWindow.show() }
     @objc private func showGallery() { panel.close(); gallery.show() }
 
     private func makeMenu() -> NSMenu {
         let menu = NSMenu()
         menu.addItem(withTitle: "截图", action: #selector(captureScreenshot), keyEquivalent: "").target = self
+        for (title, action) in [
+            ("找回最近关闭的贴图", #selector(restorePinnedImage)),
+            ("退出贴图鼠标穿透", #selector(exitPinnedPassthrough)),
+            ("识别剪贴板图片", #selector(recognizeClipboardImage)),
+            ("预览剪贴板图片", #selector(previewClipboardImage)),
+            ("批量识别图片…", #selector(recognizeImageFiles))
+        ] { menu.addItem(withTitle: title, action: action, keyEquivalent: "").target = self }
+        menu.addItem(.separator())
         menu.addItem(withTitle: "设置…", action: #selector(showSettings), keyEquivalent: ",").target = self
         #if DEBUG
         menu.addItem(withTitle: "设计面板…", action: #selector(showGallery), keyEquivalent: "").target = self
@@ -253,6 +272,9 @@ private struct LiveMenuRoot: View {
     let recent: InMemoryRecentResults
     let reopen: (OperationResult) -> Void
     let clear: () -> Void
+    let prepareImageAction: () -> Void
+    let restorePin: () -> Void
+    let exitPinPassthrough: () -> Void
     let showSettings: () -> Void
     let quit: () -> Void
     var body: some View {
@@ -261,14 +283,11 @@ private struct LiveMenuRoot: View {
                             connection.results.prefix(2).allSatisfy({ $0 == "可用" }) ? "AI 文字/流式可用" :
                             connection.configured ? "AI 已配置 · 待验证" : "AI 未配置",
                           recent: recent.results, reopen: reopen, clear: clear, screenshot: screenshot, capture: capture,
+                          pinHistoryCount: PinnedImageController.shared.history.entries.count, restorePin: restorePin,
+                          hasPassthroughPins: PinnedImageController.shared.panels.contains { $0.ignoresMouseEvents },
+                          exitPinPassthrough: exitPinPassthrough, prepareImageAction: prepareImageAction,
                           showSettings: showSettings, quit: quit)
             .preferredColorScheme(store.settings.general.appearance == .system ? nil :
                 store.settings.general.appearance == .dark ? .dark : .light)
     }
-}
-
-private struct OnboardingConnectionRoot: View {
-    @Bindable var store: SettingsStore
-    let connection: ShellConnectionModel
-    var body: some View { AIProviderSettingsView(model: connection, settings: $store.settings) }
 }

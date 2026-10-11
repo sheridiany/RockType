@@ -25,9 +25,9 @@ import RoarkTPlatform
         var statusText: String {
             switch status {
             case .granted: "已授权"
-            case .notGranted: "未授权（系统未区分首次与拒绝）"
+            case .notGranted: "未授权"
             case .notDetermined: "尚未请求"
-            case .denied: "已拒绝，可在系统设置中重新授权"
+            case .denied: "已拒绝"
             case .restricted: "受系统策略限制"
             }
         }

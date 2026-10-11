@@ -6,7 +6,7 @@ import Security
 enum RoarkTProcessTrust {
   static func canTerminate(_ application: NSRunningApplication, replacement: Bundle) -> Bool {
     guard let identifier = replacement.bundleIdentifier,
-          identifier == "com.roarkist.inputmethod.RoarkT",
+          identifier == Identifiers.inputMethodBundleID,
           application.bundleIdentifier == identifier,
           let executable = replacement.executableURL?.resolvingSymlinksInPath().standardizedFileURL,
           application.executableURL?.resolvingSymlinksInPath().standardizedFileURL == executable else { return false }
@@ -16,7 +16,7 @@ enum RoarkTProcessTrust {
     guard SecCodeCopyGuestWithAttributes(nil, attributes, [], &code) == errSecSuccess,
           let code else { return false }
     var requirement: SecRequirement?
-    let text = "anchor apple generic and certificate leaf[subject.OU] = \"DF7J2VBQD8\" and identifier \"\(identifier)\""
+    let text = Identifiers.codeRequirement(for: identifier)
     guard SecRequirementCreateWithString(text as CFString, [], &requirement) == errSecSuccess,
           let requirement else { return false }
     return SecCodeCheckValidity(code, [], requirement) == errSecSuccess

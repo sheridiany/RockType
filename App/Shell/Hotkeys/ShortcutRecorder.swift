@@ -79,40 +79,44 @@ struct HotkeySettingsView: View {
     @Bindable var center: HotkeyCenter
     @Binding var appSettings: AppSettings
     var body: some View {
-        Form {
-            Section("全局快捷键") {
+        VStack(alignment: .leading, spacing: Tokens.Space.md) {
+            U4SectionTitle(title: "全局快捷键")
+            U4Card {
                 ForEach(HotkeyCenter.Action.allCases) { action in
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: Tokens.Space.sm) {
                         HStack {
-                            Text(action.title)
-                            Spacer()
+                            Text(action.title).fontWeight(.medium)
+                            Spacer(minLength: Tokens.Space.sm)
                             Button(center.recording == action ? "按下组合键…" : label(center.shortcut(for: action))) {
                                 center.beginRecording(action)
-                            }
-                            Button("恢复默认") { center.restoreDefault(for: action) }
-                            Button("清除") { center.set(nil, for: action) }
+                            }.buttonStyle(DesignButtonStyle())
+                                .accessibilityLabel("设置" + action.title + "快捷键")
+                            Menu {
+                                Button("恢复默认") { center.restoreDefault(for: action) }
+                                Button("清除") { center.set(nil, for: action) }
+                            } label: { Image(systemName: "ellipsis") }
+                                .menuStyle(.borderlessButton).frame(width: Tokens.Size.control)
+                                .accessibilityLabel(action.title + "更多操作")
                         }
-                        Text(center.statuses[action]?.text ?? "未注册").foregroundStyle(.secondary)
+                        Text(center.statuses[action]?.text ?? "未注册")
+                            .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(.secondary)
                         if center.recording == action {
-                            Text(action == .voiceHoldToTalk ? "按下并松开 Fn；Esc 取消。" : "按组合键完成录制；Esc 取消。")
+                            Notice(text: action == .voiceHoldToTalk ? "按下并松开 Fn；Esc 取消。" : "按组合键完成录制；Esc 取消。")
                             ShortcutRecorder(voiceOnly: action == .voiceHoldToTalk,
                                 onRecord: { center.set($0, for: action) }, onCancel: {
                                     if center.recording == action { center.cancelRecording() }
-                                })
-                                .frame(height: 1)
+                                }).frame(height: 1)
                         }
                     }
+                    if action != HotkeyCenter.Action.allCases.last { U4Rule() }
                 }
-                Button("重试注册") { center.retry() }
+                Button("重试注册") { center.retry() }.buttonStyle(DesignButtonStyle(variant: .ghost))
             }
-            InputAISettingsSection(settings: $appSettings)
-            Section {
-                Text("截图、翻译与总结使用上方快捷键；语音按住 Fn 录音，松开后识别。")
-                Text("Fn 由系统共同监听；如同时触发系统听写或输入源切换，请在键盘设置中调整 Fn 行为。")
-                if let notice = center.notice { Text(notice) }
-            }
+            U4Card { InputAISettingsSection(settings: $appSettings) }
+            Notice(text: "Fn 也可能触发系统听写或切换输入源。若有冲突，请前往系统键盘设置调整 Fn 行为。")
+            if let notice = center.notice { Notice(text: notice, tone: .warn) }
+            ShortcutReference()
         }
-        .formStyle(.grouped)
         .onDisappear { if center.recording != nil { center.cancelRecording() } }
     }
 

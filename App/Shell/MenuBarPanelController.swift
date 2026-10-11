@@ -29,11 +29,17 @@ final class MenuBarPanelController {
     func toggle<Content: View>(from button: NSStatusBarButton, @ViewBuilder content: () -> Content) {
         if panel.isVisible { close(); return }
         guard let buttonWindow = button.window else { return }
-        let hosting = NSHostingView(rootView: content())
+        let root = content()
+        let hosting = NSHostingView(rootView: root)
         panel.contentView = hosting
-        let size = hosting.fittingSize
+        var size = hosting.fittingSize
         let anchor = buttonWindow.convertToScreen(button.convert(button.bounds, to: nil))
         let visible = buttonWindow.screen?.visibleFrame ?? anchor
+        if size.height > visible.height - Tokens.Space.lg {
+            size.height = max(1, visible.height - Tokens.Space.lg)
+            panel.contentView = NSHostingView(rootView: ScrollView { root }
+                .frame(width: size.width, height: size.height))
+        }
         let x = max(visible.minX, min(anchor.maxX - size.width, visible.maxX - size.width))
         let y = max(visible.minY, min(anchor.minY - size.height, visible.maxY - size.height))
         panel.setFrame(NSRect(origin: NSPoint(x: x, y: y), size: size), display: true)
@@ -78,6 +84,11 @@ struct ShellMenuBarPanel: View {
     var clear: () -> Void = {}
     var screenshot: ScreenshotCoordinator?
     var capture: () -> Void = {}
+    var pinHistoryCount = 0
+    var restorePin: () -> Void = {}
+    var hasPassthroughPins = false
+    var exitPinPassthrough: () -> Void = {}
+    var prepareImageAction: () -> Void = {}
     let showSettings: () -> Void
     let quit: () -> Void
     @Environment(\.colorScheme) private var scheme
@@ -86,25 +97,31 @@ struct ShellMenuBarPanel: View {
         let p = Tokens.palette(scheme)
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
             HStack {
-                Label("RockType", systemImage: "square.stack.3d.up")
-                    .font(Tokens.Typography.font(Tokens.Typography.read, weight: .semibold))
+                SettingsBrand()
                 Spacer()
                 Button(action: showSettings) { Image(systemName: "gearshape") }
                     .accessibilityLabel("设置").buttonStyle(DesignButtonStyle(variant: .ghost))
             }
-            if showClock {
-                Text(clock.beijingTime).font(Tokens.Typography.font(Tokens.Typography.display, weight: .semibold))
-                    .monospacedDigit()
-            }
             VStack(alignment: .leading, spacing: Tokens.Space.xs) {
+                if showClock {
+                    Text(clock.beijingTime).font(Tokens.Typography.font(Tokens.Typography.display, weight: .semibold))
+                        .monospacedDigit().accessibilityLabel("北京时间 " + clock.beijingTime)
+                }
                 Text("北京 · " + clock.beijingDate)
                 Text("本地 · " + clock.localTime)
+                    .foregroundStyle(p.textTertiary)
             }.font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(p.secondary)
-            HStack { Text("最近结果"); Spacer(); Chip(text: aiStatus) }
+                .padding(Tokens.Space.md).frame(maxWidth: .infinity, alignment: .leading)
+                .background(p.card, in: RoundedRectangle(cornerRadius: Tokens.Radius.card))
+            HStack {
+                U4SectionTitle(title: "最近结果")
+                Spacer()
+                Text("\(recent.count) / 10").monospacedDigit()
+                    .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(p.secondary)
+                    .accessibilityLabel("本次运行保留 \(recent.count) 条结果")
+            }
             if recent.isEmpty {
-                Text("本次运行暂无结果。完成文字或图片操作后，结果仅在内存中保留。")
-                    .font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(p.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                MenuRecentEmptyState()
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: Tokens.Space.xs) {
@@ -112,20 +129,30 @@ struct ShellMenuBarPanel: View {
                             Button { reopen(result) } label: {
                                 VStack(alignment: .leading, spacing: Tokens.Space.xs) {
                                     Text(result.text).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
-                                    Text(result.engine).font(Tokens.Typography.font(Tokens.Typography.caption))
+                                    Text(result.engine).lineLimit(1).font(Tokens.Typography.font(Tokens.Typography.caption))
                                         .foregroundStyle(p.secondary)
                                 }
                             }.buttonStyle(DesignButtonStyle(variant: .ghost))
                         }
                     }
-                }.frame(height: min(CGFloat(recent.count) * 66, 264))
+                }.frame(height: min(CGFloat(recent.count) * Tokens.Size.recentResultRow, Tokens.Size.recentResultsMaxHeight))
+                    .background(p.card, in: RoundedRectangle(cornerRadius: Tokens.Radius.card))
             }
             Button("清除当前内容", action: clear).buttonStyle(DesignButtonStyle(variant: .ghost))
             Button(action: capture) {
-                HStack { Label("截图", systemImage: "viewfinder"); Spacer(); Text("框选屏幕") }
+                HStack { Label("截图", systemImage: "viewfinder"); Spacer(); Text("框选屏幕").font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(p.secondary) }
             }.buttonStyle(DesignButtonStyle(variant: .secondary))
-            if let screenshot { ScreenshotImportControls(coordinator: screenshot) }
+            if let screenshot { ScreenshotImportControls(coordinator: screenshot, prepare: prepareImageAction) }
+            Button("找回最近关闭的贴图（\(pinHistoryCount)）", action: restorePin)
+                .buttonStyle(DesignButtonStyle(variant: .ghost)).disabled(pinHistoryCount == 0)
+            if hasPassthroughPins {
+                Button("退出贴图鼠标穿透", action: exitPinPassthrough)
+                    .buttonStyle(DesignButtonStyle(variant: .secondary))
+            }
             U4Rule()
+            Label(aiStatus, systemImage: "sparkles")
+                .font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(p.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             HStack {
                 Spacer()
                 Button("设置", action: showSettings).keyboardShortcut(",")
@@ -134,5 +161,6 @@ struct ShellMenuBarPanel: View {
                 Kbd("⌘Q")
             }.buttonStyle(DesignButtonStyle(variant: .ghost))
         }.padding(Tokens.Space.md).frame(width: Tokens.Size.menuWidth).modifier(DesignSurface())
+            .accessibilityElement(children: .contain).accessibilityLabel("RockType 菜单栏面板")
     }
 }

@@ -15,11 +15,24 @@ let proxy = connection.remoteObjectProxyWithErrorHandler { @Sendable [expectReje
     print(expectRejection ? "Unauthorized caller rejected" : "FAIL: signed XPC connection failed")
     finish(expectRejection ? 0 : 1)
 } as! VoiceWorkerProtocol
-// No model download, microphone, user content or real input target.
-proxy.prepare(directory: "/nonexistent-roarkt-voice-smoke-model") { @Sendable [expectRejection] ready in
-    guard !expectRejection, !ready else { finish(1) }
-    print("Signed XPC helper replied; invalid model rejected")
-    finish(0)
+if let index = CommandLine.arguments.firstIndex(of: "--evaluate-dir"), CommandLine.arguments.indices.contains(index + 2) {
+    let directory = URL(fileURLWithPath: CommandLine.arguments[index + 1])
+    let model = CommandLine.arguments[index + 2]
+    do {
+        let evaluation = try VoiceAccuracyEvaluation(proxy: proxy, directory: directory)
+        proxy.prepare(directory: model) { ready in
+            guard ready else { finish(1) }
+            evaluation.next()
+        }
+    } catch { finish(1) }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 300) { finish(1) }
+} else {
+    // No model download, microphone, user content or real input target.
+    proxy.prepare(directory: "/nonexistent-roarkt-voice-smoke-model") { @Sendable [expectRejection] ready in
+        guard !expectRejection, !ready else { finish(1) }
+        print("Signed XPC helper replied; invalid model rejected")
+        finish(0)
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 15) { print("FAIL: XPC smoke timed out"); finish(1) }
 }
-DispatchQueue.main.asyncAfter(deadline: .now() + 15) { print("FAIL: XPC smoke timed out"); finish(1) }
 dispatchMain()

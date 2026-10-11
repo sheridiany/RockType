@@ -135,6 +135,35 @@ final class RoarkTTranslationClient: @unchecked Sendable {
     self.now = now
   }
 
+  private struct Scheduled {
+    let generation: Int64
+    let work: DispatchWorkItem
+  }
+  private var scheduled: [String: Scheduled] = [:]
+
+  /// Only uncached requests wait. Each composition owns its timer; newer generations cancel it.
+  func translateDebounced(sessionID: String, generation: Int64, request: CandidateTranslationRequest,
+                          delay: TimeInterval = 0.08, completion: @escaping Completion) {
+    assertMainQueue()
+    cancel(sessionID: sessionID, throughGeneration: generation - 1)
+    guard !isSecureInputEnabled() else {
+      clearCache(); completion(.failure(CandidateTranslationFailure.cancelled)); return
+    }
+    if RoarkTCandidateSnapshot.preservesTechnicalText(request.sourceText)
+        || cache.text(for: request, now: now()) != nil {
+      translate(sessionID: sessionID, generation: generation, request: request, completion: completion)
+      return
+    }
+    let work = DispatchWorkItem { [weak self] in
+      guard let self, self.scheduled[sessionID]?.generation == generation else { return }
+      self.scheduled[sessionID] = nil
+      self.translate(sessionID: sessionID, generation: generation, request: request, completion: completion)
+    }
+    scheduled[sessionID]?.work.cancel()
+    scheduled[sessionID] = Scheduled(generation: generation, work: work)
+    DispatchQueue.main.asyncAfter(deadline: .now() + max(0, delay), execute: work)
+  }
+
   private var cache = RoarkTTranslationCache()
   private var connectionPolicy = RoarkTTranslationConnectionPolicy()
   private var cacheExpiry: DispatchWorkItem?
@@ -170,6 +199,12 @@ final class RoarkTTranslationClient: @unchecked Sendable {
     guard !isSecureInputEnabled() else {
       clearCache()
       completion(.failure(CandidateTranslationFailure.cancelled))
+      return
+    }
+
+    if RoarkTCandidateSnapshot.preservesTechnicalText(request.sourceText) {
+      completion(.success(.init(generation: generation, direction: request.direction.rawValue,
+                               sourceText: request.sourceText, translatedText: request.sourceText)))
       return
     }
 
@@ -243,6 +278,9 @@ final class RoarkTTranslationClient: @unchecked Sendable {
   func cancel(sessionID: String, throughGeneration: Int64) {
     assertMainQueue()
     defer { scheduleIdleDisconnect() }
+    if let queued = scheduled[sessionID], queued.generation <= throughGeneration {
+      queued.work.cancel(); scheduled[sessionID] = nil
+    }
     guard let request = pending[sessionID], request.generation <= throughGeneration else { return }
     request.timeout.cancel()
     pending[sessionID] = nil
@@ -322,9 +360,7 @@ final class RoarkTTranslationClient: @unchecked Sendable {
 
   private func makeConnection() -> NSXPCConnection {
     let connection = NSXPCConnection(machServiceName: ROARKT_TRANSLATION_SERVICE_NAME, options: [])
-    connection.setCodeSigningRequirement(
-      "anchor apple generic and certificate leaf[subject.OU] = \"\(ROARKT_TEAM_ID)\" and identifier \"\(ROARKT_TRANSLATION_SERVICE_NAME)\""
-    )
+    connection.setCodeSigningRequirement(Identifiers.codeRequirement(for: ROARKT_TRANSLATION_SERVICE_NAME))
     connection.remoteObjectInterface = NSXPCInterface(with: RoarkTTranslationXPCProtocol.self)
     let token = UUID()
     connectionToken = token
@@ -358,6 +394,8 @@ final class RoarkTTranslationClient: @unchecked Sendable {
   }
 
   private func failAllPending(with error: Error) {
+    for queued in scheduled.values { queued.work.cancel() }
+    scheduled.removeAll()
     let requests = Array(pending.values)
     pending.removeAll()
     for request in requests {

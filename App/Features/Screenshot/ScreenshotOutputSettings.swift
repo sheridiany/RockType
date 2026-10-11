@@ -7,6 +7,10 @@ struct ScreenshotOutputSettings: View {
 
     var body: some View {
         U4Card {
+            Toggle("截图圆角", isOn: Binding(get: { settings.roundedCorners ?? true }, set: { settings.roundedCorners = $0 }))
+            Text("默认 8 点圆角；PNG 保留透明边角，JPEG 使用白色边角。⌘S 另存为。")
+                .font(Tokens.Typography.font(Tokens.Typography.caption))
+            Divider()
             Text("快速保存目录")
             Text(settings.saveDirectory ?? "~/Pictures/RockType")
                 .font(Tokens.Typography.font(Tokens.Typography.caption))

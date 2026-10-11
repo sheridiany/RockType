@@ -3,7 +3,7 @@ import Testing
 import RoarkTXPCProtocol
 @testable import RoarkTApp
 
-private final class OnboardingXPCService: NSObject, RoarkTTranslationXPCProtocol, @unchecked Sendable {
+private final class InputVerificationXPCService: NSObject, RoarkTTranslationXPCProtocol, @unchecked Sendable {
     let answers: Bool
     init(answers: Bool) { self.answers = answers }
     func ping(reply: @escaping (String) -> Void) { if answers { reply("2") } }
@@ -16,9 +16,9 @@ private final class OnboardingXPCService: NSObject, RoarkTTranslationXPCProtocol
                             withReply reply: @escaping (Int64, String?, String?, String?, Error?) -> Void) {}
 }
 
-private final class OnboardingXPCListener: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
-    let service: OnboardingXPCService
-    init(answers: Bool = true) { service = OnboardingXPCService(answers: answers) }
+private final class InputVerificationXPCListener: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
+    let service: InputVerificationXPCService
+    init(answers: Bool = true) { service = InputVerificationXPCService(answers: answers) }
     func listener(_ listener: NSXPCListener, shouldAcceptNewConnection connection: NSXPCConnection) -> Bool {
         connection.exportedInterface = NSXPCInterface(with: RoarkTTranslationXPCProtocol.self)
         connection.exportedObject = service
@@ -27,8 +27,8 @@ private final class OnboardingXPCListener: NSObject, NSXPCListenerDelegate, @unc
     }
 }
 
-@MainActor @Test func onboardingXPCDiscoveryAndReconnection() async throws {
-    let delegate = OnboardingXPCListener()
+@MainActor @Test func inputVerificationXPCDiscoveryAndReconnection() async throws {
+    let delegate = InputVerificationXPCListener()
     let listener = NSXPCListener.anonymous()
     listener.delegate = delegate
     listener.resume()
@@ -49,9 +49,9 @@ private final class OnboardingXPCListener: NSObject, NSXPCListenerDelegate, @unc
     #expect(before.connectionID != after.connectionID && connections == 2)
 }
 
-@MainActor @Test func onboardingXPCTimeoutRebuildsAndCancellationFinishes() async throws {
-    let silentDelegate = OnboardingXPCListener(answers: false)
-    let normalDelegate = OnboardingXPCListener()
+@MainActor @Test func inputVerificationXPCTimeoutRebuildsAndCancellationFinishes() async throws {
+    let silentDelegate = InputVerificationXPCListener(answers: false)
+    let normalDelegate = InputVerificationXPCListener()
     let silent = NSXPCListener.anonymous()
     silent.delegate = silentDelegate
     silent.resume()

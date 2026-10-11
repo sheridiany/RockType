@@ -40,7 +40,7 @@ struct OperationModelField: View {
                 TextField("跟随默认模型", text: Binding(get: { model ?? "" }, set: {
                     model = OperationTemplateEdits.optionalModel($0)
                 }))
-                .textFieldStyle(.roundedBorder).frame(maxWidth: Tokens.U4.fieldWidth)
+                .textFieldStyle(.roundedBorder).frame(maxWidth: Tokens.Size.fieldWidth)
                 .accessibilityLabel(title + "模型")
                 Menu {
                     Button("跟随默认模型") { model = nil }

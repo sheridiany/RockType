@@ -53,7 +53,7 @@ final class RoarkTVoiceServer: NSObject, NSXPCListenerDelegate, RoarkTDictationX
   }
 
   func listener(_ listener: NSXPCListener, shouldAcceptNewConnection connection: NSXPCConnection) -> Bool {
-    connection.setCodeSigningRequirement(Self.requirement(ROARKT_APP_BUNDLE_ID))
+    connection.setCodeSigningRequirement(Identifiers.codeRequirement(for: ROARKT_APP_BUNDLE_ID))
     connection.exportedInterface = NSXPCInterface(with: RoarkTDictationXPCProtocol.self)
     connection.exportedObject = self
     let ownerID = ObjectIdentifier(connection)
@@ -143,7 +143,7 @@ final class RoarkTVoiceServer: NSObject, NSXPCListenerDelegate, RoarkTDictationX
     guard publisher == nil, controller != nil, publishAttempts < 3 else { return }
     publishAttempts += 1
     let connection = NSXPCConnection(machServiceName: ROARKT_TRANSLATION_SERVICE_NAME)
-    connection.setCodeSigningRequirement(Self.requirement(ROARKT_TRANSLATION_SERVICE_NAME))
+    connection.setCodeSigningRequirement(Identifiers.codeRequirement(for: ROARKT_TRANSLATION_SERVICE_NAME))
     connection.remoteObjectInterface = NSXPCInterface(with: RoarkTTranslationXPCProtocol.self)
     let publicationID = UUID()
     publication = publicationID
@@ -162,9 +162,5 @@ final class RoarkTVoiceServer: NSObject, NSXPCListenerDelegate, RoarkTDictationX
     connection.resume()
     let proxy = connection.remoteObjectProxyWithErrorHandler { _ in interrupted() } as? RoarkTTranslationXPCProtocol
     proxy?.registerDictationEndpoint(listener.endpoint)
-  }
-
-  private static func requirement(_ identifier: String) -> String {
-    "anchor apple generic and certificate leaf[subject.OU] = \"\(ROARKT_TEAM_ID)\" and identifier \"\(identifier)\""
   }
 }

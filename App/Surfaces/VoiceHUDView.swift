@@ -21,9 +21,9 @@ struct VoiceHUDView: View {
                     HStack(alignment: .center, spacing: Tokens.Space.xs) {
                         ForEach(Array(model.levels.enumerated()), id: \.offset) { _, level in
                             Capsule().fill(p.foreground)
-                                .frame(width: Tokens.Space.xs, height: max(Tokens.Space.xs, Tokens.U4.waveformHeight * level))
+                                .frame(width: Tokens.Space.xs, height: max(Tokens.Space.xs, Tokens.Size.waveformHeight * level))
                         }
-                    }.frame(width: Tokens.U4.waveformWidth, height: Tokens.U4.waveformHeight)
+                    }.frame(width: Tokens.Size.waveformWidth, height: Tokens.Size.waveformHeight)
                         .accessibilityLabel("示例录音波形，松开 Fn 结束")
                     Text(model.elapsed).monospacedDigit().font(Tokens.Typography.font(Tokens.Typography.caption))
                 } else {
@@ -47,7 +47,7 @@ struct VoiceHUDView: View {
             }
         }.padding(.horizontal, Tokens.Space.sm)
             .padding(.bottom, hasDetail && (isExpanded) ? Tokens.Space.md : 0)
-            .frame(width: hasDetail ? Tokens.U4.hudDetailWidth : Tokens.U4.hudWidth)
+            .frame(width: hasDetail ? Tokens.Size.hudDetailWidth : Tokens.Size.hudWidth)
             .modifier(DesignSurface())
             .accessibilityElement(children: .contain).accessibilityLabel("语音输入，" + model.state.title)
     }
