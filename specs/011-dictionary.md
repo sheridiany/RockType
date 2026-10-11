@@ -341,3 +341,19 @@ D 全部 18 项未命中（标记“新增退步”表示 C 曾命中）：
 日志在 `.build/dictionary/w6/{C.log,D.log,tests.log,rimechecks.log,restored-C-tests.log,replay-D.log}`。
 未运行整包构建/签名/包内验证：D 已被门槛拒绝，打包接入仅保存补丁，不声称打包成功。
 未安装、注册、启动输入法；未触碰真实 Rime 目录；未改输入法 sources、个人迁移脚本或评测期望。
+
+## W-6 三轮迭代（Claude 授权续作，2026-10-11）
+
+最多三轮，每轮一提交；门槛/冻结期望不改，RimeChecks 全过才可采用。旧大夹具从当前 git 树移除，复现改用 `scripts/dictionary/prepare-trial.sh`，命令见 `docs/dictionary-simplification.md`；旧历史记录中的 variant-d 路径不再存在，完整原始试验保存在本地 `.build/dictionary/w6/archived/`。不重写历史。
+
+### 第 1 轮：模型与搭配参数
+
+| 配置 | 日常 | 整句 | 开发 | AI | 总计 | 评测退出码 |
+| --- | --- | --- | --- | --- | --- | --- |
+| bgc，max/min=2/2 | 78 | 15 | 31 | 58 | 182 | 0 |
+| bgc，5/2 | 78 | 15 | 31 | 58 | 182 | 0 |
+| **bgw，4/3** | **78** | **17** | **31** | **58** | **184** | **0** |
+| bgw，5/2，collocation_penalty=-6，non_collocation_penalty=-18 | 78 | 10 | 31 | 58 | 177 | 0 |
+
+选择 bgw 4/3 继续，四类门槛已满足，但临时资源执行未改断言的 RimeChecks 仍退出 **133**：现存首选为显存。因此第一轮不采用。参数源码没有读取 `grammar/weight`，未加入无效字段。曾有一次临时 sed 编辑失败，未生效那次结果不计入 penalty 对照；修正命令后重新运行所得 177 才是上表数据。
+评测 TSV 保存为 `candidate-w6-r1-*.tsv`，资源和日志位于 `.build/dictionary/w6/trials/`。当前产品保持 C；本轮提交前完整 `scripts/test.sh` 退出 **0**。

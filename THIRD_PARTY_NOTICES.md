@@ -67,7 +67,7 @@ English data asset's CC-BY-SA-4.0 license or its upstream attribution.
 
 ## W-6 simplified-pipeline experiment (not shipped)
 
-`Tests/InputMethodTests/Fixtures/variant-d/Rime/roarkt_base.dict.yaml` is a
+The locally generated `roarkt_base.dict.yaml` is a
 RockType derivative of the bundled Luna Pinyin dictionary (LGPL-3.0). The
 original credits are retained. `scripts/dictionary/simplify-luna.swift` uses
 macOS ICU Hant-Hans, resolves original relative weights against the bundled
@@ -76,11 +76,13 @@ and normalizes 妳 to 你. The AI dictionary experiment remains original MIT dat
 See `docs/dictionary-simplification.md` for hashes, unresolved conversion issues,
 and the failed acceptance results; production continues to use C.
 
-The experiment also includes unmodified [rime-essay-simp](https://github.com/rime/rime-essay-simp)
+The experiment uses unmodified [rime-essay-simp](https://github.com/rime/rime-essay-simp)
 `dc06d4c96ae72ad46b29e3aa824a5d1e8f721fd0` (`essay-zh-hans.txt`, renamed
 `essay.txt`) and [rime-octagram-data](https://github.com/lotem/rime-octagram-data)
 hans revision `f8ce3b534733e489a8470a7c2adf5a154e8ea069`
 (`zh-hans-t-essay-bgw.gram`). Both repositories explicitly license these data
 under LGPL-3.0; their license texts are retained in `LICENSES/rime-essay-simp/`
 and `LICENSES/rime-octagram-data/`, together with `LICENSES/GPL-3.0.txt`.
-These experimental data are test fixtures, not input-method bundle resources.
+Large experimental resources live only under ignored `.build/dictionary/w6/`;
+only accepted production resources will be shipped. See the reproduction commands
+in `docs/dictionary-simplification.md`.
