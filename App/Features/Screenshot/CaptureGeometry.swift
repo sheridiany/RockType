@@ -19,6 +19,11 @@ enum CaptureGeometry {
         if handle.movesBottom { b = max(min(bounds.maxY, b + delta.height), t + 1) }
         return CGRect(x: l, y: t, width: r - l, height: b - t)
     }
+    /// Only geometry survives between captures; display removal or resizing must never create an invalid crop.
+    static func restored(_ rect: CGRect, bounds: CGRect) -> CGRect {
+        let clipped = rect.intersection(bounds)
+        return clipped.isNull || clipped.isEmpty ? .zero : clipped
+    }
     static func pixels(_ rect: CGRect, image: CGImage, size: CGSize) -> CGRect {
         let sx = CGFloat(image.width) / size.width, sy = CGFloat(image.height) / size.height
         return CGRect(x: rect.minX * sx, y: rect.minY * sy, width: rect.width * sx, height: rect.height * sy)

@@ -2,14 +2,20 @@ import AppKit
 import SwiftUI
 import QuartzCore
 import RoarkTCore
+import RoarkTPlatform
 import os
 
 @MainActor final class CaptureCanvas: NSView {
     let image: CGImage
-    var selection = CGRect.zero { didSet { updateSelectionLayers() } }
+    var selection = CGRect.zero { didSet { notice = nil; updateSelectionLayers() } }
     var onCancel: () -> Void = {}
     var onPreview: (CGImage) -> Void = { _ in }
     var onComplete: (CGImage) -> Void = { _ in }
+    var onSave: (CGImage) -> Void = { _ in }
+    var onRestore: () -> Void = {}
+    var allowed: () -> Bool = { SecureInput.status() == .allowed }
+    private var notice: String?
+    private enum Output { case copy, save, preview }
     private let windows: [CGRect]
     private var hoveredWindow: CGRect? { didSet { updateSelectionLayers() } }
     private var clickWindow: CGRect?
@@ -39,10 +45,15 @@ import os
     private var toolbar: NSHostingView<CaptureToolbar>?
     private var textField: NSTextField?
     private var textPoint = CGPoint.zero
-    private func complete(preview: Bool = false) {
+    private func complete(_ output: Output = .copy) {
+        guard allowed() else { onCancel(); return }
         commitText()
         guard let result = ScreenshotCompositor.render(image: image, size: bounds.size, selection: selection, annotations: history.items) else { return }
-        if preview { onPreview(result) } else { onComplete(result) }
+        switch output {
+        case .copy: onComplete(result)
+        case .save: onSave(result)
+        case .preview: onPreview(result)
+        }
     }
     private func updateToolbar() {
         guard !selection.isEmpty else { toolbar?.isHidden = true; return }
@@ -50,7 +61,7 @@ import os
             select: { [weak self] in self?.commitText(); self?.tool = $0; self?.updateToolbar() },
             undo: { [weak self] in self?.history.undo(); self?.updateAnnotations(); self?.updateToolbar() },
             redo: { [weak self] in self?.history.redo(); self?.updateAnnotations(); self?.updateToolbar() },
-            cancel: { [weak self] in self?.onCancel() }, complete: { [weak self] in self?.complete() }, preview: { [weak self] in self?.complete(preview: true) })
+            cancel: { [weak self] in self?.onCancel() }, complete: { [weak self] in self?.complete() }, preview: { [weak self] in self?.complete(.preview) })
         let view: NSHostingView<CaptureToolbar>
         if let toolbar { view = toolbar; view.rootView = root }
         else { view = NSHostingView(rootView: root); addSubview(view); toolbar = view }
@@ -88,7 +99,7 @@ import os
         labelLayer.backgroundColor = NSColor.black.withAlphaComponent(0.7).cgColor
         for overlay in [maskLayer, borderLayer, handlesLayer, labelLayer] { layer?.addSublayer(overlay) }
         updateSelectionLayers()
-        setAccessibilityLabel("截图框选：拖动框选，手柄调整，方向键微调，Enter 完成，Escape 取消")
+        setAccessibilityLabel("截图：拖动框选，单击选窗口，方向键微调，↩ 或 ⌘C 复制，⇧↩ 保存并复制路径，R 恢复上次选区，Esc 取消")
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override func viewDidMoveToWindow() {
@@ -119,11 +130,13 @@ import os
             }
         }
         handlesLayer.path = handles
-        labelLayer.isHidden = visible.isEmpty
+        labelLayer.isHidden = false
         let pixels = CaptureGeometry.pixels(visible, image: image, size: bounds.size)
-        labelLayer.string = selection.isEmpty ? "单击选窗口 · 拖动自由框选 · Esc 取消" : "\(Int(pixels.width)) × \(Int(pixels.height)) · ↩ 完成 · Esc 取消"
-        labelLayer.frame = CGRect(x: max(8, min(visible.minX, bounds.width - 310)),
-            y: max(8, visible.minY - 25), width: min(310, bounds.width - 16), height: 20)
+        labelLayer.string = notice ?? (selection.isEmpty
+            ? "单击选窗口 · 拖动框选 · R 恢复上次选区 · Esc 取消"
+            : "\(Int(pixels.width)) × \(Int(pixels.height)) · ↩/⌘C 复制 · ⇧↩ 保存路径 · R 恢复 · Esc 取消")
+        labelLayer.frame = CGRect(x: max(8, min(visible.minX, bounds.width - 610)),
+            y: max(8, visible.minY - 25), width: min(610, bounds.width - 16), height: 20)
         if let toolbar, !toolbar.isHidden {
             var frame = toolbar.frame
             frame.origin = CGPoint(x: min(max(8, selection.maxX - frame.width), bounds.width - frame.width - 8),
@@ -207,7 +220,21 @@ import os
         if let draft { history.append(draft); self.draft = nil; updateAnnotations() }
         updateToolbar()
     }
+    func showNotice(_ message: String) { notice = message; updateSelectionLayers() }
+    func restore(_ rect: CGRect) {
+        textField?.removeFromSuperview(); textField = nil
+        tool = nil; draft = nil; history = ScreenshotAnnotationHistory()
+        hoveredWindow = nil
+        selection = CaptureGeometry.restored(rect, bounds: bounds)
+        updateAnnotations(); updateToolbar()
+    }
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        // The field editor owns copy/undo while entering a text annotation.
+        guard textField == nil else { return super.performKeyEquivalent(with: event) }
+        let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+        if modifiers == .command, event.charactersIgnoringModifiers?.lowercased() == "c" {
+            complete(); return true
+        }
         if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "z" {
             if event.modifierFlags.contains(.shift) { history.redo() } else { history.undo() }
             updateAnnotations(); updateToolbar(); return true
@@ -216,9 +243,13 @@ import os
     }
     override func keyDown(with event: NSEvent) {
         if event.keyCode == 53 { onCancel(); return }
-        if event.keyCode == 36, !selection.isEmpty {
-            complete()
-            return
+        let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+        if event.keyCode == 36 || event.keyCode == 76, modifiers.isEmpty || modifiers == .shift {
+            complete(modifiers == .shift ? .save : .copy); return
+        }
+        if modifiers.isEmpty, event.charactersIgnoringModifiers?.lowercased() == "r" {
+            guard allowed() else { onCancel(); return }
+            onRestore(); return
         }
         let step: CGFloat = event.modifierFlags.contains(.shift) ? 10 : 1
         let delta: CGSize

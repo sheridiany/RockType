@@ -15,6 +15,8 @@ import os
     private var captureTask: Task<Void, Never>?
     private var protectionTask: Task<Void, Never>?
     private var panels: [NSPanel] = []
+    private var canvases: [CGDirectDisplayID: CaptureCanvas] = [:]
+    private var lastSelection: (displayID: CGDirectDisplayID, rect: CGRect)?
     private var hidden: [NSWindow] = []
     private var keyMonitor: Any?
     private var globalKeyMonitor: Any?
@@ -52,7 +54,7 @@ import os
         protectionTask?.cancel(); protectionTask = nil
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor); self.keyMonitor = nil }
         if let globalKeyMonitor { NSEvent.removeMonitor(globalKeyMonitor); self.globalKeyMonitor = nil }
-        panels.forEach { $0.orderOut(nil); $0.contentView = nil }; panels.removeAll()
+        panels.forEach { $0.orderOut(nil); $0.contentView = nil }; panels.removeAll(); canvases.removeAll()
         hidden.forEach { $0.orderFrontRegardless() }; hidden.removeAll()
     }
     func capture() {
@@ -98,14 +100,41 @@ import os
             panel.level = .screenSaver; panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.isReleasedWhenClosed = false
             let view = CaptureCanvas(frame: CGRect(origin: .zero, size: frame.rect.size), image: frame.image, windows: frame.windows)
+            let displayID = frame.displayID
+            canvases[displayID] = view
+            view.allowed = allowed
             view.onCancel = { [weak self] in self?.cancel() }
-            view.onComplete = { [weak self] image in
-                guard let self, self.allowed() else { return }
-                self.cancel(); self.onSelection(image)
-                self.openImage(image, origin: "截图", complete: true)
+            view.onComplete = { [weak self, weak view] image in
+                guard let self, let view, self.allowed() else { return }
+                do {
+                    try ScreenshotOutput.shared.copyImage(image)
+                    self.lastSelection = (displayID, view.selection)
+                    self.cancel(); self.onSelection(image)
+                } catch { view.showNotice("无法复制图片，请重试。") }
             }
-            view.onPreview = { [weak self] image in
-                guard let self, self.allowed() else { return }
+            view.onSave = { [weak self, weak view] image in
+                guard let self, let view, self.allowed() else { return }
+                let url: URL
+                do { url = try ScreenshotOutput.shared.save(image) }
+                catch { view.showNotice("保存失败，请检查截图保存目录及写入权限。") ; return }
+                self.lastSelection = (displayID, view.selection)
+                do { try ScreenshotOutput.shared.copyPath(url); self.cancel() }
+                catch { view.showNotice("PNG 已保存，但路径复制失败。") }
+            }
+            view.onRestore = { [weak self, weak view] in
+                guard let self, self.allowed(), let previous = self.lastSelection,
+                      let target = self.canvases[previous.displayID],
+                      !CaptureGeometry.restored(previous.rect, bounds: target.bounds).isEmpty else {
+                    view?.showNotice("没有可恢复的选区，或原显示器已断开。")
+                    return
+                }
+                for canvas in self.canvases.values { canvas.restore(.zero) }
+                target.restore(previous.rect)
+                target.window?.makeKey(); target.window?.makeFirstResponder(target)
+            }
+            view.onPreview = { [weak self, weak view] image in
+                guard let self, let view, self.allowed() else { return }
+                self.lastSelection = (displayID, view.selection)
                 self.cancel(); self.openImage(image, origin: "截图")
             }
             panel.contentView = view; panels.append(panel)
