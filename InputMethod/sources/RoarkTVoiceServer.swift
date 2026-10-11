@@ -1,4 +1,5 @@
 import AppKit
+import os
 import InputMethodKit
 import Security
 import Carbon
@@ -10,6 +11,7 @@ final class RoarkTVoiceServer: NSObject, NSXPCListenerDelegate, RoarkTDictationX
     init(_ call: @escaping (Value) -> Void) { self.call = call }
   }
 
+  private static let log = Logger(subsystem: "com.roarkist.inputmethod.RoarkT", category: "voice")
   private let listener = NSXPCListener.anonymous()
   private var publisher: NSXPCConnection?
   private weak var controller: SquirrelInputController?
@@ -71,10 +73,16 @@ final class RoarkTVoiceServer: NSObject, NSXPCListenerDelegate, RoarkTDictationX
     let response = Reply<(String?, String?)> { reply($0.0, $0.1) }
     let ownerID = NSXPCConnection.current().map(ObjectIdentifier.init)
     DispatchQueue.main.async { [self] in
-      guard let ownerID, connections.contains(ownerID),
-            let (context, client) = currentContext(), context.applicationPID == applicationPID else {
-        response.call((nil, nil))
-        return
+      guard let ownerID, connections.contains(ownerID) else {
+        Self.log.error("capture refused: caller connection not accepted")
+        response.call((nil, nil)); return
+      }
+      guard let (context, client) = currentContext() else {
+        response.call((nil, nil)); return
+      }
+      guard context.applicationPID == applicationPID else {
+        Self.log.error("capture refused: frontmost pid \(context.applicationPID) != requested \(applicationPID)")
+        response.call((nil, nil)); return
       }
       ticketOwner = ownerID
       let token = ticket.capture(context, now: ProcessInfo.processInfo.systemUptime)
@@ -114,10 +122,17 @@ final class RoarkTVoiceServer: NSObject, NSXPCListenerDelegate, RoarkTDictationX
   @MainActor
   private func currentContext() -> (VoiceCommitTicket.Context, IMKTextInput)? {
     dispatchPrecondition(condition: .onQueue(.main))
-    guard !IsSecureEventInputEnabled(),
-          let client = controller?.voiceClient,
-          let app = NSWorkspace.shared.frontmostApplication,
-          app.bundleIdentifier == client.bundleIdentifier() else { return nil }
+    // Reasons are logged without any text content, to diagnose binding failures.
+    guard !IsSecureEventInputEnabled() else { Self.log.error("capture refused: secure input"); return nil }
+    guard let client = controller?.voiceClient else {
+      Self.log.error("capture refused: no active input client (controller \(self.controller == nil ? "nil" : "set"))")
+      return nil
+    }
+    guard let app = NSWorkspace.shared.frontmostApplication,
+          app.bundleIdentifier == client.bundleIdentifier() else {
+      Self.log.error("capture refused: frontmost \(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "none", privacy: .public) != client \(client.bundleIdentifier() ?? "none", privacy: .public)")
+      return nil
+    }
     let context = VoiceCommitTicket.Context(activation: activation, applicationPID: app.processIdentifier,
                                            selection: client.selectedRange())
     return (context, client)

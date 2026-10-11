@@ -1,4 +1,5 @@
 import AppKit
+import os
 import AVFoundation
 import Carbon
 import RoarkTCore
@@ -34,6 +35,7 @@ import RoarkTPlatform
 /// Own once in AppDelegate, call start()/stop(). No AppDelegate mutation is required here.
 /// Input delivery is exclusively the authenticated IMK ticket path.
 @MainActor final class VoiceInputController {
+    private static let log = Logger(subsystem: "com.roarkist.roarkt", category: "voice")
     let state = VoiceHUDState()
     private let environment: VoiceEnvironment
     private let recorder: any VoiceRecording
@@ -171,6 +173,7 @@ import RoarkTPlatform
                 show(.recording, "录音中")
             } catch {
                 guard session == id else { return }
+                Self.log.error("binding failed: \(String(describing: error), privacy: .public)")
                 bridge.cancel(target); target = nil
                 show(.failed, "无法绑定输入位置，请选中 RockType 输入法后重试。")
             }
@@ -221,9 +224,12 @@ import RoarkTPlatform
                 if !environment.settings().automaticallyPrepareModel || !environment.inputSourceSelected() {
                     worker.stop(); preparedModel = nil
                 }
+                if !accepted { Self.log.error("insertion not accepted (eligible \(eligible))") }
                 show(accepted ? .done : .failed, accepted ? "已填入 · 未发送" : "输入位置已变化或提交超时，请复制结果。")
             } catch {
                 guard session == id, !Task.isCancelled else { return }
+                let nsError = error as NSError
+                Self.log.error("recognition failed: \(String(describing: type(of: error)), privacy: .public) \(nsError.domain, privacy: .public) \(nsError.code) \(String(describing: error), privacy: .private)")
                 worker.stop(); preparedModel = nil; bridge.cancel(target); self.target = nil
                 show(.failed, "识别未完成，请检查模型下载与校验状态后重试。")
             }

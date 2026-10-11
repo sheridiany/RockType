@@ -24,14 +24,18 @@ final class VoiceModelStore: ObservableObject {
             return Int64(size ?? -1) == $0.bytes
         }
     }
-    /// Size alone is only a UI hint. Every load must pass this gate.
+    /// Size alone is only a UI hint. Every load passes this gate; the full SHA-256 runs only when
+    /// the files differ from the last verified stamp (first load, re-download, or any change).
     func validate(_ model: VoiceModel) async throws -> URL {
         let folder = directory(for: model)
         let check = Task.detached(priority: .utility) {
             guard try folder.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink != true else {
                 throw CocoaError(.fileReadCorruptFile)
             }
+            // Hash once; afterwards a matching size/modification-date/inode stamp skips the 2.3 GB re-hash.
+            if VoiceModelVerification.matches(model: model, in: folder) { return }
             for file in model.files { try Task.checkCancellation(); try file.validate(at: folder.appendingPathComponent(file.name)) }
+            VoiceModelVerification.record(model: model, in: folder)
         }
         try await withTaskCancellationHandler { try await check.value } onCancel: { check.cancel() }
         try Task.checkCancellation()
@@ -49,6 +53,7 @@ final class VoiceModelStore: ObservableObject {
             defer { busy = false; progress = nil; task = nil; revision += 1 }
             do {
                 let folder = directory(for: model)
+                VoiceModelVerification.invalidate(in: folder)
                 try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true,
                                                         attributes: [.posixPermissions: 0o700])
                 guard try folder.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink != true else {
@@ -108,4 +113,41 @@ final class VoiceModelStore: ObservableObject {
 
 extension VoiceModel {
     init(_ setting: VoiceSettings.Model) { self = setting == .small ? .small : .large }
+}
+
+
+/// Records which on-disk files last passed the full SHA-256 check. Any change to a file's size,
+/// modification date or inode invalidates the record and forces a full re-hash.
+enum VoiceModelVerification {
+    static let fileName = ".verified.json"
+    private struct Stamp: Codable, Equatable { let name: String; let size: Int64; let modified: Double; let inode: UInt64 }
+
+    private static func stamps(model: VoiceModel, in folder: URL) -> [Stamp]? {
+        var result: [Stamp] = []
+        for file in model.files {
+            let url = folder.appendingPathComponent(file.name)
+            guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+                  let size = (attributes[.size] as? NSNumber)?.int64Value,
+                  let modified = (attributes[.modificationDate] as? Date)?.timeIntervalSince1970,
+                  let inode = (attributes[.systemFileNumber] as? NSNumber)?.uint64Value else { return nil }
+            result.append(Stamp(name: file.name, size: size, modified: modified, inode: inode))
+        }
+        return result
+    }
+
+    static func matches(model: VoiceModel, in folder: URL) -> Bool {
+        guard let data = try? Data(contentsOf: folder.appendingPathComponent(fileName)),
+              let recorded = try? JSONDecoder().decode([Stamp].self, from: data),
+              let current = stamps(model: model, in: folder) else { return false }
+        return recorded == current
+    }
+
+    static func record(model: VoiceModel, in folder: URL) {
+        guard let current = stamps(model: model, in: folder), let data = try? JSONEncoder().encode(current) else { return }
+        try? data.write(to: folder.appendingPathComponent(fileName), options: .atomic)
+    }
+
+    static func invalidate(in folder: URL) {
+        try? FileManager.default.removeItem(at: folder.appendingPathComponent(fileName))
+    }
 }
