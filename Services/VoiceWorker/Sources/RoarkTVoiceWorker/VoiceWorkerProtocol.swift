@@ -5,6 +5,6 @@ import Foundation
 @objc(RoarkTVoiceWorkerProtocol)
 protocol VoiceWorkerProtocol {
     func prepare(directory: String, reply: @escaping (Bool) -> Void)
-    func transcribe(audio: Data, reply: @escaping (String?) -> Void)
+    func transcribe(audio: Data, context: String, reply: @escaping (String?) -> Void)
     func shutdown()
 }
