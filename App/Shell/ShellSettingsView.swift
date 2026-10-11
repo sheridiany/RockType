@@ -221,7 +221,8 @@ struct ShellSettingsView: View {
     }
     private var screenshot: some View {
         Group {
-            Notice(text: "截图、标注与本地 OCR 即将推出。快捷键默认为 ⌃1；仅主动另存时写入文件。")
+            Notice(text: "快捷键默认为 ⌃1；仅主动保存时写入文件。")
+            ScreenshotOutputSettings(settings: $settings.screenshot)
             U4Card {
                 Picker("另存格式", selection: $settings.screenshot.format) {
                     Text("PNG").tag(ScreenshotSettings.Format.png); Text("JPEG").tag(ScreenshotSettings.Format.jpeg)
