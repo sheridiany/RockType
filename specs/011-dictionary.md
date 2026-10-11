@@ -2,7 +2,7 @@
 
 - 阶段：打磨 P1（输入法）
 - 覆盖需求：FR-A1、FR-A3、FR-A5、NFR-2
-- 状态：Ready
+- 状态：InProgress（W-1 基线已建立；W-2/W-3 待实施）
 
 ## 目标
 
@@ -36,7 +36,7 @@
 
 | # | 任务 | 执行 | 状态 |
 | --- | --- | --- | --- |
-| W-1 | 评测集与评测脚本，先跑出现状基线 | pi-ui | 未开始 |
+| W-1 | 评测集与评测脚本，先跑出现状基线 | pi-ui | 已完成，基线 162/200（81%） |
 | W-2 | 引入白霜词库并调整两套方案，回归 RimeChecks | pi-ui | 未开始 |
 | W-3 | AI / 开发中文词库与英文扩充，评测校准权重 | pi-ui | 未开始 |
 | W-4 | 个人层脚本：学习词简体迁移、个人习惯词表（含临时目录测试） | pi-platform | 未开始 |
@@ -57,4 +57,17 @@
 
 ## 进度
 
+### W-1 验收证据（2026-10-11）
+
+- 固定 200 条原创公开常识样例：日常 80、AI 60、开发 40、整句 20。人工校对多音字编码；无个人数据。`candidate-eval.tsv` 是输入，`candidate-baseline.tsv` 保存替换前逐项结果，后续不修改期望以迎合词库。
+- `scripts/eval-candidates.sh [Rime资源目录] [报告目录]` 使用当前 checkout 的 librime/Lua，在 `mktemp` 中部署、逐条新建会话、不提交候选；输出逐项 TSV、分类首选命中率、按键处理 + F19 刷新 + 读取 context 的 P95。退出码 0 表示评测成功执行，不表示所有首选正确。SPM `RoarkTCandidateEvaluationTests` 接入 `scripts/test.sh`，验证固定集完整性及命中数不低于基线。
+- `scripts/eval-candidates.sh Rime .build/dictionary/baseline`：退出码 **0**。基线：日常 **78/80 (97.50%)**、AI **38/60 (63.33%)**、开发 **29/40 (72.50%)**、整句 **17/20 (85%)**，合计 **162/200 (81%)**。
+- Apple M3 Max，macOS 27.0.1 (26A434)：一次干净部署 **2.41s**，1878 按键刷新 P95 **1.538ms**。这是 librime 同步路径测量，非真实 IMK 端到端延迟；受机器负载/文件缓存影响，不作为严格性能门禁。
+- 未验证：真实键盘、安装版与用户学习数据。本步骤不启动输入法，不触碰真实 Rime 目录。
+
+
 ## 问题
+
+### W-1 提交前检查
+
+- `zsh scripts/test.sh`：退出码 **0**（含新评测 SPM 测试、原 RimeChecks、面板/session、AppShell）；`git diff --check`：退出码 **0**。完整日志 `.build/dictionary/w1-final-tests.log`。

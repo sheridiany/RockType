@@ -14,6 +14,7 @@ let package = Package(
         .package(url: "https://github.com/sparkle-project/Sparkle.git", exact: "2.8.0"),
     ],
     targets: [
+        .testTarget(name: "RoarkTCandidateEvaluationTests", path: "Tests/CandidateEvaluationTests"),
         .target(
             name: "RoarkTXPCProtocol",
             path: "Shared/XPCProtocol",
