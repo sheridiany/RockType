@@ -3,7 +3,9 @@
 import Foundation
 
 let args = CommandLine.arguments
-precondition(args.count == 5, "usage: simplify-luna.swift luna.dict.yaml essay.txt output.yaml collisions.tsv")
+precondition((5...6).contains(args.count), "usage: simplify-luna.swift luna.dict.yaml essay.txt output.yaml collisions.tsv [sum|max]")
+let policy = args.count == 6 ? args[5] : "sum"
+precondition(["sum", "max"].contains(policy))
 let source = try String(contentsOfFile: args[1], encoding: .utf8)
 var preset: [String: Double] = [:]
 for line in try String(contentsOfFile: args[2], encoding: .utf8).split(separator: "\n") {
@@ -30,12 +32,12 @@ for line in parts[1].split(separator: "\n") where !line.hasPrefix("#") {
         weight = preset[original, default: 0] * (raw.isEmpty ? 1 : Double(raw.dropLast())! / 100)
     } else { weight = Double(raw)! }
     if weights[key] == nil { order.append(key) }
-    weights[key, default: 0] += weight
+    weights[key] = policy == "max" ? max(weights[key, default: 0], weight) : weights[key, default: 0] + weight
     origins[key, default: []].append(original)
     inputCount += 1
 }
 let header = parts[0].replacingOccurrences(of: "name: luna_pinyin", with: "name: roarkt_base")
-let notice = "# Derived by RockType: macOS ICU Hant-Hans; duplicate text+code weights summed.\n# Relative/omitted weights resolved against the pinned source essay before merging.\n# Manual correction: 妳 → 你. See docs/dictionary-simplification.md.\n"
+let notice = "# Derived by RockType: macOS ICU Hant-Hans; duplicate text+code weights: \(policy).\n# Relative/omitted weights resolved against the pinned source essay before merging.\n# Manual correction: 妳 → 你. See docs/dictionary-simplification.md.\n"
 let rows = order.map { $0 + "\t" + String(format: "%.10g", weights[$0]!) }
 try (notice + header + "...\n" + rows.joined(separator: "\n") + "\n").write(toFile: args[3], atomically: true, encoding: .utf8)
 let collisions = order.filter { origins[$0]!.count > 1 }.map { $0 + "\t" + origins[$0]!.joined(separator: "|") + "\t" + String(format: "%.10g", weights[$0]!) }

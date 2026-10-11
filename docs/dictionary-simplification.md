@@ -31,3 +31,5 @@ done
 AI 文本列转换，读音与权重不动；第一轮仍有 13 个 `100%` 词缺少新 essay 频率、并发/周报频率下限和“著”字缺失的问题。
 
 octagram 参数依据 `lotem/librime-octagram@57d18b9f58e5284bd891d559f6bdd16cf60341e9` 的 `src/octagram.cc`；只读取搭配长度及四种 penalty，没有 `grammar/weight`。本次运行日志确认加载所选模型；不以仅写入 YAML 作为参数有效性的证据。
+
+第二轮复现：`bash scripts/dictionary/prepare-trial.sh r2-max bgw 4 3 max`，随后按相同命令评测该目录。`max` 只对同词同编码取原始解析频率最大值，不调整其他频率。
