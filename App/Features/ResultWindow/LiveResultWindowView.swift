@@ -6,21 +6,25 @@ struct LiveResultWindowView: View {
     let controller: ResultWindowController
     @Environment(\.colorScheme) private var scheme
     @FocusState private var questionFocused: Bool
+    @State private var following = true
+    @State private var jump = 0
 
     var body: some View {
         @Bindable var state = controller.state
         let p = Tokens.palette(scheme)
         VStack(alignment: .leading, spacing: Tokens.Space.sm) {
             HStack {
-                Label(state.request?.template.name ?? "结果", systemImage: state.request?.template.icon ?? "text.bubble")
-                    .font(Tokens.Typography.font(weight: .medium))
-                Spacer()
+                HStack {
+                    Label(state.request?.template.name ?? "结果", systemImage: state.request?.template.icon ?? "text.bubble")
+                        .font(Tokens.Typography.font(weight: .medium))
+                    Spacer()
+                }.overlay(ResultWindowDragArea().accessibilityHidden(true))
                 Button(action: controller.setPinned) { Image(systemName: state.pinned ? "pin.fill" : "pin") }
                     .accessibilityLabel(state.pinned ? "取消置顶" : "置顶")
                 Button(action: controller.close) { Image(systemName: "xmark") }.accessibilityLabel("关闭")
             }.buttonStyle(DesignButtonStyle(variant: .ghost))
             Rectangle().fill(p.line).frame(height: Tokens.Size.hairline)
-            ScrollView {
+            ResultFollowingScrollView(resetID: state.session?.id, jump: jump, following: $following) {
                 VStack(alignment: .leading, spacing: Tokens.Space.md) {
                     ForEach(Array(state.history.enumerated()), id: \.offset) { _, turn in
                         if !turn.question.isEmpty { questionBubble(turn.question) }
@@ -33,12 +37,15 @@ struct LiveResultWindowView: View {
                     if state.phase == .thinking {
                         Label("思考中…", systemImage: "sparkles").foregroundStyle(p.secondary)
                     }
-                    if !state.answer.isEmpty { answerText(state.answer + (state.phase == .streaming ? " ▍" : "")) }
+                    if !state.answer.isEmpty { answerText(state.answer) }
+                    if state.phase == .streaming {
+                        Text("生成中…").font(.caption).foregroundStyle(p.secondary)
+                    }
                     if let notice = state.notice { Notice(text: notice, tone: state.phase == .failed ? .danger : .warn) }
                     if state.sourceExpanded, let snapshot = state.session?.snapshot {
                         VStack(alignment: .leading, spacing: Tokens.Space.sm) {
                             Text(snapshot.source.applicationName).foregroundStyle(p.secondary)
-                            answerText(snapshot.text)
+                            ResultAnswerView(text: snapshot.text, markdown: false, copyCode: controller.copyCode)
                             Button("复制原文") { controller.copy(original: true) }
                                 .buttonStyle(DesignButtonStyle(variant: .ghost))
                         }.padding(Tokens.Space.md)
@@ -46,10 +53,25 @@ struct LiveResultWindowView: View {
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
+            if !following {
+                HStack { Spacer(); Button("回到最新内容 ↓") { jump += 1 } }
+                    .buttonStyle(DesignButtonStyle(variant: .ghost))
+            }
             if state.asking {
-                HStack {
-                    DesignTextField(title: "继续追问", text: $state.question)
-                        .focused($questionFocused).onSubmit(controller.ask)
+                HStack(alignment: .bottom) {
+                    TextEditor(text: $state.question)
+                        .font(Tokens.Typography.font())
+                        .scrollContentBackground(.hidden)
+                        .padding(6).frame(height: 72)
+                        .background(p.bubble, in: RoundedRectangle(cornerRadius: Tokens.Radius.card))
+                        .overlay(alignment: .topLeading) {
+                            if state.question.isEmpty {
+                                Text("继续追问 · ⌘↩ 发送，↩ 换行").font(.caption).foregroundStyle(p.tertiary)
+                                    .padding(12).allowsHitTesting(false)
+                            }
+                        }
+                        .accessibilityLabel("继续追问，Command Return 发送，Return 换行")
+                        .focused($questionFocused)
                     Button("发送", action: controller.ask)
                         .disabled(state.isBusy || state.question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         .buttonStyle(DesignButtonStyle(variant: .secondary))
@@ -84,17 +106,14 @@ struct LiveResultWindowView: View {
             }
         }.padding(Tokens.Space.lg).frame(maxWidth: .infinity, maxHeight: .infinity)
             .modifier(DesignSurface())
+            .onChange(of: state.currentQuestion) { _, _ in jump += 1 }
             .onChange(of: state.asking) { _, asking in questionFocused = asking }
             .accessibilityLabel("结果浮窗")
     }
 
     private func answerText(_ text: String) -> some View {
-        // Verbatim display preserves paragraphs, lists and code indentation while streaming.
-        Text(text).font(Tokens.Typography.font(Tokens.Typography.read))
-            .textSelection(.enabled)
-            .lineSpacing(Tokens.Typography.readingSpacing)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        ResultAnswerView(text: text, markdown: controller.state.request?.template.output != .text,
+                         copyCode: controller.copyCode)
     }
     private func questionBubble(_ text: String) -> some View {
         Text(text).padding(Tokens.Space.sm)

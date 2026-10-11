@@ -13,9 +13,9 @@ private final class ResultPanel: NSPanel {
 /// Claude's integration point: retain one controller with one dedicated runner.
 /// All rectangles accepted by this API use AppKit global screen coordinates.
 @MainActor
-final class ResultWindowController: NSObject {
+final class ResultWindowController: NSObject, NSWindowDelegate {
     let state: ResultWindowState
-    private let panel = ResultPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
+    private let panel = ResultPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel, .resizable],
                                     backing: .buffered, defer: false)
     private let settings: () -> AppSettings
     private let feedback: @MainActor (String) -> Void
@@ -29,6 +29,10 @@ final class ResultWindowController: NSObject {
     private var sourceChanged = false
     private var anchor: CGRect?
     private var initialRetryUnavailable: String?
+    private let geometry: ResultWindowGeometry
+    private var placing = false
+    private var userPlaced = false
+    private var lastAutomaticPin = false
 
     /// feedback must present an accessible, nonactivating notice after the panel closes.
     /// completed may forward successful results to RecentResults (respect privacy settings).
@@ -36,14 +40,18 @@ final class ResultWindowController: NSObject {
          feedback: @escaping @MainActor (String) -> Void,
          completed: @escaping @MainActor (OperationResult) -> Void = { _ in },
          readable: @escaping @MainActor () -> Bool = { SecureInput.status() == .allowed },
-         aiConfigured: @escaping @MainActor () -> Bool = { true }) {
-        self.settings = settings; self.feedback = feedback
+         aiConfigured: @escaping @MainActor () -> Bool = { true },
+         geometry: ResultWindowGeometry = .shared) {
+        self.settings = settings; self.feedback = feedback; self.geometry = geometry
+        lastAutomaticPin = settings().selection.automaticallyPin
         self.readable = readable; self.aiConfigured = aiConfigured
         state = ResultWindowState(runner: runner, readable: readable, completed: completed, feedback: feedback)
         super.init()
         panel.isFloatingPanel = true; panel.hidesOnDeactivate = false
         panel.backgroundColor = .clear; panel.isOpaque = false; panel.hasShadow = true
-        panel.isReleasedWhenClosed = false; panel.isMovableByWindowBackground = true
+        panel.isReleasedWhenClosed = false; panel.isMovableByWindowBackground = false
+        panel.delegate = self
+        panel.minSize = CGSize(width: 340, height: 300)
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.becomesKeyOnlyIfNeeded = true
     }
@@ -58,6 +66,11 @@ final class ResultWindowController: NSObject {
                 guard let self, self.panel.isVisible else { return false }
                 if event.type == .keyDown { return self.handleKey(event) }
                 if event.window !== self.panel { self.outsideClick() }
+                else if event.type == .leftMouseDown, self.readable() {
+                    // Explicit interaction may focus selectable text; merely presenting never does.
+                    self.panel.acceptsKeyboard = true
+                    self.panel.makeKey()
+                }
                 return false
             }
             return consumed ? nil : event
@@ -103,23 +116,28 @@ final class ResultWindowController: NSObject {
     /// Call when settings change. Does not persist content or preferences.
     func applySettings() {
         let selection = settings().selection
-        state.pinned = selection.automaticallyPin
+        if lastAutomaticPin != selection.automaticallyPin {
+            state.pinned = selection.automaticallyPin
+            lastAutomaticPin = selection.automaticallyPin
+        }
         updateWindowStyle()
-        if panel.isVisible { placeWindow() }
+        if panel.isVisible, !userPlaced { placeWindow() }
     }
 
     func setPinned() { state.pinned.toggle(); updateWindowStyle() }
     func beginQuestion() {
-        guard panel.isVisible, state.request != nil, state.canAsk else { return }
+        guard panel.isVisible, state.request != nil, state.canAsk, readable() else { return }
         guard aiConfigured() else { feedback("请前往设置配置 AI 连接后追问。"); return }
         panel.acceptsKeyboard = true; panel.makeKeyAndOrderFront(nil)
         state.asking = true
     }
     func ask() {
+        guard readable() else { close(); return }
         guard aiConfigured() else { feedback("请前往设置配置 AI 连接后追问。"); return }
         state.ask(settings: settings())
     }
     func retry() {
+        guard readable() else { close(); return }
         if let initialRetryUnavailable, state.request?.session.turns.isEmpty == true {
             state.notice = initialRetryUnavailable
             return
@@ -161,6 +179,7 @@ final class ResultWindowController: NSObject {
     private func present(snapshot: ContentSnapshot, toolbarRect: CGRect?) {
         panel.acceptsKeyboard = false; panel.resignKey()
         anchor = toolbarRect ?? snapshot.selectionRect
+        userPlaced = false
         updateWindowStyle(); placeWindow(); panel.orderFrontRegardless()
         safetyTask?.cancel()
         safetyTask = Task { [weak self] in
@@ -189,11 +208,18 @@ final class ResultWindowController: NSObject {
     }
 
     private func placeWindow() {
+        placing = true
+        defer { placing = false }
+        if !settings().selection.followToolbar, let remembered = geometry.frame,
+           let screen = NSScreen.screens.first(where: { $0.visibleFrame.intersects(remembered) }) ?? NSScreen.main {
+            panel.setFrame(avoidingOtherResults(remembered, screen: screen.visibleFrame), display: true)
+            return
+        }
         let point = anchor.map { CGPoint(x: $0.midX, y: $0.midY) } ?? NSEvent.mouseLocation
         guard let screen = NSScreen.screens.first(where: { $0.frame.contains(point) }) ?? NSScreen.main else { return }
         let visible = screen.visibleFrame
-        let size = CGSize(width: min(Tokens.Size.resultWidth, max(1, visible.width - 24)),
-                          height: min(Tokens.Size.resultMaxHeight, max(1, visible.height - 24)))
+        let size = CGSize(width: min(geometry.frame?.width ?? Tokens.Size.resultWidth, max(1, visible.width - 24)),
+                          height: min(geometry.frame?.height ?? Tokens.Size.resultMaxHeight, max(1, visible.height - 24)))
         let primaryHeight = NSScreen.screens.first?.frame.maxY ?? 0
         let topScreen = ScreenGeometry.topLeft(visible, primaryHeight: primaryHeight)
         let selection = settings().selection.followToolbar ? anchor.map { ScreenGeometry.topLeft($0, primaryHeight: primaryHeight) } : nil
@@ -201,7 +227,26 @@ final class ResultWindowController: NSObject {
                                           cursor: ScreenGeometry.topLeft(NSEvent.mouseLocation, primaryHeight: primaryHeight),
                                           size: size, screen: topScreen)
         let frame = ScreenGeometry.topLeft(CGRect(origin: placement.origin, size: size), primaryHeight: primaryHeight)
-        panel.setFrame(frame, display: true)
+        panel.setFrame(avoidingOtherResults(frame, screen: visible), display: true)
+    }
+
+    private func avoidingOtherResults(_ frame: CGRect, screen: CGRect) -> CGRect {
+        let occupied = NSApplication.shared.windows.compactMap { $0 as? ResultPanel }
+            .filter { $0 !== panel && $0.isVisible }.map(\.frame)
+        return ResultWindowGeometry.avoiding(frame, occupied: occupied, screen: screen)
+    }
+
+    func windowDidMove(_ notification: Notification) { rememberGeometry() }
+    func windowDidResize(_ notification: Notification) { rememberGeometry() }
+    private func rememberGeometry() {
+        guard !placing, panel.isVisible else { return }
+        userPlaced = true
+        geometry.remember(panel.frame)
+    }
+    func copyCode(_ text: String) {
+        guard readable(), !text.isEmpty else { return }
+        do { try Clipboard.shared.writeString(text); state.notice = "代码已复制。" }
+        catch { state.notice = "复制失败，请重试。" }
     }
 
     private func outsideClick() {
@@ -227,17 +272,16 @@ final class ResultWindowController: NSObject {
         let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting([.capsLock, .numericPad, .function])
         let text = event.charactersIgnoringModifiers?.lowercased()
         let editor = panel.firstResponder as? NSTextView
-        // Marked text belongs to the input method, including Return and Escape.
-        if editor?.hasMarkedText() == true { return false }
-        let editingQuestion = state.asking && editor?.isEditable == true
-        if event.keyCode == 53 { escape(); return true }
-        if text == "l", modifiers == .command { beginQuestion(); return true }
-        if event.keyCode == 36 || event.keyCode == 76 {
-            if modifiers == .command { copy(returning: true); return true }
-            if modifiers.isEmpty && !editingQuestion { copy(returning: true); return true }
+        let action = ResultWindowKeyAction.resolve(code: event.keyCode, text: text, modifiers: modifiers,
+            editingQuestion: state.asking && editor?.isEditable == true, markedText: editor?.hasMarkedText() == true)
+        switch action {
+        case .passThrough: return false
+        case .escape: escape()
+        case .ask: beginQuestion()
+        case .send: ask()
+        case .copy: copy()
+        case .copyAndReturn: copy(returning: true)
         }
-        if !editingQuestion, text == "c", modifiers.isEmpty || modifiers == .command { copy(); return true }
-        return false
+        return true
     }
-
 }

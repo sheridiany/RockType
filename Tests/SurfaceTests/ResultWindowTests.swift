@@ -49,6 +49,21 @@ import Testing
         state.stop()
     }
 
+    @Test func cancelledRetryDoesNotExposeTheReplacedAnswerAsFollowupContext() async {
+        let runner = ControlledRunner()
+        let state = ResultWindowState(runner: runner, readable: { true })
+        let snapshot = ContentSnapshot(text: "Synthetic input", source: .init(pid: 0, applicationName: "Test"), method: .paste)
+        let session = OperationSession(snapshot: snapshot)
+        state.show(result(session), template: .defaults[1], settings: .defaults)
+        #expect(state.canAsk)
+        state.retry(settings: .defaults)
+        runner.streams[0].yield(.delta("partial retry"))
+        await settle(until: { state.answer == "partial retry" })
+        state.cancel()
+        #expect(!state.canAsk && state.session?.turns.isEmpty == true)
+        state.stop()
+    }
+
     @Test func streamingAndSessionLifecycle() async {
         let runner = ControlledRunner()
         let context = CheckContext()
@@ -149,7 +164,9 @@ import Testing
                     fatalError("Live surface rendering failed")
                 }
                 window.close()
-                let path = "/tmp/roarkt-result-\(dark ? "dark" : "light")-\(expanded ? "expanded" : "done").png"
+                let directory = ProcessInfo.processInfo.environment["ROARKT_RESULT_RENDER_DIR"] ?? "/tmp"
+                try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+                let path = directory + "/roarkt-result-\(dark ? "dark" : "light")-\(expanded ? "expanded" : "done").png"
                 try data.write(to: URL(fileURLWithPath: path))
             }
         }
