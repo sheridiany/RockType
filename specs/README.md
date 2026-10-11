@@ -14,3 +14,4 @@
 | [SPEC-008 输入法内 AI](008-m6-input-ai.md) | M6 | FR-E3 | Ready |
 | [SPEC-009 分发](009-m7-distribution.md) | M7 | FR-F3、F4、NFR-9 | Ready |
 | [SPEC-010 原生能力迁移](010-platform-port.md) | M2/M3 前置 | FR-C1、D3、E2、E6–E8 底层 | Ready |
+| [SPEC-011 词库优化](011-dictionary.md) | 打磨 P1 | FR-A1、A3、A5 | Ready |
