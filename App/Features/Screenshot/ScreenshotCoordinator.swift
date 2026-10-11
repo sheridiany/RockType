@@ -18,6 +18,8 @@ import os
     private var canvases: [CGDirectDisplayID: CaptureCanvas] = [:]
     private var lastSelection: (displayID: CGDirectDisplayID, rect: CGRect)?
     private var hidden: [NSWindow] = []
+    /// The app the user was in; it gets focus back when the overlay closes.
+    private var previousApp: NSRunningApplication?
     private var keyMonitor: Any?
     private var globalKeyMonitor: Any?
     var onNotice: (String) -> Void = { _ in }
@@ -54,14 +56,21 @@ import os
         protectionTask?.cancel(); protectionTask = nil
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor); self.keyMonitor = nil }
         if let globalKeyMonitor { NSEvent.removeMonitor(globalKeyMonitor); self.globalKeyMonitor = nil }
+        let overlayWasShown = !panels.isEmpty
         panels.forEach { $0.orderOut(nil); $0.contentView = nil }; panels.removeAll(); canvases.removeAll()
         hidden.forEach { $0.orderFrontRegardless() }; hidden.removeAll()
+        // Without this the overlay's focus stays on RockType, which has no text input, and the
+        // menu bar input source icon goes blank until the user clicks another app.
+        if overlayWasShown, let previousApp, !previousApp.isTerminated { previousApp.activate() }
+        previousApp = nil
     }
     func capture() {
         guard running, allowed() else { return }
         let started = CACurrentMediaTime()
         cancel(); closePreview()
         let current = generation
+        let frontmost = NSWorkspace.shared.frontmostApplication
+        previousApp = frontmost?.processIdentifier == ProcessInfo.processInfo.processIdentifier ? nil : frontmost
         hidden = (NSApp?.windows ?? []).filter { $0.isVisible && $0.level != .normal }
         hidden.forEach { $0.orderOut(nil) }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -151,7 +160,11 @@ import os
             let mouse = NSEvent.mouseLocation
             view.updateHover(at: CGPoint(x: mouse.x - frame.rect.minX, y: frame.rect.maxY - mouse.y))
             panel.orderFrontRegardless()
-            if frame.rect.contains(NSEvent.mouseLocation) { panel.makeKey(); panel.makeFirstResponder(view) }
+            if frame.rect.contains(NSEvent.mouseLocation) {
+                // Keys (Esc, ↩, R, P) only reach the overlay while RockType is active.
+                NSApp.activate()
+                panel.makeKey(); panel.makeFirstResponder(view)
+            }
         }
     }
     func openClipboardImage() {
