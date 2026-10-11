@@ -2,16 +2,20 @@ import AppKit
 import RoarkTPlatform
 import RoarkTCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Retain in AppDelegate, call start/stop, and bind HotkeyCenter.screenshotAction to capture().
 @MainActor final class ScreenshotCoordinator {
     private var running = false
     private var generation = 0
+    private var importTask: Task<Void, Never>?
+    private var importProgress: Progress?
     private var captureTask: Task<Void, Never>?
     private var protectionTask: Task<Void, Never>?
     private var panels: [NSPanel] = []
     private var hidden: [NSWindow] = []
     private var keyMonitor: Any?
+    private var globalKeyMonitor: Any?
     var onNotice: (String) -> Void = { _ in }
     var onPermissionRequired: () -> Void = { Permissions.openSettings(for: .screenRecording) }
     var readSettings: () -> AppSettings = { .defaults }
@@ -34,9 +38,11 @@ import SwiftUI
     func stop() { running = false; cancel(); closePreview(); operations.stop() }
     func cancel() {
         generation += 1
+        importTask?.cancel(); importTask = nil; importProgress?.cancel(); importProgress = nil
         captureTask?.cancel(); captureTask = nil
         protectionTask?.cancel(); protectionTask = nil
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor); self.keyMonitor = nil }
+        if let globalKeyMonitor { NSEvent.removeMonitor(globalKeyMonitor); self.globalKeyMonitor = nil }
         panels.forEach { $0.orderOut(nil); $0.contentView = nil }; panels.removeAll()
         hidden.forEach { $0.orderFrontRegardless() }; hidden.removeAll()
     }
@@ -49,6 +55,9 @@ import SwiftUI
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             if event.keyCode == 53 { self?.cancel(); return nil }
             return event
+        }
+        globalKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if event.keyCode == 53 { self?.cancel() }
         }
         protectionTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -92,8 +101,62 @@ import SwiftUI
             if frame.rect.contains(NSEvent.mouseLocation) { panel.makeKey(); panel.makeFirstResponder(view) }
         }
     }
+    func openClipboardImage() {
+        guard running, allowed() else { return }
+        cancel(); closePreview()
+        do {
+            guard let data = try Clipboard.shared.readPNG() else { onNotice("剪贴板中没有图片。"); return }
+            decodeImport(data, origin: "剪贴板图片", current: generation)
+        } catch { onNotice("无法读取剪贴板图片，请重新复制后重试。") }
+    }
+    @discardableResult func acceptDrop(_ providers: [NSItemProvider]) -> Bool {
+        guard running, allowed(), let provider = providers.first(where: { ScreenshotImageImport.type(for: $0) != nil }),
+              let type = ScreenshotImageImport.type(for: provider) else { return false }
+        cancel(); closePreview(); let current = generation
+        importProgress = provider.loadDataRepresentation(forTypeIdentifier: type) { [weak self] data, _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.running, self.allowed(), self.generation == current else { return }
+                guard let data else { self.onNotice("无法读取拖入的图片。"); return }
+                if type == UTType.fileURL.identifier {
+                    guard let url = URL(dataRepresentation: data, relativeTo: nil), url.isFileURL else {
+                        self.onNotice("请拖入本机图片文件。"); return
+                    }
+                    self.importTask = Task { [weak self] in
+                        do {
+                            let worker = Task.detached { try ScreenshotImageImport.decode(ScreenshotImageImport.read(url)) }
+                            let image = try await withTaskCancellationHandler { try await worker.value } onCancel: { worker.cancel() }
+                            guard let self, !Task.isCancelled, self.generation == current, self.allowed() else { return }
+                            self.openImage(image, origin: "拖入图片")
+                        } catch {
+                            guard let self, !Task.isCancelled, self.generation == current else { return }
+                            self.importFailure(error)
+                        }
+                    }
+                } else { self.decodeImport(data, origin: "拖入图片", current: current) }
+            }
+        }
+        return true
+    }
+    private func decodeImport(_ data: Data, origin: String, current: Int) {
+        importTask = Task { [weak self] in
+            do {
+                let worker = Task.detached { try ScreenshotImageImport.decode(data) }
+                let image = try await withTaskCancellationHandler { try await worker.value } onCancel: { worker.cancel() }
+                guard let self, !Task.isCancelled, self.generation == current, self.allowed() else { return }
+                self.openImage(image, origin: origin)
+            } catch {
+                guard let self, !Task.isCancelled, self.generation == current else { return }
+                self.importFailure(error)
+            }
+        }
+    }
+    private func importFailure(_ error: Error) {
+        onNotice(error as? ScreenshotImageImport.Failure == .tooLarge
+            ? "图片过大：支持最大 40 MB、6400 万像素，请缩小后重试。" : "图片无法打开，请使用 PNG、JPEG 或 TIFF 图片。")
+    }
     func closePreview() {
         let old = session; session = nil; old?.close()
+        operations.clearCurrentContent()
         previewPanel?.orderOut(nil); previewPanel?.contentView = nil; previewPanel = nil
         resultPanel?.orderOut(nil); resultPanel?.contentView = nil; resultPanel = nil
     }
@@ -108,7 +171,7 @@ import SwiftUI
         value.onResult = { [weak self] in self?.showResult() }
         value.start()
         if complete { value.copyImage(closeAfter: true); return }
-        let panel = CapturePanel(contentRect: CGRect(x: 0, y: 0, width: 520, height: 700),
+        let panel = CapturePanel(contentRect: CGRect(x: 0, y: 0, width: Tokens.Size.resultMaxHeight, height: ScreenshotPreviewContent.height),
             styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.level = .floating; panel.isReleasedWhenClosed = false
         panel.contentView = NSHostingView(rootView: ImagePreviewView(session: value))

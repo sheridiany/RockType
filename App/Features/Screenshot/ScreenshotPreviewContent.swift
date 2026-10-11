@@ -1,10 +1,12 @@
 import SwiftUI
 
 struct ScreenshotPreviewContent: View {
+    static var height: CGFloat { min(760, (NSScreen.main?.visibleFrame.height ?? 840) - 80) }
     @Bindable var session: ScreenshotSession
     @Environment(\.colorScheme) private var scheme
     var body: some View {
         let p = Tokens.palette(scheme)
+        ScrollView {
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
             HStack {
                 Label("图片 · " + session.origin, systemImage: "photo")
@@ -51,7 +53,9 @@ struct ScreenshotPreviewContent: View {
             if let notice = session.notice { Notice(text: notice) }
         }
         .buttonStyle(DesignButtonStyle(variant: .secondary))
-        .padding(Tokens.Space.md).frame(width: Tokens.Size.resultMaxHeight)
+        .padding(Tokens.Space.md)
+        }
+        .frame(width: Tokens.Size.resultMaxHeight, height: Self.height)
         .modifier(DesignSurface()).onExitCommand { session.close() }
     }
 }

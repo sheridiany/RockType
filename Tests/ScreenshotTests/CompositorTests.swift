@@ -28,3 +28,20 @@ final class CompositorTests: XCTestCase {
         history.redo(); XCTAssertEqual(history.items.count, 2); XCTAssertEqual(history.items.last?.tool, .pen)
     }
 }
+
+extension CompositorTests {
+    func testCropKeepsTopLeftOrientation() throws {
+        let context = try XCTUnwrap(CGContext(data: nil, width: 100, height: 100, bitsPerComponent: 8, bytesPerRow: 400,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.setFillColor(NSColor.blue.cgColor); context.fill(CGRect(x: 0, y: 0, width: 100, height: 100))
+        context.setFillColor(NSColor.red.cgColor); context.fill(CGRect(x: 0, y: 50, width: 100, height: 50))
+        let image = try XCTUnwrap(context.makeImage())
+        let result = try XCTUnwrap(ScreenshotCompositor.render(image: image, size: CGSize(width: 50, height: 50),
+            selection: CGRect(x: 10, y: 5, width: 20, height: 35), annotations: []))
+        let bitmap = NSBitmapImageRep(cgImage: result)
+        let top = try XCTUnwrap(bitmap.colorAt(x: 10, y: 5)?.usingColorSpace(.deviceRGB))
+        let bottom = try XCTUnwrap(bitmap.colorAt(x: 10, y: 60)?.usingColorSpace(.deviceRGB))
+        XCTAssertGreaterThan(top.redComponent, 0.9); XCTAssertLessThan(top.blueComponent, 0.1)
+        XCTAssertGreaterThan(bottom.blueComponent, 0.9); XCTAssertLessThan(bottom.redComponent, 0.1)
+    }
+}

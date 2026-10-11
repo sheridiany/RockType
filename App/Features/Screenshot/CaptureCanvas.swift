@@ -50,10 +50,10 @@ import SwiftUI
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override func draw(_ dirtyRect: NSRect) {
-        NSImage(cgImage: image, size: bounds.size).draw(in: bounds)
+        NSImage(cgImage: image, size: bounds.size).draw(in: bounds, from: .zero, operation: .copy, fraction: 1, respectFlipped: true, hints: nil)
         if !selection.isEmpty, let rendered = ScreenshotCompositor.render(image: image, size: bounds.size,
             selection: selection, annotations: history.items + (draft.map { [$0] } ?? [])) {
-            NSImage(cgImage: rendered, size: selection.size).draw(in: selection)
+            NSImage(cgImage: rendered, size: selection.size).draw(in: selection, from: .zero, operation: .copy, fraction: 1, respectFlipped: true, hints: nil)
         }
         let mask = NSBezierPath(rect: bounds)
         if !selection.isEmpty { mask.appendRect(selection) }
