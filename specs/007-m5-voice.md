@@ -73,7 +73,7 @@
 
 - 待 Claude + 用户确定真实 Fn 与系统听写/输入源切换冲突的验收配置；当前只解释冲突，不更改系统设置。
 - 待人工：内置麦克风/AirPods、中文/中英混说、首尾字与静音、Esc/松键丢失/设备断开/睡眠、不同应用/窗口/密码框/终端 Secure Keyboard Entry 的 ticket 行为；两档模型实际下载中断、磁盘不足、模型内存与延迟；HUD 与设置 UI 设计验收。
-- 当前只验证自动生命周期与无模型 XPC 调用，未下载 GB 模型、未启用麦克风、未向真实 AI 发送用户内容，也未安装或激活输入法。V5 保持未开始。
+- 当前只验证自动生命周期与无模型 XPC 调用，未下载 GB 模型、未启用麦克风、未向真实 AI 发送用户内容，也未安装或激活输入法。真实 V5 验收仍待人工；App 集成结果见下节。
 - 非本任务的既有构建提示：SPM 提示 `Core/Voice/LICENSE.md` 未声明资源；未越权修改根 Package.swift。
 
 
@@ -82,4 +82,15 @@
 - AppDelegate 唯一持有 VoiceInputController(store: store)，通过快捷键生命周期回调调用 start()/stop()，退出明确 stop()；启动仅在 Fn 已配置、无冲突且辅助功能已授权时开启监听。设置语音分区保留 main 的 VoiceModelStore.shared 接线，操作模板分区同时使用 M3-5 templatesPane。
 - HotkeyCenter / SystemHotkeyRegistrar 移除旧 press-only Fn 探针和第二套 FnKeyMonitor，保留 Fn 配置合法性、重复绑定冲突、权限缺失和监听失败状态。VoiceInputController 独占 press/release/cancel。快捷键录制开始同步停止语音，取消或保存后按当前配置恢复；辅助功能状态变化由现有 2 秒检查触发 stop/start 重建；录制中重新授权不提前恢复。未配置、冲突与不支持绑定均停止语音。
 - scripts/test.sh 通过，包含 AppShellTests。新增回归覆盖监听独占、录制暂停/恢复、授权撤销/重新授予、录制中授权变化、Fn 冲突、清除绑定、启动失败/重试和退出；原语音生命周期与模型/润色测试保留。截图仍为“即将推出”。
-- 完整签名构建、worker 冒烟、图库与实际 App 启动检查正在统一验证，后续补最终结果。真实 Fn/麦克风/模型下载识别/ticket 填入、系统权限与听写冲突、HUD 设计与 VoiceOver 仍待人工验证，未启用麦克风或下载模型。
+- 完整签名构建、worker 冒烟、图库与实际 App 启动检查已通过，见下表。真实 Fn/麦克风/模型下载识别/ticket 填入、系统权限与听写冲突、HUD 设计与 VoiceOver 仍待人工验证，未启用麦克风或下载模型。
+
+
+| App 集成最终检查 | 结果 | 证据与限制 |
+| --- | --- | --- |
+| scripts/test.sh | 通过 | 19 XCTest + 117 Swift Testing、Rime、AppShellTests 与旧标识检查；含新增 Fn 生命周期测试。日志 `/tmp/roarkt-m5-tests.log`。 |
+| scripts/build.sh | 通过 | 全部产物 Release 构建、签名与验证；打包语音 worker MLX 自检、签名 XPC 往返/无效模型拒绝、同 Team 错 identifier 拒绝均通过。日志 `/tmp/roarkt-final-build.log`。 |
+| scripts/render-gallery.sh | 通过 | 208 PNG，非真实语音 HUD 的交互或设计验收。日志 `/tmp/roarkt-final-gallery.log`。 |
+| 打包 App 启动与退出 | 通过（启动冒烟） | open -n 当前 worktree 的 dist/RoarkT.app，完成启动并持续存活后正常退出；按 bundle 路径限定实例，未退出已有主仓库实例。日志 `/tmp/roarkt-final-launch.log`。 |
+| 真实硬件、权限、识别与 UI | 待人工验证 | 未按 Fn 录音、未下载 GB 模型、未调用真实 AI 或安装/激活输入法；真实系统听写冲突、重新授权、麦克风指示与 ticket 安全填入仍需 Claude + 用户验收。 |
+
+集成提交 `4419476`（基于合入 main `8106843` 的 `af32a75`）；代码集成完成（待验收），不代表 V5 人工验收完成。详细 M3 联合验证见 SPEC-005 M3-6 最终验证。
