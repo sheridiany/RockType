@@ -21,7 +21,7 @@
 
 | # | 任务 | 执行 | 状态 |
 | --- | --- | --- | --- |
-| E-1 | XPC 协议新增 `configureAI`、`rewriteCandidate`；服务实现（内存配置、取消、超时、错误码、鉴权） | pi-xpc | 未开始 |
+| E-1 | XPC 协议新增 `configureAI`、`rewriteCandidate`；服务实现（内存配置、取消、超时、错误码、鉴权） | pi-xpc | E-1 代码与自动化通过；真实安装鉴权待 Claude 验收 |
 | E-2 | 主 App 下发配置：启动、AI 设置/模板/密钥变化、退出清空；设置中输入法 AI 开关与快捷键项 | pi-xpc | 未开始 |
 | E-3 | 输入法侧：触发键、请求、译文栏 AI 状态、Tab 上屏、作废规则 | pi-ime（M1 合并后） | 未开始 |
 | E-4 | 验收 | Claude + 用户 | 未开始 |
@@ -32,13 +32,22 @@
 
 | 项 | 方法 | 结果 | 证据 |
 | --- | --- | --- | --- |
-| 鉴权：输入法不能 configureAI，主 App 不能 rewriteCandidate | 服务测试 | 未运行 | |
-| 未配置 / 配置清空后返回明确错误 | 服务测试 | 未运行 | |
-| generation 取消与迟到丢弃 | 服务测试 | 未运行 | |
-| 密钥不落盘、不进日志 | 代码检查 + 测试 | 未运行 | |
+| 鉴权：输入法不能 configureAI，主 App 不能 rewriteCandidate | 服务测试 | 通过 | `InputAITests` 角色拒绝与共享 generation 测试；真实签名安装场景待人工 |
+| 未配置 / 配置清空后返回明确错误 | 服务测试 | 通过 | 空配置、无配置、非法替换配置、配置所属连接断开均撤销 |
+| generation 取消与迟到丢弃 | 服务测试 | 通过 | 忽略取消的受控 backend；取消立即回复、deadline 独立终止、旧结果丢弃 |
+| 密钥不落盘、不进日志 | 代码检查 + 测试 | E-1 通过；E-2 待实现 | 内存配置；AIClient ephemeral 会话；固定错误映射，未透传服务商错误内容 |
 | 打字期间 AI 请求不影响按键延迟 | 手工 | 待人工验证 | |
 | 真实 AI 改写 / 润色 / 翻译上屏 | 手工 | 待人工验证 | |
 
 ## 进度
+
+### E-1（2026-10-11）
+
+- 新增 `RoarkTInputAIXPCProtocol`，继承现有文字翻译协议；服务导出新接口，既有窄接口客户端保持可用。E-3 应使用新接口创建 `NSXPCInterface`。
+- `configureAI` 使用字符串字典（七个必填键见协议头），空字典撤销配置；提示词沿用 `{{target}}`，服务追加原文。错误码 100–112 的语义见协议头。
+- 实现配置所属连接生命周期、输入法/主 App 方法级角色检查、普通候选与 AI 共用 generation 门槛、取消、独立 deadline、Secure Input 请求前/结果前复检与运行期间监测。密码框焦点检查仍由 E-3 输入法负责，服务不申请辅助功能权限。
+- 验证：`swift test --filter RoarkTTranslationServiceTests` 退出 0（45 tests）；补匿名 XPC 字典/回复往返后 `scripts/test.sh` 退出 0（131 tests、Rime 部署、Hotkey/Permission checks 均通过）。首次编译因 actor 隔离报错退出 1，已修复并通过上述复测。
+- 未运行安装、LaunchAgent 加载、真实端点请求、真实签名安装鉴权和键盘验收；这些不由单元测试替代。
+
 
 ## 问题
