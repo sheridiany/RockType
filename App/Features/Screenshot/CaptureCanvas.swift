@@ -9,6 +9,7 @@ import os
     let image: CGImage
     var selection = CGRect.zero { didSet { notice = nil; updateSelectionLayers() } }
     var onCancel: () -> Void = {}
+    var onOCRCopy: (CGImage) -> Void = { _ in }
     var onPreview: (CGImage) -> Void = { _ in }
     var onComplete: (CGImage) -> Void = { _ in }
     var onSave: (CGImage) -> Void = { _ in }
@@ -16,7 +17,7 @@ import os
     var onRestore: () -> Void = {}
     var allowed: () -> Bool = { SecureInput.status() == .allowed }
     private var notice: String?
-    private enum Output { case copy, save, preview, pin }
+    private enum Output { case copy, save, preview, pin, ocrCopy }
     private let windows: [CGRect]
     private var hoveredWindow: CGRect? { didSet { updateSelectionLayers() } }
     private var clickWindow: CGRect?
@@ -55,6 +56,7 @@ import os
         case .copy: onComplete(result)
         case .save: onSave(result)
         case .preview: onPreview(result)
+        case .ocrCopy: onOCRCopy(result)
         case .pin: onPin(result)
         }
     }
@@ -314,6 +316,9 @@ import os
         if modifiers.isEmpty, event.charactersIgnoringModifiers?.lowercased() == "r" {
             guard allowed() else { onCancel(); return }
             onRestore(); return
+        }
+        if modifiers == .shift, event.charactersIgnoringModifiers?.lowercased() == "c" {
+            complete(.ocrCopy); return
         }
         let step: CGFloat = event.modifierFlags.contains(.shift) ? 10 : 1
         let delta: CGSize

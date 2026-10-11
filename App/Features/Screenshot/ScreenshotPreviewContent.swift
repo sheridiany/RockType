@@ -1,9 +1,15 @@
 import SwiftUI
+import RoarkTPlatform
 
 struct ScreenshotPreviewContent: View {
     static var height: CGFloat { min(760, (NSScreen.main?.visibleFrame.height ?? 840) - 80) }
     @Bindable var session: ScreenshotSession
+    @State private var selectedLine: Int?
+    @State private var showBoxes = true
     @Environment(\.colorScheme) private var scheme
+    private func languageName(_ code: String) -> String {
+        ["zh-Hans": "简体中文", "zh-Hant": "繁體中文", "en-US": "English", "ja-JP": "日本語", "ko-KR": "한국어"][code] ?? code
+    }
     var body: some View {
         let p = Tokens.palette(scheme)
         ScrollView {
@@ -16,6 +22,22 @@ struct ScreenshotPreviewContent: View {
             }
             if let image = session.image {
                 Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: .fit)
+                    .overlay {
+                        if showBoxes && session.ocrFinished {
+                            GeometryReader { geometry in
+                                ForEach(Array(session.ocrLines.enumerated()), id: \.offset) { index, line in
+                                    let r = line.rect
+                                    Button { selectedLine = index } label: {
+                                        Rectangle().fill(Color.accentColor.opacity(selectedLine == index ? 0.25 : 0.06))
+                                            .border(Color.accentColor.opacity(0.8), width: selectedLine == index ? 2 : 1)
+                                    }.buttonStyle(.plain)
+                                        .frame(width: r.width * geometry.size.width, height: r.height * geometry.size.height)
+                                        .position(x: r.midX * geometry.size.width, y: r.midY * geometry.size.height)
+                                        .accessibilityLabel("识别区域 \(index + 1)")
+                                }
+                            }
+                        }
+                    }
                     .frame(maxHeight: Tokens.Size.control * 10)
                     .accessibilityLabel(session.confirmingImage ? "即将发送给视觉模型的图片" : "原始分辨率合成预览")
             }
@@ -26,6 +48,19 @@ struct ScreenshotPreviewContent: View {
                     Button("确认发送图片") { session.confirmImage() }.buttonStyle(DesignButtonStyle(variant: .primary))
                 }
             } else {
+                HStack {
+                    Menu("识别语言") {
+                        ForEach(["zh-Hans", "zh-Hant", "en-US", "ja-JP", "ko-KR"], id: \.self) { language in
+                            Toggle(languageName(language), isOn: Binding(get: { session.ocrLanguages.contains(language) }, set: { enabled in
+                                if enabled { session.ocrLanguages.append(language) }
+                                else { session.ocrLanguages.removeAll { $0 == language } }
+                            }))
+                        }
+                    }.help("本次图片的优先识别语言；同时自动检测其他语言")
+                    Toggle("合并段落", isOn: $session.mergeParagraphs).toggleStyle(.checkbox)
+                        .help("下次识别时合并连续正文；代码和列表建议保留逐行格式")
+                    Spacer()
+                }
                 HStack(spacing: Tokens.Space.sm) {
                     Button("识别文字") { session.runOCR() }.disabled(session.busy)
                     Button("解释图片") { session.prepareImage() }.disabled(session.busy || session.visionModel == nil)
@@ -39,7 +74,14 @@ struct ScreenshotPreviewContent: View {
                 }
                 if session.ocrFinished {
                     HStack { Text("识别结果 · 可直接修改"); Spacer(); Chip(text: "本机 · 未上传", tone: .ok) }
-                    DesignTextArea(title: "识别结果", text: $session.text).frame(height: Tokens.Size.row * 4)
+                    Toggle("显示文字框", isOn: $showBoxes).toggleStyle(.checkbox)
+                    if let selectedLine, session.ocrLines.indices.contains(selectedLine) {
+                        Text(session.ocrLines[selectedLine].text).font(.system(.caption, design: .monospaced))
+                            .textSelection(.enabled).padding(8).frame(maxWidth: .infinity, alignment: .leading)
+                            .background(p.pill, in: RoundedRectangle(cornerRadius: 6))
+                    }
+                    TextEditor(text: $session.text).font(.system(.body, design: .monospaced))
+                        .accessibilityLabel("识别结果，可编辑").frame(height: Tokens.Size.row * 4)
                     HStack {
                         Button("翻译") { session.runText(templateID: "translate") }
                         Button("总结") { session.runText(templateID: "summarize") }

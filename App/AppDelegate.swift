@@ -190,6 +190,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func clearCurrentContent() {
         screenshot.cancel()
         screenshot.closePreview()
+        PinnedImageController.shared.closeAll()
         selectionController.dismiss()
         operations.clearCurrentContent()
         comingSoon.show(message: "当前内容已清除。")
