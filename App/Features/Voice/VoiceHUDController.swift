@@ -3,7 +3,7 @@ import Observation
 import RoarkTPlatform
 
 @MainActor @Observable final class VoiceHUDState {
-    enum Phase { case hidden, preparing, recording, recognizing, done, failed }
+    enum Phase { case hidden, preparing, loading, recording, recognizing, polishing, done, failed }
     var phase: Phase = .hidden
     var message = ""
     var result = ""
@@ -40,9 +40,9 @@ import RoarkTPlatform
     func show() {
         switch state.phase {
         case .hidden: hud.hide()
-        case .preparing: hud.show(.activity(state.message))
+        case .preparing, .loading: hud.show(.activity(state.message))
         case .recording: hud.show(.recording)
-        case .recognizing: hud.show(.activity(state.message))
+        case .recognizing, .polishing: hud.show(.activity(state.message))
         case .done: hud.show(.success(state.message))
         case .failed:
             if state.result.isEmpty {
