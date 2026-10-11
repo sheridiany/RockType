@@ -21,7 +21,7 @@ final class CaptureTests: XCTestCase {
         var continuation: CheckedContinuation<[ScreenCapture.Frame], any Error>?
         let coordinator = ScreenshotCoordinator(captureFrames: {
             try await withCheckedThrowingContinuation { continuation = $0 }
-        }, allowed: { true })
+        }, allowed: { true }, elementQuery: CaptureElementQuery(permitted: { false }))
         var completions = 0
         coordinator.onSelection = { _ in completions += 1 }
         coordinator.start(); coordinator.capture()

@@ -12,7 +12,7 @@ import RoarkTPlatform
     private let pasteboard: NSPasteboard
 
     init(settings: @escaping () -> ScreenshotSettings = { SettingsStore.shared.settings.screenshot },
-         allowed: @escaping () -> Bool = { SecureInput.status() == .allowed },
+         allowed: @escaping () -> Bool = { ScreenCapture.isReadable },
          now: @escaping () -> Date = Date.init, pasteboard: NSPasteboard = .general) {
         self.settings = settings; self.allowed = allowed; self.now = now; self.pasteboard = pasteboard
     }
@@ -68,6 +68,12 @@ import RoarkTPlatform
         guard allowed() else { throw Failure.protectedInput }
         pasteboard.clearContents()
         guard pasteboard.setData(data, forType: .png) else { throw PlatformReadError.writeFailed }
+    }
+
+    func copyColor(_ hex: String) throws {
+        guard allowed() else { throw Failure.protectedInput }
+        pasteboard.clearContents()
+        guard pasteboard.setString(hex, forType: .string) else { throw PlatformReadError.writeFailed }
     }
 
     private static func png(_ image: CGImage) throws -> Data {

@@ -14,7 +14,7 @@ import os
     var onComplete: (CGImage) -> Void = { _ in }
     var onSave: (CGImage) -> Void = { _ in }
     var onSaveAs: (CGImage) -> Void = { _ in }
-    var onCopyColor: (String) throws -> Void = { try Clipboard.shared.writeString($0) }
+    var onCopyColor: (String) throws -> Void = { try ScreenshotOutput.shared.copyColor($0) }
     var roundedCorners = true
     private let magnifier = CaptureMagnifier(frame: .zero)
     private var pointer: CGPoint?
@@ -47,10 +47,11 @@ import os
     }
     var onPin: (CGImage) -> Void = { _ in }
     var onRestore: () -> Void = {}
-    var allowed: () -> Bool = { SecureInput.status() == .allowed }
+    var allowed: () -> Bool = { ScreenCapture.isReadable }
     private var notice: String?
     private enum Output { case copy, save, saveAs, preview, pin, ocrCopy }
-    private let windows: [CGRect]
+    private var smartSelection: CaptureSmartSelection
+    private var hierarchyScroll: CGFloat = 0
     private var hoveredWindow: CGRect? { didSet { updateSelectionLayers() } }
     private var clickWindow: CGRect?
     private var freeSelecting = false
@@ -93,7 +94,16 @@ import os
                                     width: tool == .text ? 5 : style.width, fontSize: tool == .text ? style.width : 17)
     }
     override func scrollWheel(with event: NSEvent) {
-        guard allowed(), textEditor == nil, let tool, tool != .eraser else { return }
+        guard allowed(), textEditor == nil else { return }
+        if selection.isEmpty, tool == nil {
+            hierarchyScroll += event.scrollingDeltaY / (event.hasPreciseScrollingDeltas ? 12 : 1)
+            let integral = hierarchyScroll.rounded(.towardZero)
+            hierarchyScroll -= integral
+            let steps = Int(max(-12, min(12, integral)))
+            for _ in 0..<min(12, abs(steps)) { cycleElement(parent: steps > 0) }
+            return
+        }
+        guard let tool, tool != .eraser else { return }
         scrollRemainder += event.scrollingDeltaY / (event.hasPreciseScrollingDeltas ? 12 : 1)
         let steps = scrollRemainder.rounded(.towardZero)
         guard steps != 0 else { return }
@@ -226,11 +236,14 @@ import os
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
     init(frame: CGRect, image: CGImage, windows: [CGRect] = []) {
-        self.image = image; self.windows = windows; super.init(frame: frame)
+        self.image = image
+        self.smartSelection = CaptureSmartSelection(windows: windows)
+        super.init(frame: frame)
         wantsLayer = true
         frozenLayer.frame = bounds; frozenLayer.contents = image
         frozenLayer.contentsGravity = .resize
         annotationView = CaptureAnnotationView(frame: bounds, image: image)
+        annotationView.isHidden = true
         annotationView.wantsLayer = true
         annotationView.layer?.mask = annotationClip
         addSubview(annotationView)
@@ -265,7 +278,8 @@ import os
             guard history.items.indices.contains(index) else { return nil }
             return (annotationOriginal != nil ? draft : history.items[index])?.bounds
         }
-        annotationView.needsDisplay = true
+        annotationView.isHidden = annotationView.items.isEmpty && annotationView.selectedBounds == nil
+        annotationView.needsDisplay = !annotationView.isHidden
     }
     private func updateSelectionLayers() {
         guard annotationView != nil else { return }
@@ -294,7 +308,7 @@ import os
         labelLayer.isHidden = false
         let pixels = CaptureGeometry.pixels(visible, image: image, size: bounds.size)
         labelLayer.string = notice ?? (isEditingText ? "↩ 换行 · Esc 结束文字编辑 · 点击别处提交" : selection.isEmpty
-            ? "单击选窗口 · 拖动框选 · C 复制颜色 · R 恢复选区 · Esc 取消"
+            ? "单击选元素/窗口 · 滚轮/Tab 扩大 · ⇧Tab 缩小 · 拖动框选 · C 取色 · Esc 取消"
             : "\(Int(pixels.width)) × \(Int(pixels.height)) · 双击/↩ 复制 · ⌘S 另存 · ⇧C OCR · ⌥ 左/上边 · ⌘ 右/下边")
         labelLayer.frame = CGRect(x: max(8, min(visible.minX, bounds.width - 670)),
             y: max(8, visible.minY - 25), width: min(670, bounds.width - 16), height: 20)
@@ -319,8 +333,19 @@ import os
     func updateHover(at point: CGPoint) {
         updateMagnifier(at: point)
         guard selection.isEmpty, !dragging else { return }
-        let hovered = CaptureHitTesting.window(at: point, windows: windows)
-        if hoveredWindow != hovered { hoveredWindow = hovered }
+        smartSelection.update(at: point)
+        if hoveredWindow != smartSelection.current { hoveredWindow = smartSelection.current }
+    }
+    func installElements(_ snapshot: CaptureAccessibility.Snapshot) {
+        guard !dragging, selection.isEmpty else { return }
+        smartSelection.install(snapshot)
+        if let pointer { updateHover(at: pointer) }
+    }
+    var hoveredSelection: CGRect? { hoveredWindow }
+    private func cycleElement(parent: Bool) {
+        guard selection.isEmpty, !dragging else { return }
+        smartSelection.cycle(parent: parent)
+        if hoveredWindow != smartSelection.current { hoveredWindow = smartSelection.current }
     }
     override func mouseMoved(with event: NSEvent) { updateHover(at: convert(event.locationInWindow, from: nil)) }
     override func mouseEntered(with event: NSEvent) {
@@ -338,7 +363,8 @@ import os
         anchor = convert(event.locationInWindow, from: nil); original = selection
         updateMagnifier(at: anchor)
         annotationOriginal = nil; annotationHandle = nil; annotationChanged = false
-        didDrag = false; freeSelecting = false; clickWindow = CaptureHitTesting.window(at: anchor, windows: windows)
+        didDrag = false; freeSelecting = false
+        smartSelection.update(at: anchor); clickWindow = smartSelection.current
         if selection.contains(anchor) {
             if tool != .eraser, event.clickCount >= 2, let index = CaptureHitTesting.text(at: anchor, items: history.items, selection: selection) {
                 selectedAnnotation = nil; beginTextEditing(at: anchor, replacing: index); return
@@ -437,7 +463,9 @@ import os
         updateAnnotations(); updateToolbar()
     }
     private func command(for event: NSEvent) -> CaptureKeyCommand? {
-        CaptureKeyboard.command(keyCode: event.keyCode, characters: event.charactersIgnoringModifiers, modifiers: event.modifierFlags)
+        let command = CaptureKeyboard.command(keyCode: event.keyCode, characters: event.charactersIgnoringModifiers, modifiers: event.modifierFlags)
+        if case .hierarchy = command, !selection.isEmpty { return nil }
+        return command
     }
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard !isEditingText, event.modifierFlags.contains(.command), let command = command(for: event) else {
@@ -464,6 +492,7 @@ import os
         case .ocrCopy: complete(.ocrCopy)
         case .copyColor: copyColor()
         case .restore: onRestore()
+        case .hierarchy(let parent): cycleElement(parent: parent)
         case .undo: undoAnnotation()
         case .redo: undoAnnotation(redo: true)
         case .delete: deleteSelectedAnnotation()

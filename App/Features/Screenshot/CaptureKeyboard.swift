@@ -4,6 +4,7 @@ import AppKit
 enum CaptureKeyCommand: Equatable {
     case cancel, copy, quickSave, saveAs, pin, restore, ocrCopy, copyColor
     case undo, redo, delete, tool(ScreenshotTool?)
+    case hierarchy(parent: Bool)
     case nudge(CaptureDirection, CaptureEdge?, fast: Bool)
 }
 enum CaptureDirection: CaseIterable { case left, right, up, down
@@ -22,6 +23,7 @@ enum CaptureKeyboard {
         let flags = modifiers.intersection([.command, .control, .option, .shift])
         let text = characters?.lowercased()
         if keyCode == 53 { return .cancel }
+        if keyCode == 48, flags.isEmpty || flags == .shift { return .hierarchy(parent: flags.isEmpty) }
         if flags == .command {
             if text == "c" { return .copy }
             if text == "s" { return .saveAs }

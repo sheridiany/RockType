@@ -50,18 +50,28 @@ import os
     private var batch: ScreenshotBatch?
     private var imageOpenPanel: NSOpenPanel?
     var onSelection: (CGImage) -> Void = { _ in }
+    /// Numeric diagnostics only; also permits measuring the actual presentation boundary in tests.
+    var onOverlayTiming: ((Double) -> Void)?
     private let captureFrames: () async throws -> [ScreenCapture.Frame]
     private let allowed: () -> Bool
+    private let captureAllowed: () -> Bool
+    private let elementQuery: CaptureElementQuery
+    private var elementSnapshot: CaptureAccessibility.Snapshot?
+    private var captureDesktopTop: CGFloat = 0
     private let readClipboard: () throws -> Data?
     private let presentPreview: (NSPanel) -> Void
 
     init(captureFrames: @escaping () async throws -> [ScreenCapture.Frame] = { try await ScreenCapture.capture() },
-         allowed: @escaping () -> Bool = { SecureInput.status() == .allowed },
+         allowed: (() -> Bool)? = nil,
+         elementQuery: CaptureElementQuery = CaptureElementQuery(),
          saveAs: ScreenshotSaveAsController? = nil,
          readClipboard: @escaping () throws -> Data? = { try Clipboard.shared.readPNG() },
          presentPreview: @escaping (NSPanel) -> Void = { panel in panel.center(); panel.orderFrontRegardless() }) {
-        self.captureFrames = captureFrames; self.allowed = allowed
-        self.saveAs = saveAs ?? ScreenshotSaveAsController(allowed: allowed)
+        self.captureFrames = captureFrames
+        self.allowed = allowed ?? { SecureInput.status() == .allowed }
+        self.captureAllowed = allowed ?? { ScreenCapture.isReadable }
+        self.elementQuery = elementQuery
+        self.saveAs = saveAs ?? ScreenshotSaveAsController(allowed: self.captureAllowed)
         self.readClipboard = readClipboard; self.presentPreview = presentPreview
     }
     private var warmupTask: Task<Void, Never>?
@@ -82,6 +92,7 @@ import os
     func stop() { running = false; warmupTask?.cancel(); warmupTask = nil; ScreenCapture.stopWarming(); cancel(); closePreview(); PinnedImageController.shared.closeAll() }
     func cancel() {
         generation += 1
+        elementQuery.cancel(); elementSnapshot = nil
         saving = false; saveAs.cancel()
         imageOpenPanel?.cancel(nil); imageOpenPanel = nil
         importer.cancel()
@@ -97,10 +108,23 @@ import os
         previousApp = nil
     }
     func capture() {
-        guard running, allowed() else { return }
+        guard running, captureAllowed() else { return }
         let started = CACurrentMediaTime()
         cancel(); closePreview()
         let current = generation
+        captureDesktopTop = NSScreen.screens.first?.frame.maxY ?? 0
+        let mouse = NSEvent.mouseLocation
+        let point = CGPoint(x: mouse.x, y: captureDesktopTop - mouse.y)
+        elementQuery.start(at: point) { [weak self] snapshot in
+            guard let self, current == self.generation else { return }
+            self.elementSnapshot = snapshot
+            if let snapshot {
+                for canvas in self.overlays.canvases.values {
+                    guard let screen = canvas.window?.frame else { continue }
+                    canvas.installElements(CaptureSmartSelection.local(snapshot, screen: screen, desktopTop: self.captureDesktopTop))
+                }
+            }
+        }
         let frontmost = NSWorkspace.shared.frontmostApplication
         previousApp = frontmost?.processIdentifier == ProcessInfo.processInfo.processIdentifier ? nil : frontmost
         hidden = (NSApp?.windows ?? []).filter { $0.isVisible && $0.level != .normal }
@@ -118,17 +142,19 @@ import os
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
                 guard let self else { return }
-                if !self.allowed() { self.cancel(); return }
+                if !self.captureAllowed() { self.cancel(); return }
             }
         }
         captureTask = Task { [weak self] in
             guard let self else { return }
             do {
                 let frames = try await self.captureFrames()
-                guard !Task.isCancelled, current == self.generation, self.allowed() else { return }
+                guard !Task.isCancelled, current == self.generation, self.captureAllowed() else { return }
                 self.show(frames)
                 CATransaction.flush()
-                Self.timing.info("overlay_ms \((CACurrentMediaTime() - started) * 1000, privacy: .public)")
+                let elapsed = (CACurrentMediaTime() - started) * 1000
+                Self.timing.info("overlay_ms \(elapsed, privacy: .public)")
+                self.onOverlayTiming?(elapsed)
             } catch {
                 guard current == self.generation else { return }
                 self.cancel()
@@ -156,9 +182,12 @@ import os
             let view = CaptureCanvas(frame: CGRect(origin: .zero, size: frame.rect.size), image: frame.image, windows: frame.windows)
             let displayID = frame.displayID
             overlays.add(panel: panel, canvas: view, displayID: displayID)
-            view.allowed = allowed
+            view.allowed = captureAllowed
             view.roundedCorners = readSettings().screenshot.roundedCorners ?? true
             view.toolStyles = readSettings().screenshot.annotationStyles ?? [:]
+            if let elementSnapshot {
+                view.installElements(CaptureSmartSelection.local(elementSnapshot, screen: frame.rect, desktopTop: captureDesktopTop))
+            }
             view.onStyleChange = { [weak self] tool, style in
                 guard let self else { return }
                 self.writeAnnotationStyle(tool, style)
@@ -166,7 +195,7 @@ import os
             }
             view.onCancel = { [weak self] in self?.cancel() }
             view.onComplete = { [weak self, weak view] image in
-                guard let self, let view, self.allowed() else { return }
+                guard let self, let view, self.captureAllowed() else { return }
                 do {
                     try ScreenshotOutput.shared.copyImage(image)
                     self.lastSelection = (displayID, view.selection)
@@ -174,7 +203,7 @@ import os
                 } catch { view.showNotice("无法复制图片，请重试。") }
             }
             view.onSave = { [weak self, weak view] image in
-                guard let self, let view, self.allowed() else { return }
+                guard let self, let view, self.captureAllowed() else { return }
                 let url: URL
                 do { url = try ScreenshotOutput.shared.save(image) }
                 catch { view.showNotice("保存失败，请检查截图保存目录及写入权限。") ; return }
@@ -188,7 +217,8 @@ import os
             }
             let screenRect = frame.rect
             view.onPin = { [weak self, weak view] image in
-                guard let self, let view, self.allowed() else { return }
+                guard let self, let view, self.captureAllowed() else { return }
+                guard self.allowed() else { view.showNotice("贴图暂不可用，请检查辅助功能权限与安全输入状态。"); return }
                 let selection = view.selection
                 let rect = CaptureGeometry.globalScreenRect(selection, screen: screenRect)
                 // Restore hidden windows before giving the new pin keyboard focus.
@@ -198,20 +228,22 @@ import os
                 } else { self.onNotice("无法贴图，请检查安全输入状态和显示器。") }
             }
             view.onRestore = { [weak self, weak view] in
-                guard let self, self.allowed(), let previous = self.lastSelection,
+                guard let self, self.captureAllowed(), let previous = self.lastSelection,
                       self.overlays.restore(displayID: previous.displayID, rect: previous.rect) else {
                     view?.showNotice("没有可恢复的选区，或原显示器已断开。")
                     return
                 }
             }
 
-            view.onOCRCopy = { [weak self] image in
-                guard let self, self.allowed() else { return }
+            view.onOCRCopy = { [weak self, weak view] image in
+                guard let self else { return }
+                guard self.allowed() else { view?.showNotice("OCR 暂不可用，请检查辅助功能权限与安全输入状态。"); return }
                 self.cancel(); self.openImage(image, origin: "截图")
                 self.session?.runOCR(copyAfter: true)
             }
             view.onPreview = { [weak self, weak view] image in
-                guard let self, let view, self.allowed() else { return }
+                guard let self, let view, self.captureAllowed() else { return }
+                guard self.allowed() else { view.showNotice("预览暂不可用，请检查辅助功能权限与安全输入状态。"); return }
                 self.lastSelection = (displayID, view.selection)
                 self.cancel(); self.openImage(image, origin: "截图")
             }
@@ -227,14 +259,14 @@ import os
         }
     }
     func saveSelection(_ image: CGImage, canvas: CaptureCanvas, displayID: CGDirectDisplayID) {
-        guard allowed(), !saving else { return }
+        guard captureAllowed(), !saving else { return }
         let current = generation
         saving = true
         overlays.suspend()
         saveAs.present(image: image, format: readSettings().screenshot.format) { [weak self, weak canvas] outcome in
             guard let self, current == self.generation, let canvas else { return }
             self.saving = false
-            guard self.allowed() else { self.cancel(); return }
+            guard self.captureAllowed() else { self.cancel(); return }
             if outcome == .saved {
                 self.lastSelection = (displayID, canvas.selection); self.cancel(); return
             }
