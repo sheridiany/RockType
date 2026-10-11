@@ -27,8 +27,8 @@ enum AboutDocuments: String, CaseIterable {
 struct AboutLegalLinks: View {
     @State private var message: String?
     var body: some View {
-        U4SectionTitle(title: "许可证与声明")
-        U4Card {
+        DesignSectionTitle(title: "许可证与声明")
+        DesignCard {
             ForEach(AboutDocuments.allCases, id: \.rawValue) { document in
                 Button(document.title) {
                     guard let url = document.url(resources: Bundle.main.resourceURL) else {

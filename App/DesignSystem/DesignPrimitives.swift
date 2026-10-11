@@ -3,12 +3,12 @@ import SwiftUI
 // Additional surface-specific values derive from the established spacing grid.
 // Existing DesignSystem interfaces remain unchanged.
 
-struct U4Rule: View {
+struct DesignRule: View {
     @Environment(\.colorScheme) private var scheme
     var body: some View { Rectangle().fill(Tokens.palette(scheme).line).frame(height: Tokens.Size.stroke) }
 }
 
-struct U4Card<Content: View>: View {
+struct DesignCard<Content: View>: View {
     @ViewBuilder var content: () -> Content
     @Environment(\.colorScheme) private var scheme
     var body: some View {
@@ -19,7 +19,7 @@ struct U4Card<Content: View>: View {
     }
 }
 
-struct U4SectionTitle: View {
+struct DesignSectionTitle: View {
     let title: String
     @Environment(\.colorScheme) private var scheme
     var body: some View {
@@ -29,7 +29,7 @@ struct U4SectionTitle: View {
 }
 
 /// Pure SwiftUI progress also renders with ImageRenderer on macOS 14.
-struct U4Progress: View {
+struct DesignProgress: View {
     let value: Double
     let label: String
     @Environment(\.colorScheme) private var scheme
@@ -47,7 +47,7 @@ struct U4Progress: View {
 }
 
 /// Native actions, custom drawing: unlike AppKit-backed switches this is fully exportable.
-struct U4Toggle: View {
+struct SettingsToggle: View {
     let title: String
     @Binding var isOn: Bool
     @Environment(\.colorScheme) private var scheme
@@ -70,7 +70,7 @@ struct U4Toggle: View {
     }
 }
 
-struct U4Choice: View {
+struct DesignChoice: View {
     let title: String
     @Binding var value: String
     let options: [String]
@@ -94,7 +94,7 @@ struct U4Choice: View {
 }
 
 /// Inline value stays drawable in exports; editing is an explicit native sheet.
-struct U4EditableField: View {
+struct DesignEditableField: View {
     let title: String
     @Binding var value: String
     var multiline = false

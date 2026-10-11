@@ -1,3 +1,4 @@
+#if DEBUG
 import SwiftUI
 
 /// All edits below are in-memory presentation state, not application preferences.
@@ -37,7 +38,7 @@ struct SettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .id(section)
-                U4Rule()
+                DesignRule()
                 Text(feedback.isEmpty ? "设计预览 · 修改仅保留在当前面板" : feedback)
                     .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(p.secondary)
                     .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
@@ -110,41 +111,41 @@ struct SettingsView: View {
         }.frame(minHeight: Tokens.Size.row)
     }
     private func toggle(_ title: String, _ key: String, detail: String? = nil) -> some View {
-        row(title, detail: detail) { U4Toggle(title: title, isOn: flag(key)) }
+        row(title, detail: detail) { SettingsToggle(title: title, isOn: flag(key)) }
     }
     private func choice(_ title: String, _ key: String, _ options: [String]) -> some View {
-        row(title) { U4Choice(title: title, value: value(key), options: options) }
+        row(title) { DesignChoice(title: title, value: value(key), options: options) }
     }
     private func field(_ title: String, _ key: String) -> some View {
-        row(title) { U4EditableField(title: title, value: value(key)).frame(width: Tokens.Size.fieldWidth) }
+        row(title) { DesignEditableField(title: title, value: value(key)).frame(width: Tokens.Size.fieldWidth) }
     }
 
     private var generalPane: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
-            U4SectionTitle(title: "启动与外观")
-            U4Card {
+            DesignSectionTitle(title: "启动与外观")
+            DesignCard {
                 toggle("开机启动", "launch", detail: "登录后自动启动 RockType")
-                U4Rule()
+                DesignRule()
                 toggle("在菜单栏显示 RockType", "menubar")
                 toggle("菜单栏显示北京时间", "beijing", detail: "固定北京时间，不受本地时区影响")
                     .disabled(!(toggles["menubar"] ?? false))
                 choice("外观", "theme", ["跟随系统", "浅色", "深色"])
             }
-            U4SectionTitle(title: "默认值")
-            U4Card { choice("搜索引擎", "search", ["Google", "Bing", "DuckDuckGo", "百度"]) }
+            DesignSectionTitle(title: "默认值")
+            DesignCard { choice("搜索引擎", "search", ["Google", "Bing", "DuckDuckGo", "百度"]) }
         }
     }
     private var inputPane: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
-            U4SectionTitle(title: "输入方案")
-            U4Card {
+            DesignSectionTitle(title: "输入方案")
+            DesignCard {
                 choice("默认方案", "scheme", ["全拼", "小鹤双拼"])
                 toggle("常用模糊音", "fuzzy")
                 toggle("拼写与按键纠错", "correction")
                 row("中英切换", detail: "轻按 Shift；Shift + 字母不会误切换") { Kbd("Shift") }
             }
-            U4SectionTitle(title: "候选与译文")
-            U4Card {
+            DesignSectionTitle(title: "候选与译文")
+            DesignCard {
                 toggle("显示候选译文", "candidate", detail: "候选每页 5 项；译文不占编号")
                 row("选用译文", detail: "跟随当前高亮候选，翻译不阻塞打字") { Kbd("Tab") }
             }
@@ -154,13 +155,13 @@ struct SettingsView: View {
     }
     private var translationPane: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
-            U4Card {
+            DesignCard {
                 choice("翻译引擎", "engine", ["Apple 离线优先", "AI 模型"])
                 choice("目标语言", "target", ["自动（中 ⇄ 英）", "中文", "英文", "日文"])
                 choice("翻译模型", "translation-model", ["默认模型", "example-text"])
             }
-            U4SectionTitle(title: "候选翻译")
-            U4Card {
+            DesignSectionTitle(title: "候选翻译")
+            DesignCard {
                 row("中英语言包", detail: "Apple 动态翻译需要 macOS 26") { Chip(text: "已就绪", tone: .ok) }
                 row("离线兜底", detail: "精确匹配当前候选，不拼接未知句子") { Chip(text: "静态词条", tone: .neutral) }
                 toggle("候选翻译允许使用 AI", "candidate-ai", detail: "默认关闭，仅开启后使用服务商连接")
@@ -170,12 +171,12 @@ struct SettingsView: View {
     }
     private var voicePane: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
-            U4Card {
+            DesignCard {
                 choice("识别模型", "model", ["0.6B · 8bit", "1.7B · 8bit"])
                 Text("Qwen3-ASR · 本地识别；1.7B 占用更多内存。实际延迟与内存待实测。")
                     .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(p.secondary)
                 if scenario == .downloading {
-                    U4Progress(value: 0.42, label: "下载中 · 42% · 336 MB / 800 MB（示例）")
+                    DesignProgress(value: 0.42, label: "下载中 · 42% · 336 MB / 800 MB（示例）")
                     HStack {
                         Button("检查下载") { scenario = .installed; feedback = "示例模型下载与校验完成" }.buttonStyle(DesignButtonStyle(variant: .ghost))
                         Spacer()
@@ -191,7 +192,7 @@ struct SettingsView: View {
                     }
                 }
             }
-            U4Card {
+            DesignCard {
                 toggle("选中输入法时自动准备模型", "preload", detail: "只准备已下载模型，不开启麦克风")
                 toggle("AI 润色语音结果", "polish", detail: keySet ? "失败时保留原识别结果" : "请先配置 AI 连接")
                     .disabled(!keySet)
@@ -208,7 +209,7 @@ struct SettingsView: View {
                 Button(tab) { selectedSelectionTab = tab }.buttonStyle(DesignButtonStyle(variant: selectedSelectionTab == tab ? .primary : .ghost))
             } }
             if selectedSelectionTab == "行为" {
-                U4Card {
+                DesignCard {
                     toggle("启用划词工具栏", "selection")
                     choice("出现方式", "trigger", ["划词即出", "仅快捷键"])
                     toggle("复制回退", "fallback", detail: "仅读取失败时使用，保护用户剪贴板的新内容")
@@ -218,18 +219,18 @@ struct SettingsView: View {
                     choice("透明度", "opacity", ["100%", "90%", "80%"])
                 }
             } else {
-                U4Card {
+                DesignCard {
                     VStack(spacing: Tokens.Space.xs) {
                         ForEach(Array(actions.enumerated()), id: \.element) { index, action in
                             row(action) {
                                 Button { actions.swapAt(index, index - 1) } label: { Image(systemName: "arrow.up") }
                                     .buttonStyle(DesignButtonStyle(variant: .ghost)).disabled(index == 0).accessibilityLabel("上移" + action)
-                                U4Toggle(title: "启用" + action, isOn: Binding(get: { toggles["action-" + action] ?? true }, set: { toggles["action-" + action] = $0 }))
+                                SettingsToggle(title: "启用" + action, isOn: Binding(get: { toggles["action-" + action] ?? true }, set: { toggles["action-" + action] = $0 }))
                             }
                         }
                     }
                 }
-                U4Card {
+                DesignCard {
                     VStack(spacing: Tokens.Space.xs) {
                         choice("应用筛选", "filter", ["黑名单", "白名单"])
                         field("应用列表", "apps")
@@ -241,14 +242,14 @@ struct SettingsView: View {
     }
     private var screenshotPane: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
-            U4Card {
+            DesignCard {
                 row("开始截图", detail: "冻结屏幕后框选；Esc 取消") { Kbd("⌃1") }
                 toggle("框选后显示 OCR 入口", "ocr", detail: "文字识别在本机完成，不上传")
                 choice("另存格式", "format", ["PNG", "JPEG"])
                 row("完成动作", detail: "仅在选择另存为时写入文件") { Text("复制图片").foregroundStyle(p.secondary) }
             }
-            U4SectionTitle(title: "标注工具")
-            U4Card {
+            DesignSectionTitle(title: "标注工具")
+            DesignCard {
                 Text("矩形 · 椭圆 · 箭头 · 画笔 · 马赛克 · 文字 · 序号")
                 Text("支持撤销；按原始分辨率导出。")
                     .font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(p.secondary)
@@ -262,7 +263,7 @@ struct SettingsView: View {
                 Text("尚未配置 · 支持 OpenAI Chat Completions 兼容接口")
                     .font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(p.accent)
             }
-            U4Card {
+            DesignCard {
                 VStack(spacing: Tokens.Space.xs) {
                     field("服务名称", "name")
                     field("Base URL", "url")
@@ -284,7 +285,7 @@ struct SettingsView: View {
             Text(values["url", default: ""].isEmpty ? "填写 Base URL 后显示实际请求地址" : "POST " + requestURL)
                 .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(p.secondary).lineLimit(1)
             HStack {
-                U4SectionTitle(title: "能力验证")
+                DesignSectionTitle(title: "能力验证")
                 Spacer()
                 Button(scenario == .testing ? "查看测试结果" : "测试连接") {
                     scenario = scenario == .testing ? .mixed : .testing
@@ -334,7 +335,7 @@ struct SettingsView: View {
                 Button { if !templates.contains("自定义") { templates.append("自定义") }; values["template"] = "自定义"; values["template-name"] = "自定义" }
                     label: { Image(systemName: "plus") }.buttonStyle(DesignButtonStyle()).accessibilityLabel("新增模板")
             }
-            U4Card {
+            DesignCard {
                 VStack(spacing: Tokens.Space.xs) {
                     field("名称", "template-name")
                     choice("图标", "template-icon", ["文", "✦", "Aa"])
@@ -344,14 +345,14 @@ struct SettingsView: View {
                 }
             }
             HStack {
-                U4SectionTitle(title: scenario == .edited ? "提示词 · 已修改" : "提示词")
+                DesignSectionTitle(title: scenario == .edited ? "提示词 · 已修改" : "提示词")
                 Spacer()
                 Button("恢复默认") {
                     values["prompt"] = SettingsPresentation(section: .templates).values["prompt"]
                     scenario = .normal; feedback = "已恢复当前预览的默认提示词"
                 }.buttonStyle(DesignButtonStyle(variant: .ghost))
             }
-            U4EditableField(title: "提示词", value: value("prompt"), multiline: true)
+            DesignEditableField(title: "提示词", value: value("prompt"), multiline: true)
             Text("{{target}} 为目标语言；内容快照作为用户消息单独传入。")
                 .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(p.secondary)
         }
@@ -361,7 +362,7 @@ struct SettingsView: View {
             if scenario == .conflict {
                 Notice(text: "翻译选区与系统快捷键冲突，尚未生效。请重新设置。", tone: .warn)
             }
-            U4Card {
+            DesignCard {
                 VStack(spacing: Tokens.Space.xs) {
                     ForEach(SettingsFixtures.shortcuts, id: \.0) { title, key in
                         row(title) {
@@ -394,11 +395,11 @@ struct SettingsView: View {
     }
     private var permissionsPane: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
-            U4SectionTitle(title: "主 App 权限")
+            DesignSectionTitle(title: "主 App 权限")
             ForEach([("辅助功能", "读取选中文字，并在返回来源时切换窗口。"),
                      ("屏幕录制", "仅在你按下截图快捷键后读取屏幕。"),
                      ("麦克风", "仅在按住 Fn 时录音，松开立即结束。")], id: \.0) { title, detail in
-                U4Card {
+                DesignCard {
                     row(title, detail: detail) { Chip(text: scenario == .denied ? "未授权" : "已授权", tone: scenario == .denied ? .warn : .ok) }
                     if scenario == .denied {
                         Button("打开系统设置") { feedback = "预览：在系统设置 → 隐私与安全性 → \(title) 中授权" }
@@ -412,7 +413,7 @@ struct SettingsView: View {
     }
     private var privacyPane: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
-            U4Card {
+            DesignCard {
                 row("默认不保存内容", detail: "原文、截图与结果只在内存中；退出即清空。") { Image(systemName: "lock.shield").foregroundStyle(p.accent) }
                 toggle("保留最近结果", "recent", detail: "最多 10 条，只保存在内存中。")
                 row("清除当前内容", detail: "清空结果和追问上下文，不影响另存的图片。") {
@@ -420,12 +421,12 @@ struct SettingsView: View {
                         .buttonStyle(DesignButtonStyle(variant: .danger))
                 }
             }
-            U4Card {
+            DesignCard {
                 Text("密码框 / Secure Input") .font(Tokens.Typography.font(weight: .medium))
                 Text("不取词、不翻译、不调用 AI、不填入语音、不写缓存。")
                     .font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(p.secondary)
             }
-            U4Card {
+            DesignCard {
                 row("本地诊断", detail: "只含动作、状态、耗时与脱敏错误；不含正文和密钥。") {
                     Button("导出诊断") { feedback = "诊断导出预览：未生成或写入文件" }.buttonStyle(DesignButtonStyle())
                 }
@@ -434,15 +435,15 @@ struct SettingsView: View {
     }
     private var aboutPane: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.lg) {
-            U4Card {
+            DesignCard {
                 Text("RockType").font(Tokens.Typography.font(Tokens.Typography.display, weight: .semibold))
                 Text("设置预览 · 合成数据").foregroundStyle(p.secondary)
                 Text("macOS 14 及以上 · Apple Silicon")
-                U4Rule()
+                DesignRule()
                 Text("中文输入 · 双语候选 · 本地语音 · 划词与 AI · 截图")
                     .font(Tokens.Typography.font(Tokens.Typography.meta))
             }
-            U4Card {
+            DesignCard {
                 row("开源许可", detail: "主 App：MIT · 输入法：GPL v3，按进程隔离。") {
                     Button("查看说明") { feedback = "许可证见仓库 LICENSES 与 THIRD_PARTY_NOTICES" }.buttonStyle(DesignButtonStyle(variant: .ghost))
                 }
@@ -453,3 +454,5 @@ struct SettingsView: View {
         }
     }
 }
+
+#endif

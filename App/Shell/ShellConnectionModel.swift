@@ -11,23 +11,36 @@ final class ShellConnectionModel {
     private(set) var configured = false
     private(set) var message = ""
     private(set) var testing = false
+    private(set) var fallbackImageResult = "未验证"
     private(set) var results = ["未验证", "未验证", "未验证", "未验证"]
     @ObservationIgnored private let keychain = Keychain()
     @ObservationIgnored private var testedKeyDigest: SHA256.Digest?
     @ObservationIgnored var readKey: (String) throws -> String? = { try Keychain().get(account: $0) }
     @ObservationIgnored var keyExists: (String) throws -> Bool = { try Keychain().exists(account: $0) }
 
-    /// Refresh before trusting a probe: a key can also be replaced outside this settings view.
+    private struct ImageVerification {
+        let connection: AIConnectionSettings
+        let digest: SHA256.Digest
+        let models: Set<String>
+    }
+    @ObservationIgnored private var verifiedImages: [String: ImageVerification] = [:]
+
+    /// Verification belongs to a profile, exact configuration and current credential.
+    /// Checking a parked profile must not replace the profile displayed in Settings.
     func imageCapabilityVerified(connection: AIConnectionSettings, model: String) -> Bool {
-        refresh(connection)
-        let testedModel = connection.visionModel ?? (connection.defaultModelSupportsImages ? connection.defaultModel : "")
-        return !testing && configured && testedKeyDigest != nil && results.count == 4
-            && results[2] == "可用" && model == testedModel && !model.isEmpty
+        guard !(testing && configuration.id == connection.id), let record = verifiedImages[connection.id] else { return false }
+        guard record.connection == connection,
+              let secret = try? readKey(connection.id), SHA256.hash(data: Data(secret.utf8)) == record.digest else {
+            verifiedImages[connection.id] = nil
+            return false
+        }
+        return record.models.contains(model)
     }
 
     private func invalidateResults() {
         cancel()
         testedKeyDigest = nil
+        fallbackImageResult = "未验证"
         results = Array(repeating: "未验证", count: 4)
     }
     @ObservationIgnored private var task: Task<Void, Never>?
@@ -36,12 +49,13 @@ final class ShellConnectionModel {
     @ObservationIgnored private var configuration = AIConnectionSettings()
     @ObservationIgnored var runTests: (AIConnectionSettings, String) async -> [String] = { settings, secret in
         do {
-            let result = try await AIConnectionTester(client: AIClient(connection: settings)).run(apiKey: secret)
+            let result = try await AIConnectionTester(client: AIClient(connection: settings,
+                requestAllowed: { await !SecureInput.isSecureInputActive() })).run(apiKey: secret)
             var labels = [result.text, result.streaming, result.image, result.cancellation].map(ShellConnectionModel.label)
             if result.text == .available, let latency = result.textLatency {
                 labels[0] += String(format: " · %.2f 秒", latency)
             }
-            return labels
+            return labels + [ShellConnectionModel.label(result.fallbackImage)]
         } catch { return Array(repeating: "未验证", count: 4) }
     }
 
@@ -72,6 +86,7 @@ final class ShellConnectionModel {
 
     func refresh(_ settings: AIConnectionSettings) {
         if configuration != settings {
+            if let record = verifiedImages[settings.id], record.connection != settings { verifiedImages[settings.id] = nil }
             invalidateResults()
             configuration = settings
         }
@@ -84,6 +99,7 @@ final class ShellConnectionModel {
             if let testedKeyDigest {
                 guard let secret = try readKey(settings.id),
                       SHA256.hash(data: Data(secret.utf8)) == testedKeyDigest else {
+                    verifiedImages[settings.id] = nil
                     invalidateResults()
                     hasKey = present
                     configured = present && !settings.baseURL.isEmpty && !settings.defaultModel.isEmpty
@@ -102,6 +118,7 @@ final class ShellConnectionModel {
     }
 
     func saveKey(_ secret: String) -> Bool {
+        verifiedImages[configuration.id] = nil
         guard !secret.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             message = "密钥不能为空。"
             return false
@@ -116,6 +133,7 @@ final class ShellConnectionModel {
     }
 
     func deleteKey() {
+        verifiedImages[configuration.id] = nil
         invalidateResults()
         do {
             try keychain.delete(account: configuration.id)
@@ -125,6 +143,7 @@ final class ShellConnectionModel {
     }
 
     func test() {
+        verifiedImages[configuration.id] = nil
         invalidateResults()
         guard !SecureInput.isSecureInputActive() else {
             message = "安全输入已开启，暂不发送连接测试。"
@@ -160,11 +179,20 @@ final class ShellConnectionModel {
                     status: result.contains(where: { $0.hasPrefix("不可用") }) ? .failed : .succeeded,
                     duration: Date().timeIntervalSince(started)))
                 guard !Task.isCancelled, self.generation == current else { return }
-                guard result.count == 4,
+                guard (4...5).contains(result.count),
                       let currentSecret = try? self.readKey(config.id),
                       currentSecret == secret else { self.invalidateResults(); return }
                 self.testedKeyDigest = SHA256.hash(data: Data(secret.utf8))
-                self.results = result
+                self.results = Array(result.prefix(4))
+                self.fallbackImageResult = result.count == 5 ? result[4] : "未验证"
+                if result[2] == "可用" {
+                    var models: Set<String> = [config.visionModel ?? config.defaultModel]
+                    if result.count == 5, result[4] == "可用", let fallback = AIProviderRouting.nonempty(config.fallbackModel) {
+                        models.insert(fallback)
+                    }
+                    self.verifiedImages[config.id] = ImageVerification(connection: config,
+                        digest: SHA256.hash(data: Data(secret.utf8)), models: models)
+                }
                 self.secureInputWatch?.cancel()
                 self.secureInputWatch = nil
                 self.testing = false
@@ -202,8 +230,8 @@ struct ShellConnectionView: View {
             if !model.configured {
                 Notice(text: "填写服务地址、默认模型并设置密钥，即可开始使用 AI。未配置时，中文输入与本地 OCR 仍可使用。")
             }
-            U4SectionTitle(title: "服务商连接")
-            U4Card {
+            DesignSectionTitle(title: "服务商连接")
+            DesignCard {
                 field("服务名称", $settings.name)
                 field("Base URL", $settings.baseURL)
                 HStack {
@@ -212,20 +240,20 @@ struct ShellConnectionView: View {
                     if model.hasKey { Button("删除") { model.deleteKey() } }
                 }
                 field("默认模型", $settings.defaultModel)
-                U4Rule()
+                DesignRule()
                 SettingsControlRow("默认模型支持图片") {
-                    U4Toggle(title: "默认模型支持图片", isOn: $settings.defaultModelSupportsImages)
+                    SettingsToggle(title: "默认模型支持图片", isOn: $settings.defaultModelSupportsImages)
                 }
                 field("视觉模型（可选）", Binding(get: { settings.visionModel ?? "" }, set: { settings.visionModel = $0.isEmpty ? nil : $0 }))
             }
             Text("OpenAI Chat Completions 兼容接口 · 测试会发送固定样本文字与图片。")
                 .font(Tokens.Typography.font(Tokens.Typography.caption))
             HStack {
-                U4SectionTitle(title: "能力验证"); Spacer()
+                DesignSectionTitle(title: "能力验证"); Spacer()
                 if model.testing { Button("取消测试") { model.cancel() } }
                 else { Button("测试连接") { model.test() }.disabled(!model.configured) }
             }
-            U4Card {
+            DesignCard {
                 ForEach(Array(["文字", "流式", "图片", "取消"].enumerated()), id: \.offset) { index, title in
                     HStack(alignment: .firstTextBaseline) {
                         Text(title).frame(width: 44, alignment: .leading)
@@ -236,7 +264,7 @@ struct ShellConnectionView: View {
                                 model.results[index] == "可用" ? p.ok : p.secondary)
                             .multilineTextAlignment(.trailing)
                     }
-                    if index < 3 { U4Rule() }
+                    if index < 3 { DesignRule() }
                 }
             }
             if !model.message.isEmpty {

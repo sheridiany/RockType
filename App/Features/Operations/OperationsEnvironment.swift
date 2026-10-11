@@ -19,7 +19,8 @@ public final class OperationsEnvironment {
     public func makeRunner(connectionID: String = "default", currentConnectionID: (@MainActor () -> String)? = nil) -> DefaultOperationRunner {
         let runner = DefaultOperationRunner(offline: TextTranslationXPCClient(),
             apiKey: { try Keychain().get(account: currentConnectionID?() ?? connectionID) ?? "" },
-            isAllowed: { SecureInput.status() == .allowed })
+            isAllowed: { SecureInput.status() == .allowed },
+            providerKey: { try Keychain().get(account: $0) ?? "" })
         runners.removeAll { $0.value == nil }; runners.append(WeakRunner(value: runner))
         return runner
     }

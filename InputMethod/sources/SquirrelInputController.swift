@@ -38,6 +38,7 @@ final class SquirrelInputController: IMKInputController, @unchecked Sendable {
     }
     let translationChanged = preferences.input.candidateTranslation != inputPreferences.input.candidateTranslation
       || preferences.translation != inputPreferences.translation
+      || preferences.input.inputAI != inputPreferences.input.inputAI
     let modeChanged = preferences.input.showModeIndicator != inputPreferences.input.showModeIndicator
     inputPreferences = preferences
     if translationChanged {
@@ -81,6 +82,7 @@ final class SquirrelInputController: IMKInputController, @unchecked Sendable {
   private let translationSessionID = UUID().uuidString
   private var candidateTranslation = RoarkTCandidateTranslationSession()
   private var translationLoadingTimer: DispatchWorkItem?
+  private var inputAIProtection: Timer?
   private var lastTranslationError: String?
   // IMK invokes this controller on the main run loop; assert that boundary.
   private lazy var inputModePanel = MainActor.assumeIsolated { RoarkTInputModePanel() }
@@ -154,18 +156,31 @@ final class SquirrelInputController: IMKInputController, @unchecked Sendable {
       case .keyDown:
         translationClient.noteInputActivity()
         inputModePanel.hide()
-        // ignore Command+X hotkeys.
-        if modifiers.contains(.command) {
+        let keyCode = event.keyCode
+        if matchesInputAIShortcut(event), inputPreferences.input.inputAI?.enabled == true,
+           let snapshot = translationSnapshot(forAI: true) {
+          if !event.isARepeat { sendInputAI(candidateTranslation.beginAI(snapshot)) }
+          handled = true
           break
         }
-
-        let keyCode = event.keyCode
+        if keyCode == 53, candidateTranslation.ticket?.action != nil {
+          cancelDynamicTranslation()
+          requestDynamicTranslationIfNeeded()
+          handled = true // First Escape dismisses AI; leave Rime composition intact.
+          break
+        }
+        // Other Command shortcuts belong to the source app; revoke any AI result first.
+        if modifiers.contains(.command) {
+          if candidateTranslation.ticket?.action != nil { cancelDynamicTranslation() }
+          break
+        }
         if keyCode == 48, modifiers.isDisjoint(with: [.control, .option, .command, .shift]),
            candidateTranslation.interceptsTab {
           if !event.isARepeat { performTranslationAction() }
           handled = true // Never submit a stale result or move app focus while loading.
           break
         }
+        if candidateTranslation.ticket?.action != nil { cancelDynamicTranslation() }
         var keyChars = event.charactersIgnoringModifiers
         let capitalModifiers = modifiers.isSubset(of: [.shift, .capsLock])
         if let code = keyChars?.first,
@@ -205,11 +220,12 @@ final class SquirrelInputController: IMKInputController, @unchecked Sendable {
   }
 
   func performTranslationAction() {
-    guard inputPreferences.input.candidateTranslation, !IsSecureEventInputEnabled() else { cancelDynamicTranslation(); return }
+    guard (candidateTranslation.ticket?.action != nil || inputPreferences.input.candidateTranslation),
+          !IsSecureEventInputEnabled() else { cancelDynamicTranslation(); return }
     if candidateTranslation.canRetry {
-      guard translationSnapshot() == candidateTranslation.ticket?.snapshot,
+      guard translationSnapshot(forAI: candidateTranslation.ticket?.action != nil) == candidateTranslation.ticket?.snapshot,
             let request = candidateTranslation.retry() else { return }
-      sendTranslation(request)
+      if request.action != nil { sendInputAI(request) } else { sendTranslation(request) }
     } else {
       commitTranslationSelection()
     }
@@ -530,6 +546,7 @@ private extension SquirrelInputController {
   }
 
   func destroySession() {
+    inputAIProtection?.invalidate(); inputAIProtection = nil
     if session != 0 {
       let sessionID = translationSessionID
       translationClient.cancel(sessionID: sessionID, throughGeneration: candidateTranslation.ticket?.generation ?? 0)
@@ -725,6 +742,10 @@ private extension SquirrelInputController {
   }
 
   private func requestDynamicTranslationIfNeeded() {
+    if let ticket = candidateTranslation.ticket, ticket.action != nil {
+      if translationSnapshot(forAI: true) == ticket.snapshot { updateTranslationPanel(); return }
+      cancelDynamicTranslation()
+    }
     guard inputPreferences.input.candidateTranslation, let snapshot = translationSnapshot() else {
       cancelDynamicTranslation()
       return
@@ -794,19 +815,60 @@ private extension SquirrelInputController {
     }
   }
 
-  private func translationSnapshot() -> RoarkTCandidateSnapshot? {
-    translationContext()?.snapshot
+  private func matchesInputAIShortcut(_ event: NSEvent) -> Bool {
+    guard let shortcut = inputPreferences.input.inputAI?.shortcut else { return false }
+    var modifiers: Shortcut.Modifiers = []
+    for (native, configured) in [(NSEvent.ModifierFlags.control, Shortcut.Modifiers.control),
+                                (.option, .option), (.command, .command), (.shift, .shift)] {
+      if event.modifierFlags.contains(native) { modifiers.insert(configured) }
+    }
+    return RoarkTInputAIAction.matches(keyCode: event.keyCode, modifiers: modifiers, shortcut: shortcut)
   }
 
-  private func translationContext() -> (snapshot: RoarkTCandidateSnapshot, canForget: Bool)? {
+  private func sendInputAI(_ request: RoarkTCandidateTranslationSession.Ticket) {
+    guard let action = request.action, inputPreferences.input.inputAI?.enabled == true,
+          translationSnapshot(forAI: true) == request.snapshot else { cancelDynamicTranslation(); return }
+    translationLoadingTimer?.cancel()
+    inputAIProtection?.invalidate()
+    inputAIProtection = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+      MainActor.assumeIsolated {
+        guard let self else { return }
+        if IsSecureEventInputEnabled() || self.client == nil {
+          self.cancelDynamicTranslation()
+          self.translationClient.invalidate()
+        }
+      }
+    }
+    updateTranslationPanel()
+    translationClient.rewrite(sessionID: translationSessionID, generation: request.generation,
+      source: request.snapshot.source, action: action, timeout: inputPreferences.input.inputAI?.timeout ?? 30) { [weak self] result in
+      guard let self, self.candidateTranslation.ticket == request else { return }
+      guard self.translationSnapshot(forAI: true) == request.snapshot else { self.cancelDynamicTranslation(); return }
+      switch result {
+      case let .success(response):
+        self.candidateTranslation.receive(response.translatedText, for: request)
+      case let .failure(error):
+        let failure = RoarkTInputAIAction.failure(error)
+        self.candidateTranslation.fail(failure.message, for: request, retryable: failure.retryable)
+      }
+      self.updateTranslationPanel()
+    }
+  }
+
+  private func translationSnapshot(forAI: Bool = false) -> RoarkTCandidateSnapshot? {
+    translationContext(forAI: forAI)?.snapshot
+  }
+
+  private func translationContext(forAI: Bool = false) -> (snapshot: RoarkTCandidateSnapshot, canForget: Bool)? {
     guard session != 0, client != nil, !IsSecureEventInputEnabled(),
           processKey(UInt32(XK_F19), modifiers: 0) else { return nil }
-    let values = properties(named: ["roarkt_panel_raw", "roarkt_panel_source", "roarkt_panel_identity",
-                                    "roarkt_panel_scope", "roarkt_panel_can_forget"])
-    guard let raw = values["roarkt_panel_raw"], !raw.isEmpty,
-          let source = values["roarkt_panel_source"], !source.isEmpty,
-          let identity = values["roarkt_panel_identity"], !identity.isEmpty,
-          let scope = values["roarkt_panel_scope"], ["whole", "segment"].contains(scope) else { return nil }
+    let prefix = forAI ? "roarkt_ai_" : "roarkt_panel_"
+    let values = properties(named: [prefix + "raw", prefix + "source", prefix + "identity",
+                                    prefix + "scope", "roarkt_panel_can_forget"])
+    guard let raw = values[prefix + "raw"], !raw.isEmpty,
+          let source = values[prefix + "source"], !source.isEmpty,
+          let identity = values[prefix + "identity"], !identity.isEmpty,
+          let scope = values[prefix + "scope"], ["whole", "segment", "prefix"].contains(scope) else { return nil }
     return (RoarkTCandidateSnapshot(rawInput: raw, source: source, identity: identity, scope: scope),
             values["roarkt_panel_can_forget"] == "1")
   }
@@ -822,8 +884,11 @@ private extension SquirrelInputController {
   }
 
   func commitTranslationSelection() {
-    guard inputPreferences.input.candidateTranslation, let submission = candidateTranslation.commit,
-          translationSnapshot() == submission.snapshot else { return }
+    let ai = candidateTranslation.ticket?.action != nil
+    guard (ai ? inputPreferences.input.inputAI?.enabled == true : inputPreferences.input.candidateTranslation),
+          let submission = candidateTranslation.commit,
+          translationSnapshot(forAI: ai) == submission.snapshot else { return }
+    setTranslationProperty("roarkt_panel_commit_ai", ai ? "1" : "")
     let snapshot = submission.snapshot
     for (key, value) in [("raw", snapshot.rawInput), ("source", snapshot.source),
                          ("identity", snapshot.identity), ("scope", snapshot.scope), ("text", submission.text)] {
@@ -836,6 +901,7 @@ private extension SquirrelInputController {
   }
 
   private func cancelDynamicTranslation() {
+    inputAIProtection?.invalidate(); inputAIProtection = nil
     translationLoadingTimer?.cancel()
     translationLoadingTimer = nil
     if let request = candidateTranslation.ticket {

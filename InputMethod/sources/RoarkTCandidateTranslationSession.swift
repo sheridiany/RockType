@@ -34,10 +34,54 @@ struct RoarkTCandidateSnapshot: Equatable {
   }
 }
 
+enum RoarkTInputAIAction: String, CaseIterable {
+  case rewrite, polish, translate
+  var title: String {
+    switch self { case .rewrite: return "AI 改写"; case .polish: return "AI 润色"; case .translate: return "AI 翻译" }
+  }
+  static func matches(keyCode: UInt16, modifiers: Shortcut.Modifiers, shortcut: Shortcut) -> Bool {
+    guard modifiers == shortcut.modifiers, !modifiers.intersection([.control, .option, .command]).isEmpty,
+          let key = shortcut.key?.lowercased() else { return false }
+    // Same physical US key names as the settings recorder; Shift must not turn "1" into "!".
+    let codes: [String: UInt16] = [
+      "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8, "v": 9,
+      "b": 11, "q": 12, "w": 13, "e": 14, "r": 15, "y": 16, "t": 17,
+      "1": 18, "2": 19, "3": 20, "4": 21, "6": 22, "5": 23, "=": 24, "9": 25, "7": 26,
+      "-": 27, "8": 28, "0": 29, "]": 30, "o": 31, "u": 32, "[": 33, "i": 34, "p": 35,
+      "return": 36, "l": 37, "j": 38, "'": 39, "k": 40, ";": 41, "\\": 42, ",": 43, "/": 44,
+      "n": 45, "m": 46, ".": 47, "tab": 48, "space": 49, "`": 50, "delete": 51,
+      "left": 123, "right": 124, "down": 125, "up": 126
+    ]
+    return codes[key] == keyCode
+  }
+  static func failure(_ error: Error) -> (message: String, retryable: Bool) {
+    let value = error as NSError
+    if value.domain == CandidateTranslationFailure.errorDomain {
+      switch value.code {
+      case 101: return ("未配置 AI，请到设置启用并配置 AI", false)
+      case 103, 105: return ("AI 已取消", false)
+      case 104: return ("AI 连接身份验证失败", false)
+      case 106: return ("AI 请求超时，按 Tab 重试", true)
+      case 107: return ("AI 认证失败，请检查设置中的密钥", false)
+      case 108: return ("AI 模型不可用，请检查设置", false)
+      case 109: return ("AI 请求限流，按 Tab 重试", true)
+      case 110: return ("AI 网络失败，按 Tab 重试", true)
+      case 100, 102, 111, 112: return ("AI 请求失败，请重新触发", false)
+      default: break
+      }
+    }
+    let failure = CandidateTranslationFailure.from(error)
+    return ("AI 请求失败：" + failure.message, failure.canRetry)
+  }
+
+  var next: Self { switch self { case .rewrite: return .polish; case .polish: return .translate; case .translate: return .rewrite } }
+}
+
 struct RoarkTCandidateTranslationSession {
   struct Ticket: Equatable {
     let generation: Int64
     let snapshot: RoarkTCandidateSnapshot
+    var action: RoarkTInputAIAction? = nil
   }
   struct Submission {
     let snapshot: RoarkTCandidateSnapshot
@@ -60,10 +104,13 @@ struct RoarkTCandidateTranslationSession {
 
   // Keep loading Tab local even with no retained text: it must not change
   // candidate selection or move application focus while awaiting this ticket.
-  var interceptsTab: Bool { ticket != nil && (isLoading || commit != nil || canRetry) }
+  var interceptsTab: Bool { ticket != nil && (isLoading || commit != nil || canRetry || ticket?.action != nil) }
 
   var displayText: String {
     guard ticket != nil else { return "" }
+    if let action = ticket?.action {
+      return action.title + " · " + (isLoading ? "思考中…" : (translation ?? failure ?? "暂不可用"))
+    }
     if isLoading { return loadingIndicatorVisible ? "正在翻译…" : (translation ?? "") }
     return translation ?? (failure ?? "暂不可用") + (canRetry ? "，按 Tab 重试" : "")
   }
@@ -80,11 +127,16 @@ struct RoarkTCandidateTranslationSession {
     return begin(snapshot)
   }
 
-  private mutating func begin(_ snapshot: RoarkTCandidateSnapshot) -> Ticket {
+  mutating func beginAI(_ snapshot: RoarkTCandidateSnapshot) -> Ticket {
+    let action = ticket?.snapshot == snapshot ? (ticket?.action?.next ?? .rewrite) : .rewrite
+    return begin(snapshot, action: action)
+  }
+
+  private mutating func begin(_ snapshot: RoarkTCandidateSnapshot, action: RoarkTInputAIAction? = nil) -> Ticket {
     let previousText = translation
     invalidate()
-    translation = previousText
-    let request = Ticket(generation: generation, snapshot: snapshot)
+    translation = action == nil ? previousText : nil
+    let request = Ticket(generation: generation, snapshot: snapshot, action: action)
     ticket = request
     isLoading = true
     return request
@@ -92,7 +144,7 @@ struct RoarkTCandidateTranslationSession {
 
   mutating func retry() -> Ticket? {
     guard canRetry, !isLoading, let ticket else { return nil }
-    return begin(ticket.snapshot)
+    return begin(ticket.snapshot, action: ticket.action)
   }
 
   @discardableResult

@@ -51,3 +51,13 @@
 - 复杂照片/渐变底图使用区域主要取样色平填，不是图像修复；重叠框、竖排、极小文字与过长译文不保证理想排版。字号最低 4px 的极密文本仍可能需要放大或改用文字翻译。
 - Vision 未返回文本 payload 的二进制码不展示；非 HTTP/HTTPS 内容只支持复制。未新增联系人、Wi-Fi、支付或任意自定义 URL scheme 动作。
 - 未安装或注册输入法、未加载 LaunchAgent、未模拟全局输入。尝试的并行助手因无模型凭据未执行，已关闭；实现和验证由主会话完成。
+
+## 融合 Provider 路由后的修复（2026-10-11）
+
+- 合入 main `3a2f3fa`；主规格冲突保留双方全部任务行及证据。未改 main 的 `AIProviderRouting` 配置校验、模型回退条件或其他任务状态。
+- 原始复现：`swift test --filter OverlayRoutingTests.testWholeImageUsesOfflineOnceThenExistingOptionalAIRoute` 退出 1；空模型配置在新路由解析时失败，AI 调用次数为 0，随后 `fallback[0]` 越界使 xctest signal 5。日志 `/tmp/surfaces-provider-red.log`。
+- 先改为 `try XCTUnwrap(fallback.first)`：仍严格断言调用次数和每行内容，配置未修时继续报告 XCTest 失败，但不再 signal 5；`/tmp/surfaces-provider-safe-red.log`。再为成功路径配置明确的合成端点及模型；增加空模型与悬空 Provider 的负例，保持零密钥读取、零传输和无译图要求。
+- 生产缺口：覆盖翻译 runner 仍按 `settings.ai.id` 读取默认密钥。把组装提取到 `ScreenshotSession.makeOverlayRunner`，先保留旧行为建立回归，实际捕获请求的连接/模型属于翻译 Provider、密钥却属于默认 Provider（`/tmp/surfaces-provider-credential-red.log`）。修复为传入 `providerKey`，按新路由解析出的 Provider ID 读取钥匙串；不再把默认密钥用于其他 Provider。模板继续使用 translation 任务路由，不自行选择服务商或备用模型。
+- 回归走生产组装 + 生产 `DefaultOperationRunner`，仅离线和 AI 传输/密钥读取替换为合成闭包：离线优先、显式 AI、非默认翻译 Provider 的专属密钥/任务模型/同服务商备用模型及结果引擎标签；部分正文、认证失败、保护状态不回退；空模型/已删除 Provider 在读密钥前失败。原 OverlayRoutingTests 及新增回归共 5 项通过（`/tmp/surfaces-provider-green.log`）。
+- 预防：成功路径夹具须满足真实路由配置契约；生产组装必须是回归测试的一部分，避免只测手工组装的 runner 掩盖凭据接线遗漏。集合断言失败后通过 throwing unwrap 停止当前测试，不继续无检查索引。
+- 最终 `scripts/test.sh` 与 `scripts/build.sh` 真实退出码均为 **0**：155 XCTest + 224 Swift Testing、Rime/外壳检查及完整签名构建/语音自测通过；日志 `/tmp/surfaces-provider-{test,build}.log`，退出码为同名 `.exit` 文件。真实多 Provider 网络与安装版交互本轮未运行，仍待人工验收；未安装、注册输入法或加载 LaunchAgent。

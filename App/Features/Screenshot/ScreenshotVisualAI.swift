@@ -11,6 +11,7 @@ import RoarkTPlatform
         let text: String
         let connection: AIConnectionSettings
         let model: String
+        var fallbackImageCapabilityVerified = false
     }
     typealias Send = @MainActor (Request, @escaping @Sendable () async -> Void,
         @escaping @Sendable (String) async -> Void, @escaping @MainActor @Sendable () -> Bool) async throws -> String
@@ -25,7 +26,7 @@ import RoarkTPlatform
     @ObservationIgnored private let verified: (AIConnectionSettings, String) -> Bool
     @ObservationIgnored private let allowed: () -> Bool
     @ObservationIgnored private let remember: (Bool) -> Void
-    @ObservationIgnored private let send: Send
+    @ObservationIgnored private let send: Send?
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var watch: Task<Void, Never>?
     @ObservationIgnored private var generation = 0
@@ -34,10 +35,11 @@ import RoarkTPlatform
          allowed: @escaping () -> Bool, remember: @escaping (Bool) -> Void,
          send: Send? = nil) {
         self.settings = settings; self.verified = verified; self.allowed = allowed
-        self.remember = remember; self.send = send ?? Self.sender()
+        self.remember = remember; self.send = send
     }
     static func sender(client: @escaping (AIConnectionSettings) -> AIClient = { AIClient(connection: $0) },
-                       apiKey: @escaping (String) throws -> String = { try Keychain().get(account: $0) ?? "" }) -> Send {
+                       apiKey: @escaping (String) throws -> String = { try Keychain().get(account: $0) ?? "" },
+                       onModel: @escaping @Sendable (String) async -> Void = { _ in }) -> Send {
         { request, thinking, delta, permitted in
              guard permitted() else { throw OperationFailure.protectedInput }
              let key = try apiKey(request.connection.id)
@@ -45,13 +47,16 @@ import RoarkTPlatform
              let service = ScreenshotAIService(client: client(request.connection),
                  recognize: { try await OCR().recognize($0).text }, isAllowed: permitted)
              return try await service.run(action: request.action, png: request.png, correctedText: request.text,
-                 model: request.model, imageCapabilityVerified: true, apiKey: key, onThinking: thinking, onDelta: delta)
+                 model: request.model, imageCapabilityVerified: true, apiKey: key,
+                 fallbackImageCapabilityVerified: request.fallbackImageCapabilityVerified,
+                 onModel: onModel, onThinking: thinking, onDelta: delta)
         }
     }
 
     var visionModel: String? {
-        let connection = settings().ai
-        let model = connection.visionModel ?? (connection.defaultModelSupportsImages ? connection.defaultModel : "")
+        guard let route = try? AIProviderRouting.resolve(settings(), task: .image) else { return nil }
+        let connection = route.connection
+        let model = route.model
         return !model.isEmpty && verified(connection, model) ? model : nil
     }
     func clear() {
@@ -65,16 +70,20 @@ import RoarkTPlatform
     func prepare(action: ScreenshotAIService.Action, png: Data, text: String, forceConfirmation: Bool = false) {
         clear(); self.action = action
         guard allowed() else { fail("安全输入已启用，操作已停止。"); return }
-        guard let model = visionModel else { fail("当前视觉模型尚未验证，请先配置并测试图片能力。"); return }
+        guard let route = try? AIProviderRouting.resolve(settings(), task: .image), let model = visionModel else { fail("当前视觉模型尚未验证，请先配置并测试图片能力。"); return }
         guard !png.isEmpty, png.count <= 10 * 1024 * 1024 else { fail("图片超过视觉请求的 10 MB 上限，请缩小后重试。"); return }
         guard text.utf8.count <= 32_768 else { fail("文字超过 32 KB，请精简识别文字后重试。"); return }
         self.model = model
-        request = Request(action: action, png: png, text: text, connection: settings().ai, model: model)
+        request = Request(action: action, png: png, text: text, connection: route.connection, model: model,
+            fallbackImageCapabilityVerified: route.connection.fallbackModel.map { verified(route.connection, $0) } ?? false)
         phase = .confirming
         if settings().screenshot.skipImageAIConfirmation == true && !forceConfirmation { confirm(skipFuture: true) }
     }
     private func valid(_ request: Request) -> Bool {
-        allowed() && request.connection == settings().ai && request.model == visionModel
+        allowed() && request.connection == (try? AIProviderRouting.resolve(settings(), task: .image).connection)
+            && request.model == visionModel
+            && (!request.fallbackImageCapabilityVerified
+                || request.connection.fallbackModel.map { verified(request.connection, $0) } == true)
     }
     func confirm(skipFuture: Bool = false) {
         guard phase == .confirming, let request else { return }
@@ -89,7 +98,10 @@ import RoarkTPlatform
                 return
             }
             do {
-                let answer = try await self.send(request, { [weak self] in
+                let sender = self.send ?? Self.sender(onModel: { [weak self] model in
+                    await self?.receiveModel(model, current: current)
+                })
+                let answer = try await sender(request, { [weak self] in
                     await self?.receiveThinking(current)
                 }, { [weak self] value in
                     await self?.receive(value, current: current)
@@ -116,6 +128,10 @@ import RoarkTPlatform
                 if !self.valid(request) { self.fail("安全输入、连接或模型状态已变化，操作已停止。"); return }
             }
         }
+    }
+    private func receiveModel(_ value: String, current: Int) {
+        guard generation == current, isBusy, let request, valid(request) else { return }
+        model = value
     }
     private func receiveThinking(_ current: Int) {
         guard generation == current, isBusy, let request, valid(request), output.isEmpty else { return }

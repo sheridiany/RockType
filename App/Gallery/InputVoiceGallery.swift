@@ -1,3 +1,4 @@
+#if DEBUG
 import SwiftUI
 
 @MainActor
@@ -20,3 +21,5 @@ enum InputVoiceGallery {
         }
     }
 }
+
+#endif

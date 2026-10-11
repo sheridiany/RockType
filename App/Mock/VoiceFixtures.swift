@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 struct VoicePresentation {
@@ -34,3 +35,5 @@ struct VoicePresentation {
                 state == .missingModel ? "先在设置 → 语音下载模型。下载完成前不会开启麦克风。" : "")
     }
 }
+
+#endif

@@ -1,3 +1,4 @@
+#if DEBUG
 import SwiftUI
 
 struct InputModeView: View {
@@ -16,3 +17,5 @@ struct InputModeView: View {
             .accessibilityElement(children: .ignore).accessibilityLabel(model.title + "，" + model.detail)
     }
 }
+
+#endif

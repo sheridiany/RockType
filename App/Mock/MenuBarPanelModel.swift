@@ -1,3 +1,4 @@
+#if DEBUG
 struct MenuBarPanelModel: Sendable {
     enum AIStatus: String, Sendable { case ready, unconfigured, error }
     struct Recent: Identifiable, Sendable {
@@ -36,3 +37,5 @@ struct MenuBarPanelModel: Sendable {
             localTime: clock ? "旧金山 01:24" : nil, recent: recent))
     }
 }
+
+#endif

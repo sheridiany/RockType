@@ -27,6 +27,8 @@ final class OverlayRoutingTests: XCTestCase {
         let overlay = ScreenshotOverlayTranslation(runner: runner, allowed: { true })
         let image = try OverlayTranslationTests.image()
         var config = AppSettings.defaults
+        config.ai.baseURL = "https://synthetic.invalid/v1"
+        config.ai.defaultModel = "synthetic-translation"
         overlay.run(image: image, lines: OverlayTranslationTests.lines, settings: config)
         await OverlayTranslationTests.settle { overlay.phase == .done }
         XCTAssertEqual(offline.texts.count, 1); XCTAssertEqual(overlay.engine, "Apple Translation")
@@ -36,7 +38,8 @@ final class OverlayRoutingTests: XCTestCase {
         await OverlayTranslationTests.settle { overlay.phase == .done }
         XCTAssertEqual(offline.texts.count, 2)
         let fallback = await ai.prompts; XCTAssertEqual(fallback.count, 1)
-        for line in OverlayTranslationTests.lines { XCTAssertTrue(fallback[0].contains(line.text)) }
+        let fallbackPrompt = try XCTUnwrap(fallback.first)
+        for line in OverlayTranslationTests.lines { XCTAssertTrue(fallbackPrompt.contains(line.text)) }
         config.translation.engine = .ai
         overlay.run(image: image, lines: OverlayTranslationTests.lines, settings: config)
         await OverlayTranslationTests.settle { overlay.phase == .done }
@@ -63,5 +66,97 @@ final class OverlayRoutingTests: XCTestCase {
         session.showTranslatedImage = false; XCTAssertEqual(session.png(displayed: true), original)
         session.text = "Edited transcript"
         XCTAssertNil(session.overlay.image); XCTAssertFalse(session.showTranslatedImage)
+    }
+}
+
+
+private actor OverlayProviderCalls {
+    struct Call: Equatable, Sendable {
+        let provider: String
+        let model: String
+        let key: String
+    }
+    private(set) var values: [Call] = []
+    func record(_ provider: String, _ model: String, _ key: String) { values.append(.init(provider: provider, model: model, key: key)) }
+}
+extension OverlayRoutingTests {
+    private func providerSettings() -> AppSettings {
+        var settings = AppSettings.defaults
+        settings.ai.id = "default-provider"; settings.ai.defaultModel = "default-model"
+        settings.ai.baseURL = "https://default.invalid/v1"
+        var translation = AIConnectionSettings()
+        translation.id = "translation-provider"; translation.name = "Synthetic translation"
+        translation.baseURL = "https://translation.invalid/v1"; translation.defaultModel = "provider-default"
+        translation.fallbackModel = "translation-backup"
+        settings.aiProviders = [translation]
+        settings.aiTaskRoutes = [AITask.translation.rawValue: .init(providerID: translation.id, model: "translation-task")]
+        return settings
+    }
+    @MainActor func testProductionOverlayAssemblyUsesTranslationProviderCredentialAndBackup() async throws {
+        let config = providerSettings(), calls = OverlayProviderCalls(), offline = BatchOffline()
+        offline.fails = true
+        var accounts: [String] = []
+        let runner = ScreenshotSession.makeOverlayRunner(allowed: { true }, offline: offline,
+            providerKey: { id in accounts.append(id); return "synthetic-" + id }, streamAI: { connection, prompt, key, model, _ in
+                await calls.record(connection.id, model, key)
+                guard key == "synthetic-translation-provider" else { throw AIClientError.unauthorized }
+                guard prompt.contains("Hello world"), prompt.contains("Ready to continue") else { throw AIClientError.decoding }
+                if model == "translation-task" { throw AIClientError.server }
+                return "[[RT:0]]\n你好，世界\n[[RT:1]]\n准备继续\n[[RT:END]]"
+            })
+        let overlay = ScreenshotOverlayTranslation(runner: runner, allowed: { true })
+        defer { overlay.clear() }
+        overlay.run(image: try OverlayTranslationTests.image(), lines: OverlayTranslationTests.lines, settings: config)
+        await OverlayTranslationTests.settle { overlay.phase != .running }
+        XCTAssertEqual(overlay.phase, .done); XCTAssertNotNil(overlay.image)
+        XCTAssertEqual(offline.texts.count, 1)
+        XCTAssertEqual(accounts, ["translation-provider"])
+        let sent = await calls.values
+        XCTAssertEqual(sent, [
+            .init(provider: "translation-provider", model: "translation-task", key: "synthetic-translation-provider"),
+            .init(provider: "translation-provider", model: "translation-backup", key: "synthetic-translation-provider")])
+        XCTAssertEqual(overlay.engine, "Synthetic translation · translation-backup · 备用模型")
+    }
+    @MainActor func testUnavailableTranslationProviderFailsBeforeCredentialReadOrTransport() async throws {
+        for missing in [false, true] {
+            var config = providerSettings(); config.translation.engine = .ai
+            if missing { config.aiProviders = [] }
+            else { config = .defaults; config.translation.engine = .ai }
+            var reads = 0
+            let calls = OverlayProviderCalls()
+            let runner = ScreenshotSession.makeOverlayRunner(allowed: { true }, providerKey: { _ in reads += 1; return "synthetic" },
+                streamAI: { connection, _, key, model, _ in await calls.record(connection.id, model, key); return "Unexpected" })
+            let overlay = ScreenshotOverlayTranslation(runner: runner, allowed: { true })
+            overlay.run(image: try OverlayTranslationTests.image(), lines: OverlayTranslationTests.lines, settings: config)
+            await OverlayTranslationTests.settle { overlay.phase != .running }
+            XCTAssertEqual(overlay.phase, .failed); XCTAssertNil(overlay.image); XCTAssertEqual(reads, 0)
+            let sent = await calls.values; XCTAssertTrue(sent.isEmpty)
+            overlay.clear()
+        }
+    }
+}
+
+
+extension OverlayRoutingTests {
+    @MainActor func testOverlayNeverRetriesPartialAuthenticationOrProtectedFailures() async throws {
+        for scenario in ["partial", "authentication", "protected"] {
+            var config = providerSettings(); config.translation.engine = .ai
+            let calls = OverlayProviderCalls(); var allowed = true
+            let runner = ScreenshotSession.makeOverlayRunner(allowed: { allowed }, providerKey: { "synthetic-" + $0 },
+                streamAI: { connection, _, key, model, delta in
+                    await calls.record(connection.id, model, key)
+                    if scenario == "authentication" { throw AIClientError.unauthorized }
+                    if scenario == "partial" { await delta("Incomplete synthetic output") }
+                    else { await MainActor.run { allowed = false } }
+                    throw AIClientError.server
+                })
+            let overlay = ScreenshotOverlayTranslation(runner: runner, allowed: { allowed })
+            overlay.run(image: try OverlayTranslationTests.image(), lines: OverlayTranslationTests.lines, settings: config)
+            await OverlayTranslationTests.settle { overlay.phase != .running }
+            XCTAssertEqual(overlay.phase, .failed, scenario); XCTAssertNil(overlay.image)
+            let sent = await calls.values
+            XCTAssertEqual(sent, [.init(provider: "translation-provider", model: "translation-task", key: "synthetic-translation-provider")], scenario)
+            overlay.clear()
+        }
     }
 }

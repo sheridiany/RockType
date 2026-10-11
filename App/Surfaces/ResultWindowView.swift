@@ -1,3 +1,4 @@
+#if DEBUG
 import SwiftUI
 
 struct ResultWindowView: View {
@@ -186,3 +187,5 @@ struct ResultWindowView: View {
         question = ""; model.notice = nil; feedback = nil
     }
 }
+
+#endif

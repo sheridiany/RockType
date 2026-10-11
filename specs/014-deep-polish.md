@@ -48,13 +48,16 @@
 | # | 任务 | 执行 | 状态 |
 | --- | --- | --- | --- |
 | R2-SHOT | 选区（批次 2）：放大镜 + 取色（显示 HEX，C 复制）、双击选区复制、按边微调（⌥/⌘+方向键调整边）、截图圆角输出（默认开启，设置可关）、⌘S 另存为；遮罩性能与多屏复测；画布/协调器职责拆分 | pi-xpc | 实现与自动化通过；待人工验收 |
-| R2-AI | AI 第二轮：划词工具栏与结果窗口打磨、多 Provider 管理体验、请求取消与并发、隐私（Secure Input 时一律不发） | pi-platform | 未开始 |
+| R2-AI | AI 第二轮：划词工具栏与结果窗口打磨、多 Provider 管理体验、请求取消与并发、隐私（Secure Input 时一律不发） | pi-platform | [实现、测试与构建通过；待人工验收](evidence/014-R2-AI.md) |
 | R2-OCR | OCR/预览第二轮：预览面板整体视觉、OCR 结果与翻译并排、批量/剪贴板图片 OCR | pi-surfaces | 已实现，评测/测试/构建通过；待人工验收 |
 | R2b-SURF | 预览接入 ScreenshotAIService：OCR+图片视觉翻译/总结/理解、发送确认与记忆、思考/流式/取消/重试、复制与追问、贴图共用入口；证据见 [014-R2b-SURF](evidence/014-R2b-SURF.md) | pi-surfaces | 已实现，测试/构建通过；待人工验收 |
 | R2-UI | 菜单栏面板、结果窗口、划词工具栏等剩余界面视觉统一；设计系统 token 清理 | pi-ui | 实现与测试/构建通过；键盘/VoiceOver 待人工验收，见 [证据](evidence/014-R2-UI.md) |
 | R2-ARCH | 架构整理：`App/Mock`、`App/Gallery` 移出正式 App 目标（或仅 DEBUG）；`App/Surfaces` 与 `App/Features` 职责划分（视图 vs 控制器）；死代码清理；`docs/architecture.md` 同步；不改行为 | pi-ime | 第一阶段完成：全仓审计、IME/语音等价整理与架构同步；测试/构建通过；Gallery/Mock 隔离留后续，见 [证据](evidence/014-R2-ARCH.md) |
 | R3-UI | 截图设置覆盖、完整快捷键速查、关于页版本/更新/许可证、菜单栏新功能入口 | pi-ui | 实现、测试/构建与离屏检查通过；待人工验收，见 [证据](evidence/014-R3-UI.md) |
 | R3-SURF | 覆盖式图片翻译（整图批量路由、译图切换/复制/保存/贴图）、本机二维码/条码识别与链接确认、贴图共用入口；[证据](evidence/014-R3-SURF.md) | pi-surfaces | 已实现，测试/构建通过；待人工验收 |
+| R4-UI | 架构 A02/A03/A15：正式导航脱离 Mock、组件按用途命名、Gallery/Mock 的 DEBUG 边界与 A04 预览解耦 | pi-ui | 测试/构建、release 符号与开发渲染通过；待人工验收，见 [证据](evidence/014-R4-UI.md) |
+| R3-IME | 完成 FR-E3 输入法内 AI：⌥Tab 三动作、状态/Tab 上屏/作废与安全输入；接入 InputAIController 生命周期；消除候选双重防抖并测量 | pi-ime | 实现与自动测试/构建通过；待安装后真实试打，见 [证据](evidence/014-R3-IME.md) |
+| R5-UI | A16 现状文档同步、用户功能/快捷键手册、正式界面离屏检查及 UI 区域修正 | pi-ui | 文档、测试/构建与离屏复查通过；人工项已标注，见 [证据](evidence/014-R5-UI.md) |
 
 ## 规则
 

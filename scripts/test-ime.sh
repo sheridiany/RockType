@@ -5,7 +5,7 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 temporary=$(mktemp -d "${TMPDIR:-/tmp}/roarkt-ime-checks.XXXXXX")
 trap 'rm -rf "$temporary"' EXIT
 xcrun swiftc -import-objc-header "$root/Shared/XPCProtocol/include/RoarkTTranslationXPCProtocol.h" \
-  "$root/Core/Identifiers.swift" "$root/Core/Translation/DynamicTranslationProtocol.swift" \
+  "$root/Core/Identifiers.swift" "$root/Core/Shortcuts.swift" "$root/Core/Translation/DynamicTranslationProtocol.swift" \
   "$root/InputMethod/sources/RoarkTTranslationClient.swift" \
   "$root/InputMethod/sources/RoarkTCandidateTranslationSession.swift" \
   "$root/Tests/InputMethodTests/SessionChecks.swift" -o "$temporary/session"
@@ -17,7 +17,7 @@ xcrun swiftc -import-objc-header "$root/InputMethod/librime/src/rime/key_table.h
 "$temporary/modifiers"
 xcrun swiftc -swift-version 6 -import-objc-header "$root/Tests/InputMethodTests/PanelBridge.h" \
   -I "$root/InputMethod/librime/src" \
-  "$root/Core/Identifiers.swift" "$root/Core/Translation/DynamicTranslationProtocol.swift" \
+  "$root/Core/Identifiers.swift" "$root/Core/Shortcuts.swift" "$root/Core/Translation/DynamicTranslationProtocol.swift" \
   "$root/InputMethod/sources/BridgingFunctions.swift" \
   "$root/InputMethod/sources/SquirrelConfig.swift" "$root/InputMethod/sources/SquirrelTheme.swift" \
   "$root/InputMethod/sources/SquirrelView.swift" \

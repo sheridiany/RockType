@@ -263,6 +263,7 @@ private final class HangingStreamStub: URLProtocol, @unchecked Sendable {
     let successful = DefaultOperationRunner(recent: recent, apiKey: { "synthetic" }, isAllowed: { true },
         streamAI: { _, _, _, _, _ in "Synthetic answer" })
     var settings = AppSettings(); settings.privacy.keepRecentResultsInMemory = false
+    settings.ai.defaultModel = "synthetic-model"
     let disabled = OperationRequest(session: OperationSession(snapshot: snapshot()),
         template: OperationTemplate.defaults[1], settings: settings)
     #expect(result(await collect(successful.run(disabled))) != nil)

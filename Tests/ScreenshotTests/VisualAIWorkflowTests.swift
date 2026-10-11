@@ -170,3 +170,28 @@ extension VisualAIWorkflowTests {
         XCTAssertEqual(coordinator.session?.visual.phase, .idle)
     }
 }
+
+extension VisualAIWorkflowTests {
+    @MainActor func testImageTaskRouteAndBackupVerificationChangesRequireNewConfirmation() throws {
+        var config = settings()
+        var provider = config.ai
+        provider.id = "synthetic-other-provider"
+        provider.fallbackModel = "synthetic-backup"
+        config.aiProviders = [provider]
+        config.aiTaskRoutes = [AITask.image.rawValue: .init(providerID: provider.id)]
+        var backupVerified = true, calls = 0
+        let visual = ScreenshotVisualAI(settings: { config },
+            verified: { _, model in model != "synthetic-backup" || backupVerified },
+            allowed: { true }, remember: { _ in }, send: { _, _, _, _ in calls += 1; return "Unexpected" })
+        visual.prepare(action: .translate, png: Data([1]), text: "Synthetic")
+        XCTAssertEqual(visual.request?.connection.id, provider.id)
+        config.aiTaskRoutes = nil
+        visual.confirm()
+        XCTAssertEqual(visual.phase, .failed); XCTAssertEqual(calls, 0)
+        config.aiTaskRoutes = [AITask.image.rawValue: .init(providerID: provider.id)]
+        visual.prepare(action: .translate, png: Data([1]), text: "Synthetic")
+        backupVerified = false
+        visual.confirm()
+        XCTAssertEqual(visual.phase, .failed); XCTAssertEqual(calls, 0)
+    }
+}

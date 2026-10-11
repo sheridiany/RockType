@@ -284,6 +284,61 @@ struct RimeChecks {
       require(api.delete_candidate_on_current_page(session, rank % 5), "forget learned word")
       refresh()
       print("forget action passed: \(args[4])")
+    case "input-ai":
+      let raw = args[4] == "roarkt_flypy" ? "ykwfuu" : "yingwenshu"
+      let suffix = args[4] == "roarkt_flypy" ? "uu" : "shu"
+      input(raw)
+      let before = ["raw", "source", "identity", "scope"].map { property("roarkt_panel_" + $0) }
+      require(!api.process_key(session, 0xff09, 1 << 3), "factory Alt+Tab must be unbound in Rime")
+      refresh()
+      require(before == ["raw", "source", "identity", "scope"].map { property("roarkt_panel_" + $0) },
+              "Alt+Tab must not mutate the candidate or input")
+      guard let rank = find("英文") else { fatalError("missing prefix candidate") }
+      require(api.select_candidate_on_current_page(session, rank % 5), "confirm AI prefix")
+      refresh()
+      require(property("roarkt_ai_source").hasPrefix("英文"), "AI includes confirmed prefix")
+      require(property("roarkt_ai_source") == property("roarkt_panel_source"), "whole candidate preserves original snapshot")
+      for key in ["raw", "source", "identity", "scope"] {
+        api.set_property(session, "roarkt_panel_commit_" + key, property("roarkt_ai_" + key))
+      }
+      api.set_property(session, "roarkt_panel_commit_ai", "1")
+      api.set_property(session, "roarkt_panel_commit_text", "synthetic AI result")
+      _ = api.simulate_key_sequence(session, "{F20}")
+      require(property("roarkt_panel_committed") == "1", "AI whole commit")
+      consume("synthetic AI result")
+      require((api.get_input(session).map { String(cString: $0) } ?? "").isEmpty, "whole AI consumes composition")
+      // A highlighted short candidate replaces only its covered prefix, leaving raw suffix intact.
+      input(raw)
+      guard let short = find("英文") else { fatalError("missing short candidate") }
+      require(api.highlight_candidate_on_current_page(session, short % 5), "highlight short candidate")
+      refresh()
+      require(property("roarkt_ai_source") == "英文" && property("roarkt_ai_scope") == "prefix", "AI partial snapshot")
+      for key in ["raw", "source", "identity", "scope"] {
+        api.set_property(session, "roarkt_panel_commit_" + key, property("roarkt_ai_" + key))
+      }
+      api.set_property(session, "roarkt_panel_commit_ai", "1")
+      api.set_property(session, "roarkt_panel_commit_text", "synthetic prefix")
+      _ = api.simulate_key_sequence(session, "{F20}")
+      consume("synthetic prefix")
+      require(api.get_input(session).map { String(cString: $0) } == suffix, "AI preserves unconverted suffix")
+      input(args[4] == "roarkt_flypy" ? "ykwfuuru" : "yingwenshuru")
+      guard let prefix = find("英文") else { fatalError("missing confirmed prefix") }
+      require(api.select_candidate_on_current_page(session, prefix % 5), "confirm prefix before partial AI")
+      refresh()
+      guard let partial = find("书") else { fatalError("missing partial candidate after prefix") }
+      require(api.highlight_candidate_on_current_page(session, partial % 5), "highlight partial after prefix")
+      refresh()
+      require(property("roarkt_panel_source") == "书", "ordinary segment translation unchanged")
+      require(property("roarkt_ai_source") == "英文书", "AI includes prefix even with an unconverted suffix")
+      for key in ["raw", "source", "identity", "scope"] {
+        api.set_property(session, "roarkt_panel_commit_" + key, property("roarkt_ai_" + key))
+      }
+      api.set_property(session, "roarkt_panel_commit_ai", "1")
+      api.set_property(session, "roarkt_panel_commit_text", "synthetic combined prefix")
+      _ = api.simulate_key_sequence(session, "{F20}")
+      consume("synthetic combined prefix")
+      require(api.get_input(session).map { String(cString: $0) } == "ru", "AI consumes confirmed prefix exactly once")
+      print("AI Alt+Tab conflict, confirmed-prefix snapshot, whole/partial commit passed: \(args[4])")
     case "translation":
       input(args[4] == "roarkt_flypy" ? "nihc" : "nihao")
       require(property("roarkt_panel_source") == "你好", "translation source")

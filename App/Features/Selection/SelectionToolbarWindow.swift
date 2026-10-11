@@ -36,6 +36,8 @@ struct LiveSelectionToolbar: View {
         .frame(maxWidth: maximumWidth)
         .fixedSize(horizontal: false, vertical: true)
         .modifier(DesignSurface())
+        .font(Tokens.Typography.font(weight: .medium))
+        .foregroundStyle(Tokens.palette(scheme).foreground)
         .accessibilityLabel("划词工具栏")
     }
 
@@ -45,11 +47,6 @@ struct LiveSelectionToolbar: View {
 
     private func buttons(compact: Bool, items: [SelectionToolbarAction], overflow: [SelectionToolbarAction] = []) -> some View {
         HStack(spacing: Tokens.Space.xs) {
-            Image(systemName: "square.stack.3d.up.fill")
-                .foregroundStyle(Tokens.palette(scheme).accent)
-                .padding(.horizontal, Tokens.Space.sm).accessibilityHidden(true)
-            Rectangle().fill(Tokens.palette(scheme).line)
-                .frame(width: Tokens.Size.stroke, height: Tokens.Size.compact)
             ForEach(items) { action in
                 Button { perform(action.id) } label: {
                     HStack(spacing: Tokens.Space.xs) {
@@ -113,26 +110,33 @@ private final class SelectionHostingView: NSHostingView<LiveSelectionToolbar> {
     func show(snapshot: ContentSnapshot, settings: AppSettings, aiConfigured: Bool = true, perform: @escaping (String) -> Void) {
         let actions = SelectionToolbarAction.configured(in: settings, aiConfigured: aiConfigured)
         guard !actions.isEmpty else { hide(); return }
-        let height = NSScreen.screens.first?.frame.maxY ?? 0
-        let selection = snapshot.selectionRect.map { ScreenGeometry.topLeft($0, primaryHeight: height) }
-        let cursor = ScreenGeometry.mousePosition
+        let selection = snapshot.selectionRect
+        let cursor = NSEvent.mouseLocation
         let anchor = selection.map { CGPoint(x: $0.midX, y: $0.midY) } ?? cursor
-        guard let screen = ScreenGeometry.screen(containing: anchor) ?? ScreenGeometry.screen(containing: cursor) else { return }
-        let maximumWidth = max(Tokens.Size.control, min(Tokens.Size.resultWidth, screen.visibleFrame.width - Tokens.Space.xxl))
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(cursor) })
+                ?? NSScreen.screens.first(where: { $0.frame.contains(anchor) }) else { hide(); return }
+        let maximumWidth = max(Tokens.Size.control, min(Tokens.Size.resultWidth, screen.visibleFrame.width - 16))
         let view = LiveSelectionToolbar(actions: actions, maximumWidth: maximumWidth, perform: perform)
         let host = SelectionHostingView(rootView: view)
         panel.contentView = host
         let size = host.fittingSize
-        let placement = Placement.floating(selection: selection, cursor: cursor, size: size, screen: screen.visibleFrame)
-        let frame = CGRect(origin: placement.origin, size: size)
-        panel.setFrame(ScreenGeometry.topLeft(frame, primaryHeight: height), display: true)
+        panel.setFrame(SelectionToolbarLayout.frame(selection: selection, cursor: cursor, size: size,
+            screen: screen.visibleFrame), display: true)
         switch settings.general.appearance {
         case .system: panel.appearance = nil
         case .light: panel.appearance = NSAppearance(named: .aqua)
         case .dark: panel.appearance = NSAppearance(named: .darkAqua)
         }
+        // Frequent selection gestures stay immediate; only soften the first opacity change.
+        panel.alphaValue = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 1 : 0
         panel.orderFrontRegardless()
+        if panel.alphaValue < 1 {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.10
+                panel.animator().alphaValue = 1
+            }
+        }
     }
 
-    func hide() { panel.orderOut(nil); panel.contentView = nil }
+    func hide() { panel.orderOut(nil); panel.alphaValue = 1; panel.contentView = nil }
 }

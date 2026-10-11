@@ -55,18 +55,26 @@ import RoarkTPlatform
          overlayRunner: (any OperationRunner)? = nil,
          scanCodes: @escaping @Sendable (Data) async throws -> [BarcodeScanner.Code] = { try await BarcodeScanner().recognize($0) },
          openURL: @escaping (URL) -> Bool = { NSWorkspace.shared.open($0) }) {
-        self.overlay = ScreenshotOverlayTranslation(runner: overlayRunner ?? DefaultOperationRunner(
-            offline: TextTranslationXPCClient(), apiKey: { try Keychain().get(account: settings().ai.id) ?? "" }, isAllowed: allowed), allowed: allowed)
+        self.overlay = ScreenshotOverlayTranslation(runner: overlayRunner ?? Self.makeOverlayRunner(
+            allowed: allowed), allowed: allowed)
         self.barcodes = ScreenshotBarcodes(allowed: allowed, recognize: scanCodes, open: openURL)
         self.rememberImageConfirmation = rememberImageConfirmation
         self.visual = ScreenshotVisualAI(settings: settings, verified: verified, allowed: allowed,
             remember: rememberImageConfirmation, send: sendVisual)
         self.translation = ScreenshotTranslation(runner: translationRunner ?? DefaultOperationRunner(
             offline: TextTranslationXPCClient(), apiKey: { try Keychain().get(account: settings().ai.id) ?? "" },
-            isAllowed: allowed), allowed: allowed)
+            isAllowed: allowed, providerKey: { try Keychain().get(account: $0) ?? "" }), allowed: allowed)
         self.image = image; self.origin = origin; self.settings = settings; self.verified = verified
         self.ocrLanguages = settings().screenshot.ocrLanguages
         self.allowed = allowed; self.recognize = recognize
+    }
+    /// Kept at the production assembly boundary so routing tests exercise the same credential wiring.
+    static func makeOverlayRunner(allowed: @escaping () -> Bool,
+                                  offline: (any TextTranslationClient)? = nil,
+                                  providerKey: @escaping (String) throws -> String = { try Keychain().get(account: $0) ?? "" },
+                                  streamAI: DefaultOperationRunner.AIStream? = nil) -> DefaultOperationRunner {
+        DefaultOperationRunner(offline: offline ?? TextTranslationXPCClient(),
+            apiKey: { throw AIClientError.configuration }, isAllowed: allowed, streamAI: streamAI, providerKey: providerKey)
     }
     func start() {
         guard protection == nil, !closed else { return }

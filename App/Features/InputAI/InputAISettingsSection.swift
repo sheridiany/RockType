@@ -1,5 +1,6 @@
 import SwiftUI
 import RoarkTCore
+import RoarkTPlatform
 
 struct InputAISettingsSection: View {
     @Binding var settings: AppSettings
@@ -8,9 +9,31 @@ struct InputAISettingsSection: View {
     private var preferences: Binding<InputAISettings> {
         Binding(get: { settings.input.inputAI ?? InputAISettings() }, set: { settings.input.inputAI = $0 })
     }
+    private var route: AIProviderRouting.Resolved? { try? AIProviderRouting.resolve(settings, task: .inputAI) }
+    private var configured: Bool {
+        guard let route else { return false }
+        return !route.connection.baseURL.isEmpty && (try? Keychain().exists(account: route.connection.id)) == true
+    }
     var body: some View {
         Section("输入法内 AI") {
             Toggle("启用输入法内 AI", isOn: preferences.enabled)
+                .disabled(!configured && !preferences.wrappedValue.enabled)
+            if let route {
+                Text("当前模型：" + route.model).foregroundStyle(.secondary)
+            }
+            if !configured {
+                Text("先在 AI 连接中选择服务商并设置密钥，再启用输入法内 AI。")
+                    .foregroundStyle(.secondary)
+            }
+            Picker("等待上限", selection: preferences.timeout) {
+                Text("15 秒").tag(15.0)
+                Text("30 秒").tag(30.0)
+                Text("60 秒").tag(60.0)
+                Text("90 秒").tag(90.0)
+                if ![15.0, 30, 60, 90].contains(preferences.wrappedValue.timeout) {
+                    Text("当前 \(Int(preferences.wrappedValue.timeout)) 秒").tag(preferences.wrappedValue.timeout)
+                }
+            }
             HStack {
                 Text("改写 / 润色 / 翻译")
                 Spacer()
@@ -30,7 +53,7 @@ struct InputAISettingsSection: View {
             }
             Text("仅在输入法组词时触发，每次按键切换一个动作；Esc 返回普通候选翻译。需要先在 AI 连接中配置服务与密钥。")
                 .foregroundStyle(.secondary)
-            Text("此键由输入法处理。与 Rime 或其他应用的冲突需在实际输入时验证。")
+            Text("继续打字会作废旧结果；Esc 停止，Tab 仅接受当前结果。安全输入期间不请求 AI。快捷键与 Rime 或其他应用的冲突需在实际输入时验证。")
                 .foregroundStyle(.secondary)
         }
         .onDisappear { recording = false }
