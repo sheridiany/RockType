@@ -68,7 +68,9 @@ struct OnboardingShellView: View {
         .onChange(of: flow.finished) { _, finished in if finished { onFinish() } }
         .onDisappear { cancelInput(); trial = "" }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in input.refresh() }
-        .task {
+        .task(id: flow.step) {
+            guard flow.step == .input else { return }
+            await input.prepareRegistration()
             // Only reads input-source metadata, only while this window is visible.
             while !Task.isCancelled {
                 input.refresh()
@@ -89,15 +91,17 @@ struct OnboardingShellView: View {
     @ViewBuilder private var content: some View {
         switch flow.step {
         case .input:
-            Text("系统设置 → 键盘 → 文本输入 → 编辑 → ＋ → 简体中文")
+            Text("系统设置 → 键盘 → 输入法 → 编辑… → ＋ → 简体中文 → RoarkT")
                 .font(Tokens.Typography.font(Tokens.Typography.meta))
             HStack {
                 Chip(text: input.snapshot.addedIDs.isEmpty ? "尚未添加" : "已添加", tone: input.snapshot.addedIDs.isEmpty ? .warn : .ok)
                 Chip(text: input.snapshot.selectedRoarkTID == nil ? "尚未选中" : "已选中",
                      tone: input.snapshot.selectedRoarkTID == nil ? .warn : .ok)
                 Spacer()
-                Button("打开键盘设置") { input.openKeyboardSettings() }.buttonStyle(DesignButtonStyle())
+                Button("打开键盘设置") { Task { await input.openKeyboardSettings() } }
+                    .disabled(input.isRegistering || input.isOpeningSettings).buttonStyle(DesignButtonStyle())
             }
+            if let message = input.registrationMessage { Notice(text: message) }
             Notice(text: input.message, tone: input.verified ? .ok : .neutral)
             TextField("开始验证后，在这里试打 nihao 并选字", text: $trial)
                 .textFieldStyle(.roundedBorder).accessibilityLabel("输入法试打")
@@ -140,7 +144,7 @@ struct OnboardingShellView: View {
     }
 }
 
-private struct LanguagePackStepView: View {
+struct LanguagePackStepView: View {
     let model: LanguagePackModel
     @State private var preparing = false
     @State private var direction = 0
