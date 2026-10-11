@@ -35,10 +35,10 @@
 
 | # | 任务 | 执行 | 状态 |
 | --- | --- | --- | --- |
-| P1 | Placement + ScreenGeometry + 单元测试（迁移 `placement_test.go` 的全部用例） | pi | 完成（待验收） |
-| P2 | Clipboard（含复制回退）、SecureInput、Accessibility、SelectionReader | pi | 完成（待验收） |
-| P3 | OCR（用 `../RoarkTools/internal/platform/testdata/ocr-sample.png` 复制到 `Tests/PlatformTests/Fixtures/` 做测试）、Keychain（测试用独立服务名并清理） | pi | 完成（待验收） |
-| P4 | GlobalHotkeys、FnKeyMonitor、Permissions | pi | 完成（待验收） |
+| P1 | Placement + ScreenGeometry + 单元测试（迁移 `placement_test.go` 的全部用例） | pi | 完成（Claude 已验收 2026-10-11） |
+| P2 | Clipboard（含复制回退）、SecureInput、Accessibility、SelectionReader | pi | 完成（Claude 已验收 2026-10-11） |
+| P3 | OCR（用 `../RoarkTools/internal/platform/testdata/ocr-sample.png` 复制到 `Tests/PlatformTests/Fixtures/` 做测试）、Keychain（测试用独立服务名并清理） | pi | 完成（Claude 已验收 2026-10-11） |
+| P4 | GlobalHotkeys、FnKeyMonitor、Permissions | pi | 完成（Claude 已验收 2026-10-11） |
 | P5 | 验收 | Claude | 未开始 |
 
 ## 验收
@@ -64,3 +64,4 @@
 - P4：**已决定（Claude）**：快捷键按物理 ANSI 键位解释即可，Fn-only / 未支持键名明确报错；检查系统已启用的 symbolic hotkeys，并将 Carbon 重复注册错误映射为 conflict。其他应用自行拦截事件、非 ANSI 布局与动态系统设置变化仍需人工验收，不增加按当前布局字符注册。
 - P4：AX / 屏幕录制预检只能区分 granted / notGranted；麦克风可区分 notDetermined / denied / restricted。更详细的引导状态需由 App 层管理。
 - **已决定（Claude）**：OCR / Keychain 去掉 SecureInput.requireReadable()、checkReadable 注入及相关拒绝测试。Secure Input 是系统全局状态，其他应用的密码框或终端 Secure Keyboard Entry 可能长期开启，不应阻止读取自身密钥或识别已有图片。FR-E8 约束当前焦点内容的读取/写入；SelectionReader、Clipboard 复制回退以及后续语音填入、缓存写入保留保护。本次未修改取词及剪贴板实现。
+- Claude 验收备注（2026-10-11）：OCR、Keychain 不受 Secure Input 门控（已修正，e888c1b）。`Clipboard.readString/readPNG` 仍门控；M4 实现“剪贴板图片作为输入”（FR-D7）时重新评估。
