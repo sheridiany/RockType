@@ -11,18 +11,11 @@ struct GalleryEntry: Identifiable {
 
 @MainActor
 enum GalleryCatalog {
-    static let entries: [GalleryEntry] = [
-        GalleryEntry(surface: "result", state: "streaming", title: "结果浮窗 · 流式中") {
-            AnyView(ResultExampleView(model: .streaming))
-        },
-        GalleryEntry(surface: "result", state: "done", title: "结果浮窗 · 完成") {
-            AnyView(ResultExampleView(model: .done))
-        },
-    ]
-    // U4: independent registration block; surfaces 1–5 are maintained separately.
-    + InputVoiceGallery.entries
-    + OnboardingGallery.entries
-    + SettingsGallery.entries
+    // U3 (surfaces 1–5) and U4 register independent blocks.
+    static let entries: [GalleryEntry] = PrimarySurfaceEntries.entries
+        + InputVoiceGallery.entries
+        + OnboardingGallery.entries
+        + SettingsGallery.entries
 }
 
 enum GalleryTheme: String, CaseIterable, Identifiable {
