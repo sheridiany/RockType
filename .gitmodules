@@ -1,0 +1,9 @@
+[submodule "InputMethod/librime"]
+	path = InputMethod/librime
+	url = https://github.com/rime/librime.git
+[submodule "InputMethod/plum"]
+	path = InputMethod/plum
+	url = https://github.com/rime/plum.git
+[submodule "InputMethod/Sparkle"]
+	path = InputMethod/Sparkle
+	url = https://github.com/sparkle-project/Sparkle
