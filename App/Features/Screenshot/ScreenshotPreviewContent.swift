@@ -255,6 +255,7 @@ struct ScreenshotPreviewContent: View {
             Menu("图片操作") {
                 Button("复制图片") { session.copyImage() }
                 Button("另存为…") { session.save() }
+                Button("贴图") { session.pinImage() }
                 Divider()
                 Button("解释图片…") { showVisual = true; session.prepareImage() }.disabled(session.visionModel == nil || session.busy)
                 Button("配置视觉模型…") { session.configureVision() }

@@ -24,6 +24,7 @@ import RoarkTPlatform
     var notice: String?
     var confirmingImage: Bool { visual.phase == .confirming }
     var onClose: () -> Void = {}
+    var onPin: (CGImage) -> Bool = { _ in false }
     var performText: (OperationRequest) -> Void = { _ in }
     var imageCompleted: (OperationResult, OperationTemplate) -> Void = { _, _ in }
     var configureVision: () -> Void = {}
@@ -80,6 +81,10 @@ import RoarkTPlatform
         !closed && allowed() && (current == nil || current == generation)
     }
     func png() -> Data? { image.flatMap { NSBitmapImageRep(cgImage: $0).representation(using: .png, properties: [:]) } }
+    func pinImage() {
+        guard check(), let image else { return }
+        if onPin(image) { close() } else { notice = "无法贴图，请检查安全输入状态和显示器。" }
+    }
     func copyImage(closeAfter: Bool = false) {
         guard check(), let data = png() else { return }
         do { try Clipboard.shared.writePNG(data); notice = "图片已复制"; if closeAfter { close() } }

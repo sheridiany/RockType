@@ -47,6 +47,7 @@ import os
     }
     var onPin: (CGImage) -> Void = { _ in }
     var onRestore: () -> Void = {}
+    var onScrollCapture: () -> Void = {}
     var allowed: () -> Bool = { ScreenCapture.isReadable }
     private var notice: String?
     private enum Output { case copy, save, saveAs, preview, pin, ocrCopy }
@@ -309,7 +310,7 @@ import os
         let pixels = CaptureGeometry.pixels(visible, image: image, size: bounds.size)
         labelLayer.string = notice ?? (isEditingText ? "↩ 换行 · Esc 结束文字编辑 · 点击别处提交" : selection.isEmpty
             ? "单击选元素/窗口 · 滚轮/Tab 扩大 · ⇧Tab 缩小 · 拖动框选 · C 取色 · Esc 取消"
-            : "\(Int(pixels.width)) × \(Int(pixels.height)) · 双击/↩ 复制 · ⌘S 另存 · ⇧C OCR · ⌥ 左/上边 · ⌘ 右/下边")
+            : "\(Int(pixels.width)) × \(Int(pixels.height)) · 双击/↩ 复制 · L 长截图 · ⌘S 另存 · ⇧C OCR · ⌥ 左/上边 · ⌘ 右/下边")
         labelLayer.frame = CGRect(x: max(8, min(visible.minX, bounds.width - 670)),
             y: max(8, visible.minY - 25), width: min(670, bounds.width - 16), height: 20)
         if let toolbar, !toolbar.isHidden {
@@ -492,6 +493,11 @@ import os
         case .ocrCopy: complete(.ocrCopy)
         case .copyColor: copyColor()
         case .restore: onRestore()
+        case .scrollCapture:
+            guard !dragging else { return }
+            guard !selection.isEmpty else { showNotice("请先框选一个可滚动窗口内的区域。"); return }
+            guard annotations.isEmpty else { showNotice("长截图会重新采集内容，请先撤销标注。"); return }
+            onScrollCapture()
         case .hierarchy(let parent): cycleElement(parent: parent)
         case .undo: undoAnnotation()
         case .redo: undoAnnotation(redo: true)

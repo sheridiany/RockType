@@ -22,6 +22,8 @@ import os
     }()
     private let saveAs: ScreenshotSaveAsController
     private var saving = false
+    private var scrollCapture: ScrollCaptureController?
+    private let scrollHUD = ScrollCaptureHUD()
     private var captureTask: Task<Void, Never>?
     private var protectionTask: Task<Void, Never>?
     private let overlays = CaptureOverlayGroup()
@@ -92,6 +94,8 @@ import os
     func stop() { running = false; warmupTask?.cancel(); warmupTask = nil; ScreenCapture.stopWarming(); cancel(); closePreview(); PinnedImageController.shared.closeAll() }
     func cancel() {
         generation += 1
+        let scroll = scrollCapture; scrollCapture = nil
+        scroll?.onCancel = {}; scroll?.cancel(); scrollHUD.close()
         elementQuery.cancel(); elementSnapshot = nil
         saving = false; saveAs.cancel()
         imageOpenPanel?.cancel(nil); imageOpenPanel = nil
@@ -194,6 +198,10 @@ import os
                 for canvas in self.overlays.canvases.values { canvas.toolStyles[tool.rawValue] = style }
             }
             view.onCancel = { [weak self] in self?.cancel() }
+            view.onScrollCapture = { [weak self, weak view] in
+                guard let self, let view else { return }
+                self.beginScrollCapture(view, frame: frame)
+            }
             view.onComplete = { [weak self, weak view] image in
                 guard let self, let view, self.captureAllowed() else { return }
                 do {
@@ -258,6 +266,42 @@ import os
             }
         }
     }
+    private func beginScrollCapture(_ canvas: CaptureCanvas, frame: ScreenCapture.Frame) {
+        guard allowed(), canvas.selection.width >= 32, canvas.selection.height >= 32 else {
+            canvas.showNotice("请选取至少 32 × 32 点的区域，并确认辅助功能与安全输入状态。"); return
+        }
+        let selection = canvas.selection
+        guard let window = frame.windows.first(where: { $0.contains(CGPoint(x: selection.midX, y: selection.midY)) }), window.contains(selection) else {
+            canvas.showNotice("长截图的选区必须完整位于同一个窗口内。"); return
+        }
+        let region = CaptureGeometry.globalScreenRect(selection, screen: frame.rect)
+        let expectedWindow = CaptureGeometry.globalScreenRect(window, screen: frame.rect)
+        let pid = previousApp?.processIdentifier
+        let rounded = readSettings().screenshot.roundedCorners ?? true
+        lastSelection = (frame.displayID, selection)
+        cancel() // Releases frozen full-screen images, restores the source app, and removes overlay monitors.
+        let current = generation
+        let controller = ScrollCaptureController(allowed: allowed, prepare: {
+            try await ScrollRegionCapture.prepare(selection: region, expectedWindow: expectedWindow, expectedPID: pid)
+        })
+        scrollCapture = controller
+        controller.onCancel = { [weak self] in
+            guard let self, self.generation == current else { return }; self.cancel()
+        }
+        controller.onFailure = { [weak self] message in
+            guard let self, self.generation == current else { return }; self.cancel(); self.onNotice(message)
+        }
+        controller.onComplete = { [weak self] image in
+            guard let self, self.generation == current, self.allowed() else { return }
+            let scale = CGFloat(image.width) / region.width
+            guard let result = ScreenshotExport.render(image: image,
+                pointSize: CGSize(width: region.width, height: CGFloat(image.height) / scale), roundedCorners: rounded) else {
+                self.cancel(); self.onNotice("无法生成长截图，请缩小选区后重试。"); return
+            }
+            self.cancel(); self.openImage(result, origin: "滚动长截图")
+        }
+        scrollHUD.show(controller, near: region); controller.start()
+    }
     func saveSelection(_ image: CGImage, canvas: CaptureCanvas, displayID: CGDirectDisplayID) {
         guard captureAllowed(), !saving else { return }
         let current = generation
@@ -308,6 +352,7 @@ import os
             value.performText = self.performText; value.configureVision = self.configureVision
             value.imageCompleted = self.imageCompleted
             value.onClose = { [weak self] in self?.closePreview() }
+            value.onPin = { [weak self] image in self?.pinPreviewImage(image) ?? false }
             value.start(); return value
         }
         let batch = ScreenshotBatch(sessions: sessions); self.batch = batch
@@ -330,6 +375,14 @@ import os
         let old = session; session = nil; old?.close()
         previewPanel?.orderOut(nil); previewPanel?.contentView = nil; previewPanel = nil
     }
+    private func pinPreviewImage(_ image: CGImage) -> Bool {
+        guard allowed(), let screen = NSScreen.main else { return false }
+        let bounds = screen.visibleFrame
+        let scale = min(1, min(bounds.width * 0.75 / CGFloat(image.width), bounds.height * 0.75 / CGFloat(image.height)))
+        let size = CGSize(width: CGFloat(image.width) * scale, height: CGFloat(image.height) * scale)
+        return PinnedImageController.shared.pin(image, at: CGRect(x: bounds.midX - size.width / 2,
+            y: bounds.midY - size.height / 2, width: size.width, height: size.height))
+    }
     func openImage(_ image: CGImage, origin: String, complete: Bool = false) {
         guard running, allowed() else { return }
         closePreview()
@@ -337,6 +390,7 @@ import os
             verified: imageCapabilityVerified, allowed: allowed, rememberImageConfirmation: rememberImageConfirmation)
         session = value
         value.onClose = { [weak self] in self?.closePreview() }
+        value.onPin = { [weak self] image in self?.pinPreviewImage(image) ?? false }
         value.configureVision = configureVision
         value.performText = performText
         value.imageCompleted = imageCompleted
