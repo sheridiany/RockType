@@ -105,6 +105,8 @@ public struct ScreenshotSettings: Codable, Equatable, Sendable {
     public var saveDirectory: String? = nil
     /// Missing in existing settings: each tool uses its own built-in default.
     public var annotationStyles: [String: ScreenshotAnnotationStyle]? = nil
+    /// nil/false asks before each explicit image AI action; no image content is persisted.
+    public var skipImageAIConfirmation: Bool? = nil
     public init() {}
 }
 

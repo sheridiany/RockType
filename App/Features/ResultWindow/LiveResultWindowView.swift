@@ -102,7 +102,7 @@ struct LiveResultWindowView: View {
             .frame(maxWidth: .infinity, alignment: .trailing)
     }
     private var captureMethod: String {
-        if controller.state.request?.template.id == ScreenshotSession.imageTemplate.id { return "图片理解" }
+        if let id = controller.state.request?.template.id, let template = ScreenshotSession.imageTemplate(forID: id) { return template.name }
         return switch controller.state.session?.snapshot.method {
         case .accessibility: "直接读取"
         case .copyFallback: "复制回退"
