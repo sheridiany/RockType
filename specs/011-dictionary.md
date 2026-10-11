@@ -43,6 +43,8 @@
 | W-3 | AI / 开发中文词库与英文扩充，评测校准权重 | pi-ui | 已完成 C 校准：日常 78、整句 17、开发 29、AI 57，总计 181/200 |
 | W-4 | 简体空间去重、中英文质量筛选、ICU 学习词迁移及回归测试 | pi-platform | 大小写合并与中文质量回归通过；预览/临时生成完成，词条质量待人工验收 |
 | W-4 | 个人层脚本：D 采用后的 t2s 学习词迁移、个人习惯词表 | pi-platform | 待负责人与 Claude 执行；本任务未碰真实用户数据 |
+| W-4 | 简体空间去重、中英文质量筛选、ICU 学习词迁移及回归测试 | pi-platform | 附加 translator/显式拼音真实包回归通过；词条质量与 IMK 试打待人工验收 |
+| W-4a | 学习词迁移备份排除顶层日志目录 | pi-platform | 完成；专项及全量通过 |
 | W-5 | Claude 在本机执行个人层脚本、安装、用户试打 | Claude + 用户 | 未开始 |
 | W-6 | 全简体管线 D：词库、预置词汇、模型、方案与 C/D 冻结评测 | pi-ui | 第四轮完成并采用 D；自动验证通过，真实迁移与试打待 Claude |
 
@@ -438,3 +440,20 @@ C原181条命中保持，哪里、算力、前端正确；“联调”评测依�
 - 简体gram：`lotem/rime-octagram-data@f8ce3b534733e489a8470a7c2adf5a154e8ea069`，LGPL-3.0，内容未改。
 - OpenCC固定版本的表仅作离线异体依据，Apache-2.0；转换数据不在产品包中，预编译librime中OpenCC代码的许可仍附带。
 - NOTICES、PROVENANCE与包内许可同步。没有安装、注册、启动输入法或访问真实Rime目录；真实userdb迁移、安装后全拼/双拼试打、用户规模延迟仍待Claude/用户验证。未改`InputMethod/sources`或个人迁移脚本。
+
+### W-4 紧急修复：附加 translator 与显式拼音
+
+- 真实包回归复现旧实现：个人中文条目没有显式编码，在繁体字表下产生 Encode failure，专项退出 1。先前最小合成词表部署测试不能证明实际主词库的嵌套导入完整性，旧验收不足，不能继续用于该结论。
+- 改为个人独立附加 translator，不再替换或 import 主词典。中文 `script_translator@personal_zh` 支持多音节编码，英文 `table_translator@personal_en`；质量 0.1，个人层禁用 userdb/造句/补全。仅追加 translator、编译依赖及对应命名空间配置。全拼、双拼各自编译个人 prism；空语言词表不挂载。
+- `Core/Settings/RimeSettingsPatch.swift` 的可选引用按方案选择同一个人 patch 的 `pinyin` / `flypy` 节。个人脚本仍不写 custom；安装更新后由设置所有者重新生成引用。主 translator/english 的全部配置与无个人层基线保持一致。
+- 新增显式读音解析：递归主词表、整词优先、逐字拼接，按有效频率（含预置频率及百分比）择读音；缺少简体读音时用 ICU Hans-Hant 字形查表。不能编码则丢弃并输出数量，绝不写空码。合成回归覆盖嵌套/环形导入、词优先、多音字、繁简字形、自定义列顺序、缺失依赖和无法编码。
+- `Tests/PersonalScriptsTests/packaged_checks.py` 经现有 SPM 包装接入 `scripts/test.sh`，必须使用当前 worktree 的 `scripts/build.sh` 产物。无个人层/中英文个人层/仅英文/空个人层均在临时 profile 部署；对照主 table 尺寸和字节、无 Encode failure、全拼/双拼的常用词首选、个人中文和英文实际候选。未写用户目录、未安装/注册/启动输入法。
+- 最终 `scripts/build.sh` **退出 0**；`scripts/test.sh` **退出 0**，个人脚本 20 项检查全部通过。真实包中的中文主 table 为 **13,032,304 字节**，英文主 table 为 **814,612 字节**；四种 profile 对照尺寸和全部字节一致。全拼 `shuju/yonghu/gongsi` 与对应双拼查询首选均与无个人层基线一致；个人中文/英文在两种方案下均查到，无 Encode failure。
+- 证据位于 `.build/personal-deployment-evidence/`：`red.log` / `red.exit` 为故障复现（1），`final-build.log` / `.exit` 为完整构建（0），`verified-tests.log` / `.exit` 为最终全量验证（0）。`git diff --check` 通过。真实 IMK 试打仍待 Claude/用户验收。
+
+### W-4a：迁移备份排除顶层日志目录
+
+- 合成回归复现真实故障：顶层 `logs/` 内的 librime 日志符号链接触发 `nonregular backup member`，迁移 CLI 退出 2、回归测试退出 1。
+- 修复仅排除 profile 顶层真实 `logs/` 目录。日志内容及普通/断裂日志链接不读取、不复制、不修改；`logs` 本身为符号链接时仍拒绝，其他目录（包括嵌套 `data/logs`）中的符号链接仍拒绝。其余用户数据完整备份规则保持原样。
+- 临时真实 librime/ICU 测试验证：迁移与回滚成功，数据库摘要恢复一致，备份不含日志目录，其他设置文件在备份中，日志文件及两个符号链接原样保留；另两种非日志符号链接场景被拒绝且数据库摘要不变。专项退出 **0**。
+- 全量 `scripts/test.sh` **退出 0**：171 项 Swift Testing，个人脚本包含 22 项检查，真实包部署对照再次通过。证据：`.build/personal-deployment-evidence/logs-tests.log` / `logs-tests.exit`。`git diff --check` 通过。用户已自行完成真实迁移，本任务没有重复执行，也未访问或修改真实 profile。

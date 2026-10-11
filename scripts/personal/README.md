@@ -25,15 +25,20 @@ python3 scripts/personal/build-personal-dict.py \
 
 中文候选还会经过质量过滤：排除 `第?[〇零一二三四五六七八九十百千万两]+` 及常见量词组合（同时识别约数前缀/后缀）；排除能完全由主词库至少两个 2 字及以上词组成的候选，以及由主词库词加一个边缘单字组成的候选。分词时仅在内存保留左右最多 15 字的连续汉字上下文；某个词至少 80% 的分词出现都嵌在同一个更长候选或主词库词中时，按碎片排除。不同长词的包含次数不会相加；有足够独立用例的词保留。过滤、大小写合并和频次门槛均先于总上限截取。
 
-产出：
+产出共 6 个个人层文件：
 
-- `roarkt_personal.dict.yaml`：导入 `roarkt_zh` 并补充中文，沿用 `roarkt_zh` userdb。
-- `roarkt_personal_en.dict.yaml` 及同名 schema：导入 `roarkt_en` 并补充英文，沿用 `roarkt_en` userdb；额外 schema 只用作编译依赖。
-- `roarkt_personal.patch.yaml`：只挂载个人中英文词典及编译依赖。设置生成的两份 custom 通过 `patch` 下的 `__include: roarkt_personal.patch:/patch?` 可选引用它，文件不存在时正常部署。脚本从不读取、修改或备份两份 custom；手写 custom 也保持原样，需由其所有者自行加入同样的可选引用。重复执行内容相同则不写文件。
+- `roarkt_personal.dict.yaml`：只包含可编码的个人中文词，每行写显式拼音；不导入或替换主词库。
+- `roarkt_personal_en.dict.yaml`：只包含个人英文词，显式小写字母编码；不导入主英文词库。
+- `roarkt_personal.schema.yaml`、`roarkt_personal_flypy.schema.yaml`、`roarkt_personal_en.schema.yaml`：编译依赖。中文全拼/双拼各有独立 prism，分别引用对应工厂方案的 speller；不是新增用户输入源。
+- `roarkt_personal.patch.yaml`：`pinyin` / `flypy` 两节仅追加 `engine/translators`、编译依赖和个人 translator 配置。主 `translator/dictionary: roarkt_zh`、`english/dictionary: roarkt_en` 及其学习设置保持原样。个人中文使用 `script_translator@personal_zh`，英文使用 `table_translator@personal_en`；初始质量 0.1，禁用个人层造句、补全与 userdb。某语言没有可用词时不挂载该语言的 translator/依赖，避免部署空词库。
+
+中文编码递归读取 `roarkt_zh` 的词表及逐字读音：先取整词最高频显式读音；否则组合逐字最高频读音。简体词/字在表中没有读音时，用系统 ICU `Hans-Hant` 查对应繁体字形。预置词频和百分比权重纳入读音选择。无法得到完整拼音的候选丢弃，摘要输出 `unencoded_chinese`，不写空编码列。
+
+设置生成的两份 custom 分别引用 `roarkt_personal.patch:/pinyin?` / `roarkt_personal.patch:/flypy?`，不存在个人文件时正常部署。更新到本实现后需由设置所有者重新生成 custom；旧的 `/patch?` 引用不会挂载本文件。个人脚本从不读取、修改或备份 custom；手写 custom 由其所有者采用对应引用。重复生成内容相同则不写文件。
 
 设置同步与个人脚本各自管理自己的文件：设置重写 custom 不影响个人词典，个人脚本回滚也不撤销设置变更。已用真实 librime 验证缺失引用、加入词表、重写设置后继续命中个人词，以及回滚删除个人 patch 后恢复工厂词典。个人层文件没有生成标记时拒绝覆盖。
 
-成功写入会输出 `backup_id`。回滚只恢复这 4 个个人层文件，且要求它们仍与本次生成内容相同；有后续手改则拒绝覆盖：
+成功写入会输出 `backup_id`。回滚只恢复这 6 个个人层文件，且要求它们仍与本次生成内容相同；有后续手改则拒绝覆盖：
 
 ```sh
 python3 scripts/personal/build-personal-dict.py \
@@ -46,7 +51,7 @@ python3 scripts/personal/build-personal-dict.py \
 
 **主词库全简体后执行**：等待 SPEC-011 D / W-6 合并并部署全简体主词库，再由 Claude 在授权的离线窗口处理用户 userdb。本次开发仅用临时数据库验证，不提前操作真实学习数据。
 
-只处理当前 `roarkt_zh.userdb`，不搜索或读取任何旧产品数据。备份整个指定 Rime 目录（排除备份目录自身及脚本锁），保存到 `roarkt-backups/<UTC时间>-simplified/original/`，不覆盖已有备份。禁止在线迁移；脚本通过独立进程持有 LevelDB POSIX 锁，并检测备份及发布前数据库是否变化。
+只处理当前 `roarkt_zh.userdb`，不搜索或读取任何旧产品数据。备份指定 Rime 目录的用户数据（排除备份目录自身、脚本锁及顶层真实 `logs/` 目录），保存到 `roarkt-backups/<UTC时间>-simplified/original/`，不覆盖已有备份。日志目录内的 librime 符号链接随日志一起排除，不读取、不复制也不修改。若 `logs` 本身是符号链接，或其他目录含非常规成员，仍拒绝；不会泛化为允许符号链接。禁止在线迁移；脚本通过独立进程持有 LevelDB POSIX 锁，并检测备份及发布前数据库是否变化。
 
 ```sh
 scripts/personal/migrate-userdb-simplified.sh \
@@ -69,13 +74,14 @@ scripts/personal/migrate-userdb-simplified.sh \
 
 ## 复现临时目录测试
 
-无需准备 OpenCC。直接运行：
+无需准备 OpenCC。真实部署回归必须使用本 worktree 的完整构建产物，先运行：
 
 ```sh
+scripts/build.sh
 swift test --filter personalScriptsInTemporaryDirectories
 scripts/test.sh
 ```
 
-测试使用真实 librime 与系统 ICU，缺少编译工具或 librime 时失败，不跳过迁移检查。测试经 `RoarkTPersonalScriptsTests` 注册在 Package.swift，统一测试入口可运行。
+测试使用 `scripts/build.sh` 产物内的真实 SharedSupport、librime 与系统 ICU，缺少产物或工具时失败，不跳过。临时 profile 对照验证主中英文 table 尺寸及字节一致、无 Encode failure、常用词首选不变、个人中英文可查到，并覆盖仅英文/空个人层。测试经 `RoarkTPersonalScriptsTests` 注册在 Package.swift，统一测试入口可运行。
 
 测试入口先调用实际 `RimeSettingsPatchWriter` 生成默认及修改后的设置文件，再将私有 fixture 路径交给 Python 检查；完整 `checks.py` 是内部子进程，不单独运行。
