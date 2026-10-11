@@ -288,24 +288,6 @@ struct ScreenshotEditorView: View {
     }
 }
 
-/// Geometry shared by the prototype's move/resize gestures and floating overlays.
-enum ScreenshotHandle: CaseIterable {
-    case topLeft, top, topRight, right, bottomRight, bottom, bottomLeft, left
-    var title: String {
-        switch self {
-        case .topLeft: "左上"; case .top: "上"; case .topRight: "右上"; case .right: "右"
-        case .bottomRight: "右下"; case .bottom: "下"; case .bottomLeft: "左下"; case .left: "左"
-        }
-    }
-    var movesLeft: Bool { [.topLeft, .bottomLeft, .left].contains(self) }
-    var movesRight: Bool { [.topRight, .bottomRight, .right].contains(self) }
-    var movesTop: Bool { [.topLeft, .top, .topRight].contains(self) }
-    var movesBottom: Bool { [.bottomLeft, .bottom, .bottomRight].contains(self) }
-    func point(in rect: CGRect) -> CGPoint {
-        CGPoint(x: movesLeft ? rect.minX : movesRight ? rect.maxX : rect.midX,
-                y: movesTop ? rect.minY : movesBottom ? rect.maxY : rect.midY)
-    }
-}
 enum ScreenshotPlacement {
     static func toolbarCenter(for rect: CGRect) -> CGPoint {
         let width = Tokens.Screenshot.toolbarWidth, height = Tokens.Screenshot.toolbarHeight
