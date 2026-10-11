@@ -29,7 +29,7 @@
 
 | # | 任务 | 执行 | 状态 |
 | --- | --- | --- | --- |
-| V1 | VoiceWorker 迁移、构建脚本、签名、`scripts/build.sh` 集成 | pi-ime | 未开始 |
+| V1 | VoiceWorker 迁移、构建脚本、签名、`scripts/build.sh` 集成 | pi-ime | 完成（待验收） |
 | V2 | 模型存储与下载（B2、B3），设置 → 语音 分区接线 | pi-ime | 未开始 |
 | V3 | Fn 按住录音、worker 客户端、HUD 控制、ticket 填入（B1、B4） | pi-ime | 未开始 |
 | V4 | 自动准备（B5）、AI 润色（B6） | pi-ime | 未开始 |
@@ -49,5 +49,7 @@
 | `scripts/test.sh`、`scripts/build.sh` | 命令 | 未运行 | |
 
 ## 进度
+
+- V1：固定版本 MLX 独立包、双向签名 XPC 协议、内存音频、取消退出进程；构建脚本嵌入 XPC helper/Metal 资源、补主 App 麦克风声明与 entitlement。`scripts/test.sh` 通过（66 测试与 Rime 部署）；worker 首次构建正在运行，最终构建/签名结果在验收表补齐。未进行真实模型与权限验收。
 
 ## 问题
