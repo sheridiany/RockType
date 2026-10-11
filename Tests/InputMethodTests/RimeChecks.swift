@@ -284,6 +284,60 @@ struct RimeChecks {
       require(api.delete_candidate_on_current_page(session, rank % 5), "forget learned word")
       refresh()
       print("forget action passed: \(args[4])")
+    case "lifecycle-regression":
+      let raw = args[4] == "roarkt_flypy" ? "ykwfuu" : "yingwenshu"
+      let suffix = args[4] == "roarkt_flypy" ? "uu" : "shu"
+      func stageAI() {
+        for key in ["raw", "source", "identity", "scope"] {
+          api.set_property(session, "roarkt_panel_commit_" + key, property("roarkt_ai_" + key))
+        }
+        api.set_property(session, "roarkt_panel_commit_ai", "1")
+        api.set_property(session, "roarkt_panel_commit_text", "obsolete synthetic AI")
+      }
+      func rejectStagedAI() {
+        _ = api.simulate_key_sequence(session, "{F20}")
+        require(property("roarkt_panel_committed") != "1", "stale AI must not commit")
+        var commit = RimeCommit.rimeStructInit()
+        let committed = api.get_commit(session, &commit)
+        if committed { _ = api.free_commit(&commit) }
+        require(!committed, "rejection must not insert any text")
+      }
+      input(raw)
+      stageAI()
+      require(api.change_page(session, false), "page down")
+      refresh()
+      rejectStagedAI()
+      require(api.change_page(session, true), "page up")
+      refresh()
+      stageAI()
+      _ = api.process_key(session, Int32(Character("a").asciiValue!), 0)
+      refresh()
+      rejectStagedAI()
+      input(raw)
+      stageAI()
+      api.clear_composition(session) // Same engine boundary as an ended/deactivated composition.
+      refresh()
+      rejectStagedAI()
+      for shift: Int32 in [0xffe1, 0xffe2] {
+        input(raw)
+        guard let rank = find("英文") else { fatalError("missing confirmed prefix") }
+        require(api.select_candidate_on_current_page(session, rank % 5), "confirm prefix")
+        refresh()
+        stageAI()
+        _ = api.process_key(session, shift, 1)
+        // Both translation and AI snapshots are read between Shift press and release.
+        for _ in 0..<3 { refresh() }
+        _ = api.process_key(session, shift, 1 << 30)
+        require(api.get_option(session, "ascii_mode"), "Shift still enters persistent English")
+        consume("英文" + suffix) // commit_code, not candidate/AI output.
+        refresh()
+        rejectStagedAI()
+        _ = api.process_key(session, shift, 1)
+        refresh()
+        _ = api.process_key(session, shift, 1 << 30)
+        require(!api.get_option(session, "ascii_mode"), "Shift returns to Chinese after AI invalidation")
+      }
+      print("Lifecycle/page/input/Shift commit_code and stale AI regression passed: \(args[4])")
     case "input-ai":
       let raw = args[4] == "roarkt_flypy" ? "ykwfuu" : "yingwenshu"
       let suffix = args[4] == "roarkt_flypy" ? "uu" : "shu"

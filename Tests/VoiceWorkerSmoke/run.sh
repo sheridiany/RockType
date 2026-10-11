@@ -10,7 +10,7 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Helpers" "$app/Contents/XPCService
 ditto dist/RoarkTVoiceWorker.xpc "$app/Contents/Helpers/RoarkTVoiceWorker.xpc"
 ln -s ../Helpers/RoarkTVoiceWorker.xpc "$app/Contents/XPCServices/RoarkTVoiceWorker.xpc"
 cp App/Info.plist "$app/Contents/Info.plist"
-swiftc -swift-version 6 -target arm64-apple-macos14.0 Core/Identifiers.swift App/Features/Voice/VoiceWorkerProtocol.swift \
+swiftc -swift-version 6 -target arm64-apple-macos14.0 Core/Identifiers.swift Shared/VoiceWorkerProtocol/VoiceWorkerProtocol.swift \
   Tests/VoiceWorkerSmoke/main.swift Tests/VoiceWorkerSmoke/Evaluation.swift -o "$app/Contents/MacOS/RockType"
 codesign --force --options runtime --timestamp=none --sign "$identity" "$app"
 codesign --verify --strict --deep "$app"

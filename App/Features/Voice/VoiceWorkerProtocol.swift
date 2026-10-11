@@ -1,1 +1,1 @@
-../../../Services/VoiceWorker/Sources/RoarkTVoiceWorker/VoiceWorkerProtocol.swift
+../../../Shared/VoiceWorkerProtocol/VoiceWorkerProtocol.swift

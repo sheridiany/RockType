@@ -84,6 +84,10 @@
 		D51C00010000000000000002 /* InputMethodPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = D51C00020000000000000002 /* InputMethodPreferences.swift */; };
 		D51C00010000000000000003 /* Shortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = D51C00020000000000000003 /* Shortcuts.swift */; };
 		D51C00010000000000000004 /* RoarkTInputSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = D51C00020000000000000004 /* RoarkTInputSettings.swift */; };
+		9FA9F29568F84C959911AA64 /* SquirrelInputController+Events.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7378699B38B34207865D8099 /* SquirrelInputController+Events.swift */; };
+		C4030264C00F463181C0386A /* SquirrelInputController+Candidates.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9CAA4C1AC404C31B394A8CE /* SquirrelInputController+Candidates.swift */; };
+		F369221DEBC84720B0DEC8E1 /* SquirrelInputController+Translation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93CD18C07F1C460985361A1D /* SquirrelInputController+Translation.swift */; };
+		61153284665F4885AE116426 /* SquirrelView+Geometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 778F2E8EBDF148F0BDC6C3C3 /* SquirrelView+Geometry.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -265,6 +269,10 @@
 		D51C00020000000000000002 /* InputMethodPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = InputMethodPreferences.swift; path = ../Core/Settings/InputMethodPreferences.swift; sourceTree = SOURCE_ROOT; };
 		D51C00020000000000000003 /* Shortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Shortcuts.swift; path = ../Core/Shortcuts.swift; sourceTree = SOURCE_ROOT; };
 		D51C00020000000000000004 /* RoarkTInputSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RoarkTInputSettings.swift; path = sources/RoarkTInputSettings.swift; sourceTree = SOURCE_ROOT; };
+		7378699B38B34207865D8099 /* SquirrelInputController+Events.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "SquirrelInputController+Events.swift"; path = "sources/SquirrelInputController+Events.swift"; sourceTree = "<group>"; };
+		C9CAA4C1AC404C31B394A8CE /* SquirrelInputController+Candidates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "SquirrelInputController+Candidates.swift"; path = "sources/SquirrelInputController+Candidates.swift"; sourceTree = "<group>"; };
+		93CD18C07F1C460985361A1D /* SquirrelInputController+Translation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "SquirrelInputController+Translation.swift"; path = "sources/SquirrelInputController+Translation.swift"; sourceTree = "<group>"; };
+		778F2E8EBDF148F0BDC6C3C3 /* SquirrelView+Geometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "SquirrelView+Geometry.swift"; path = "sources/SquirrelView+Geometry.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -289,6 +297,10 @@
                 C10A00022F20000100A00012 /* VoiceCommitTicket.swift */,
                 C10A00022F20000100A00011 /* RoarkTVoiceServer.swift */,
 				B38E9B942BEAFEFD0036ABEF /* SquirrelInputController.swift */,
+				7378699B38B34207865D8099 /* SquirrelInputController+Events.swift */,
+				C9CAA4C1AC404C31B394A8CE /* SquirrelInputController+Candidates.swift */,
+				93CD18C07F1C460985361A1D /* SquirrelInputController+Translation.swift */,
+				778F2E8EBDF148F0BDC6C3C3 /* SquirrelView+Geometry.swift */,
 				C10A00022F20000100A00001 /* RoarkTTranslationClient.swift */,
 				C10A00022F20000100A00003 /* RoarkTProcessTrust.swift */,
 				C10A00022F20000100A00006 /* DynamicTranslationProtocol.swift */,
@@ -560,6 +572,10 @@
 				B39771232BECEA150093A49B /* MacOSKeyCodes.swift in Sources */,
 				B39771292BEDAF4A0093A49B /* SquirrelView.swift in Sources */,
 				B38E9B952BEAFEFD0036ABEF /* SquirrelInputController.swift in Sources */,
+				9FA9F29568F84C959911AA64 /* SquirrelInputController+Events.swift in Sources */,
+				C4030264C00F463181C0386A /* SquirrelInputController+Candidates.swift in Sources */,
+				F369221DEBC84720B0DEC8E1 /* SquirrelInputController+Translation.swift in Sources */,
+				61153284665F4885AE116426 /* SquirrelView+Geometry.swift in Sources */,
 				C10A00012F20000100A00001 /* RoarkTTranslationClient.swift in Sources */,
 				C10A00012F20000100A00003 /* RoarkTProcessTrust.swift in Sources */,
 				C10A00012F20000100A00006 /* DynamicTranslationProtocol.swift in Sources */,
