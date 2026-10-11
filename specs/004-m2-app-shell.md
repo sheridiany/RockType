@@ -32,7 +32,9 @@
 | S3 | 权限中心与全局快捷键接线 | pi-platform | S1 的 Settings 模型 | 完成（待验收） |
 | S4 | 首次引导与输入法“设置”入口 | pi-ime | S1 的 Settings 模型 | 未开始 |
 | S4 | 首次引导与输入法“设置”入口 | pi-ime | S1 的 Settings 模型 | 完成（待验收） |
-| S5 | 集成验收 | Claude（代码集成：agent/ui） | S1–S4 | 集成完成（待验收） |
+| S5 | 集成验收 | Claude（代码集成：agent/ui） | S1–S4 | 已验收并合并 |
+| S5-F1 | 设置侧栏鼠标/键盘焦点一致性 | agent/ui | S5 | 完成（待验收） |
+| S5-F2 | 输入法偏好同步与 Rime patch 部署 | agent/ui | S5 | 完成（待验收） |
 
 ### S1（pi-xpc，分支 agent/xpc）
 
@@ -122,11 +124,33 @@ Settings 模型已提交：f87c60a。`Core/Settings/AppSettings.swift` 为公共
 
 ## 问题
 
+### S5 验收后：输入法偏好同步（agent/ui）
+
+- **实现完成（待 Claude 验收）**。S5 集成本身已由 Claude 验收合并；本次仅交付两项后续修复，不将输入法真实交互标为验收通过。
+- 本次按 Claude 明确决定，使用 `com.roarkist.roarkt.settingsChanged` 与 `com.roarkist.roarkt.redeployRime` 两个无内容分布式通知，作为本设置同步链路对 XPC-only 约定的明确例外。名称在新增 Core/Settings 文件中从 `Identifiers.appBundleID` 派生；通知的 object/userInfo 均为空，接收方忽略外部载荷，仅重读固定的本地文件。翻译/语音服务通信仍使用原有 XPC。
+- SettingsStore 仅在 settings.json 成功持久化后生成配置并发通知；写入失败不通知。运行中的输入法会合并连续通知，在后台读取/解析 input、translation 字段；启动时也读取，不解析 AI、语音或模板字段。文件缺失、损坏、过大或 schema 不支持时回落默认值，无创建、备份或修复写入。Core 的 AppSettings、Shortcuts 与只读投影直接编译进输入法工程，未改变已有模型字段语义，没有 GPL 实现回流到 MIT 目录。
+- 候选翻译开关同时控制请求、译文栏和 Tab/点击上屏；关闭时取消任务并使旧结果失效。Shift 切换与模式提示消费实时设置。默认方案通过 JSON 同步，当前 Rime 组词结束后应用；用户显式在系统菜单选择全拼/双拼时优先，不程序化 enable/select 系统输入源。
+- 主 App 生成 `~/Library/Rime/roarkt.custom.yaml`、`roarkt_flypy.custom.yaml`，只含带固定生成标记的 patch。控制模糊音、全拼简拼/纠错、Shift 与英文补全；通过原规则位置的恒等替换停用可选规则，不复制小鹤 GPL 编码规则。任一目标无生成标记或为符号链接/非普通文件时，预检不改动两个目标，并在输入法设置页提示和提供重试。标记必须位于文件头，用户文件正文碰巧包含标记不视为授权覆盖。
+- 内容未变化不触发重新部署。生成文件先写完整暂存文件，再原子发布；每次更新保证整数秒修改时间递增，避免 librime 的秒级时间戳比较漏掉快速关闭→开启。真实部署测试曾捕获此漏更新，修复后默认→关闭→恢复默认三轮部署通过。
+- 输入法收到重新部署通知后，等待所有已跟踪控制器的实际 Rime 输入缓冲为空，再释放旧会话并调用既有部署入口；文件读取、解析、等待部署不在按键回调中执行。当前组词不会为应用设置而被强制提交或丢弃。真实多应用组词与部署后恢复仍需人工验证。
+- 界面已移除“尚未同步”说明。**保留的阶段边界**：翻译偏好会读取，但候选仍遵守现有离线中英自动方向；候选 AI、指定目标语言与划词/截图翻译未在本任务实现，界面明确说明即将推出。当前输入法仍保持简体输出；`simplifiedChinese` 没有新增可切换入口。未改动语音源文件或语音协议。
+
+| 验证 | 结果 | 证据与范围 |
+| --- | --- | --- |
+| `scripts/test.sh` | 通过 | 19 个 XCTest + 78 个 Swift Testing 测试，Rime 新鲜部署与标识检查通过；日志 `/tmp/roarkt-followup-sync-tests.log`。新增测试覆盖只读默认/损坏回落、忽略非输入法字段、patch 生成、用户文件/符号链接不覆盖、幂等写入、保存后通知、失败不通知、冲突提示及恢复。 |
+| 真实 librime patch 部署 | 通过 | `RimeSettingsDeploymentTests` 在独立临时目录部署默认→关闭全部可选项→恢复默认，检查编译后的两种方案、Shift/英文补全及小鹤编码规则完整性；包含于全量测试，不修改用户 Rime 目录。 |
+| `scripts/build.sh` | 通过 | 最终主 App、翻译服务、输入法和注册工具全部构建、签名验证通过；日志 `/tmp/roarkt-followup-build.log`。沿用 `dist → .build/dist.noindex`，未手动更改该链接。 |
+| Gallery / 焦点回归 | 通过（自查） | F1 的 208 张 Gallery PNG 与修改前逐文件 SHA-256 相同；原生窗口鼠标点选后无侧栏残留焦点，Tab 后焦点与选中项一致。相关源与截图在 `dist/followup-focus/`。 |
+| 同步冲突界面 | 通过（自查） | 两个 custom 文件冲突提示与重试入口，浅深色合成配置截图检查通过；`dist/followup-sync/`。 |
+| `git diff --check` | 通过 | 无空白错误；改动限于本次允许目录和规格。 |
+
+**待人工验证**：安装最终输入法后，在真实组词过程中修改偏好，确认通知接收、译文请求取消/隐藏、Tab 不提交旧译文、组词结束后部署与下次输入恢复；默认方案与系统输入源选择优先级；真实全拼/双拼模糊音、简拼、纠错、英文补全及 Shift/模式提示；VoiceOver、macOS 14 真机。自动化没有向用户运行中的输入法发送通知或改写用户 Rime 文件，不宣称跨进程真实按键验收通过。
+
 ### S5 验收后：设置侧栏焦点（agent/ui）
 
 - **已修复（待 Claude 验收）**：侧栏原先分别管理选中项与系统按钮焦点，鼠标选中“截图”后焦点仍停在其他项。现在仅在本设置窗口收到 Tab/Shift-Tab 后显示焦点环，Tab 聚焦同步选中项；鼠标操作清除侧栏焦点，不影响正文表单的键盘导航。没有修改 Gallery 的纯展示视图。
 - 验证：原生 SwiftUI/AppKit 合成配置窗口，发送 Tab → 鼠标点“截图”，修复前断言失败（选中截图，firstResponder 位于另一侧栏行）；修复后浅深色均通过，firstResponder 不再留在侧栏。再发送 Tab，焦点与“通用”选择一致、环可见；两主题截图已检查。临时复现源与截图：`dist/followup-focus/`（不提交，不含用户数据）。当前环境系统窗口截屏接口不可用，采用测试窗口自身的 NSHostingView 绘制截图并检查真实 firstResponder；未宣称系统截图验收。
-- `scripts/test.sh` 通过；`scripts/render-gallery.sh` 通过，208 张 PNG 与修复前逐文件 SHA-256 完全相同。日志 `/tmp/roarkt-followup-focus-tests.log`、`/tmp/roarkt-followup-focus-gallery.log`。完整构建与后续设置同步任务一起验证。VoiceOver 与 macOS 14 真机仍待人工走查。
+- `scripts/test.sh` 通过；`scripts/render-gallery.sh` 通过，208 张 PNG 与修复前逐文件 SHA-256 完全相同。日志 `/tmp/roarkt-followup-focus-tests.log`、`/tmp/roarkt-followup-focus-gallery.log`。`scripts/build.sh` 已随后续设置同步的最终代码通过全产物构建与签名验证。VoiceOver 与 macOS 14 真机仍待人工走查。
 
 - Claude 集成时需在负责输入法的工作树补齐子模块后重跑完整 `scripts/build.sh`；本工作树主 App/翻译服务已签名，不能代替输入法构建验收。
 - 当前 AI Base URL 仅允许 HTTPS（且不允许 userinfo/query/fragment），阻止密钥经明文发送；若产品要支持本机 HTTP 兼容端点，请决定是否只放行 loopback 并另行补充测试。

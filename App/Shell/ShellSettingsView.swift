@@ -9,6 +9,8 @@ struct ShellSettingsView: View {
     let sections: ShellSettingsSections
     let persistenceMessage: String
     let exportDiagnostics: () -> Void
+    var inputMethodSyncMessage: String? = nil
+    var retryInputMethodSync: () -> Void = {}
     @FocusState private var focusedSection: SettingsSection?
     @State private var keyboardNavigation = false
     @State var section: SettingsSection = .general
@@ -132,7 +134,8 @@ struct ShellSettingsView: View {
     }
     private var input: some View {
         Group {
-            Notice(text: "当前只保存偏好，尚未同步到输入法进程。")
+            Notice(text: inputMethodSyncMessage ?? "保存后自动同步到输入法。Rime 配置更改将在当前组词结束后重新部署；默认方案在空闲时应用，仍可从系统输入菜单选择全拼或双拼。")
+            if inputMethodSyncMessage != nil { Button("重试同步", action: retryInputMethodSync) }
             U4Card {
                 Picker("默认方案", selection: $settings.input.scheme) {
                     Text("全拼").tag(InputSettings.Scheme.pinyin)
@@ -165,7 +168,7 @@ struct ShellSettingsView: View {
                 toggle("候选翻译允许使用 AI", $settings.translation.allowCandidateAI)
             }
             U4Card { LanguagePackStepView(model: language) }
-            Notice(text: "动态离线翻译需 macOS 26；候选静态词条按原文精确匹配。划词与截图翻译即将推出。")
+            Notice(text: "动态离线翻译需 macOS 26；候选静态词条按原文精确匹配。候选 AI、指定目标语言以及划词与截图翻译即将推出；当前候选始终使用离线中英互译。")
         }
     }
     private var voice: some View {

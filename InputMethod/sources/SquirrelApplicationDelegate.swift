@@ -21,12 +21,14 @@ final class SquirrelApplicationDelegate: NSObject, NSApplicationDelegate {
   func applicationWillFinishLaunching(_ notification: Notification) {
     panel = SquirrelPanel(position: .zero)
     addObservers()
+    RoarkTInputSettings.shared.start { [weak self] in self?.deploy() }
   }
 
   func applicationWillTerminate(_ notification: Notification) {
     // swiftlint:disable:next notification_center_detachment
     NotificationCenter.default.removeObserver(self)
     panel?.hide()
+    RoarkTInputSettings.shared.stop()
   }
 
   func deploy() {

@@ -5,7 +5,7 @@ import RoarkTCore
 /// The app's single preference owner. Bind directly to `settings`; subscribers see changes immediately.
 @MainActor @Observable
 final class SettingsStore {
-    static let shared = SettingsStore()
+    static let shared = SettingsStore(inputMethodSync: InputMethodSettingsSynchronizer())
     static let didChange = Notification.Name("RoarkTSettingsDidChange")
 
     var settings: AppSettings {
@@ -18,12 +18,15 @@ final class SettingsStore {
     private(set) var loadStatus: SettingsPersistence.LoadStatus?
     /// Only a fixed message; underlying errors can contain paths or configuration contents.
     private(set) var persistenceError: String?
+    private(set) var inputMethodSyncMessage: String?
+    @ObservationIgnored private let inputMethodSync: InputMethodSettingsSynchronizer?
     @ObservationIgnored private var readFailed = false
     @ObservationIgnored private let persistence: SettingsPersistence
     @ObservationIgnored private var pendingSave: Task<Void, Never>?
     @ObservationIgnored private var firstPendingChange: ContinuousClock.Instant?
 
-    init(persistence: SettingsPersistence = SettingsPersistence()) {
+    init(persistence: SettingsPersistence = SettingsPersistence(), inputMethodSync: InputMethodSettingsSynchronizer? = nil) {
+        self.inputMethodSync = inputMethodSync
         self.persistence = persistence
         do {
             let loaded = try persistence.load()
@@ -61,6 +64,7 @@ final class SettingsStore {
         do {
             try persistence.save(settings)
             persistenceError = nil
+            inputMethodSyncMessage = inputMethodSync?.publish(settings)
         } catch {
             persistenceError = "无法保存设置，请检查磁盘空间与文件访问权限。"
         }
