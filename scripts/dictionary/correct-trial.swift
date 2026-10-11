@@ -26,6 +26,7 @@ func simplify(_ text: String, code: String? = nil) -> String {
     }
     return output
 }
+var provenance = ["source\toriginal\tcode\tsimplified"]
 var oldPreset: [String: Double] = [:]
 for line in try read(source + "/essay.txt").split(separator: "\n") {
     let f = line.split(separator: "\t")
@@ -36,6 +37,7 @@ var order: [String] = [], weights: [String: Double] = [:], corrected: [String] =
 for line in luna[1].split(separator: "\n") where !line.hasPrefix("#") {
     let f = line.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
     let word = simplify(f[0], code: f[1]), key = word + "\t" + f[1]
+    provenance.append("luna\t" + f[0] + "\t" + f[1] + "\t" + word)
     let raw = f.count > 2 ? f[2] : ""
     let weight = raw.isEmpty || raw.hasSuffix("%") ? oldPreset[f[0], default: 0] * (raw.isEmpty ? 1 : Double(raw.dropLast())! / 100) : Double(raw)!
     if weights[key] == nil { order.append(key) }
@@ -51,10 +53,18 @@ try write("original\tcode\tICU\tcorrected\n" + corrected.joined(separator: "\n")
 var preset: [String: Double] = [:]
 for line in try read(trial + "/Rime/essay.txt").split(separator: "\n") {
     let f = line.split(separator: "\t")
-    if f.count == 2 { let key = simplify(String(f[0])); preset[key] = max(preset[key, default: 0], Double(f[1])!) }
+    if f.count == 2 {
+        let key = simplify(String(f[0]))
+        provenance.append("essay-simp\t" + f[0] + "\t\t" + key)
+        preset[key] = max(preset[key, default: 0], Double(f[1])!)
+    }
 }
 if mode == "floor" {
-    for (word, weight) in oldPreset { let key = simplify(word); preset[key] = max(preset[key, default: 0], weight) }
+    for (word, weight) in oldPreset {
+        let key = simplify(word)
+        provenance.append("essay-C\t" + word + "\t\t" + key)
+        preset[key] = max(preset[key, default: 0], weight)
+    }
 }
 try write(preset.keys.sorted().map { $0 + "\t" + String(format: "%.10g", preset[$0]!) }.joined(separator: "\n") + "\n", trial + "/Rime/essay.txt")
 // Resolve inherited weights against the new preset. Missing inherited terms retain
@@ -70,4 +80,5 @@ let rows = ai[1].components(separatedBy: "\n").map { line -> String in
 }
 let aiHeader = ai[0].components(separatedBy: "\n").filter { !$0.hasPrefix("# 100%") && !$0.hasPrefix("# Other 822") }.joined(separator: "\n")
 try write("# Inherit simplified preset frequency when >=800; otherwise authored priority 800.\n" + aiHeader + "...\n" + rows.joined(separator: "\n"), aiPath)
+try write(provenance[0] + "\n" + provenance.dropFirst().sorted().joined(separator: "\n") + "\n", trial + "/origins.tsv")
 print("mode=\(mode) base=\(order.count) corrections=\(corrected.count) preset=\(preset.count)")

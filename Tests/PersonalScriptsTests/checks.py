@@ -131,12 +131,13 @@ class PersonalTests(unittest.TestCase):
         shutil.copy2(ROOT / 'InputMethod/bin/rime_deployer', bin_dir / 'rime_deployer')
         (self.base / 'Frameworks').symlink_to(ROOT / 'InputMethod/lib')
         shared = self.base / 'shared'; shared.mkdir()
-        for name in ['default.yaml', 'key_bindings.yaml', 'punctuation.yaml', 'symbols.yaml', 'pinyin.yaml', 'essay.txt']:
+        for name in ['default.yaml', 'key_bindings.yaml', 'punctuation.yaml', 'symbols.yaml', 'pinyin.yaml']:
             shutil.copy2(ROOT / 'InputMethod/data/plum' / name, shared / name)
-        for path in (ROOT / 'Rime').glob('*.yaml'):
+        for path in (ROOT / 'Rime').iterdir():
+            if path.suffix not in {'.yaml', '.txt', '.gram'}:
+                continue
             shutil.copy2(path, shared / path.name)
         shutil.copytree(ROOT / 'Rime/lua', shared / 'lua')
-        shutil.copytree(ROOT / 'InputMethod/data/opencc', shared / 'opencc')
         for path in self.dicts.iterdir():
             shutil.copy2(path, shared / path.name)
         build = self.base / 'build'; build.mkdir()

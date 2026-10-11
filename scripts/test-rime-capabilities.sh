@@ -12,10 +12,9 @@ trap 'rm -rf "$temporary"' EXIT
 mkdir -p "$temporary/bin" "$temporary/shared" "$temporary/bootstrap" "$temporary/build"
 cp "$runtime/bin/rime_deployer" "$temporary/bin/"
 ln -s "$runtime/lib" "$temporary/Frameworks"
-for resource in default.yaml key_bindings.yaml punctuation.yaml symbols.yaml pinyin.yaml luna_pinyin.dict.yaml essay.txt zh-hant-t-essay-bgw.gram; do
+for resource in default.yaml key_bindings.yaml punctuation.yaml symbols.yaml pinyin.yaml; do
   cp "$runtime/data/plum/$resource" "$temporary/shared/"
 done
-cp -R "$runtime/data/opencc" "$temporary/shared/"
 cp -R "$source_dir/." "$temporary/shared/"
 cp "$source_dir/default.custom.yaml" "$temporary/bootstrap/"
 deploy() {

@@ -2,12 +2,12 @@
 
 - 阶段：打磨 P1（输入法）
 - 覆盖需求：FR-A1、FR-A3、FR-A5、NFR-2
-- 状态：InProgress（已采用校准后的 C；四类自动验收通过，个人层对齐及真实试打待完成）
+- 状态：InProgress（已采用 D 全简体管线；自动验收通过，真实 userdb 迁移及试打待完成）
 
 ## 目标
 
 候选更准、更全：换上词频经过大语料重统计的开源中文词库；补齐 AI / 开发领域词；按用户本人的习惯定制。**产品打包**与**用户个人数据**严格分开：个人词表只写入用户本机 `~/Library/Application Support/RoarkT/Rime`，不进安装包、不进 git。
-候选更准、更全，同时日常与整句首选不得低于旧词库基线。补齐 AI / 开发领域词，按用户本人的习惯定制。**已采用校准后的 C：原词库 + 繁体 AI 术语 + 英文扩充**。日常、整句、开发均保持 A，AI 达到 95%；此前 B 与未校准 C 的结论保留为历史证据，最新结论以“C 校准与采用”节为准。**产品打包**与**用户个人数据**严格分开：个人词表只写入用户本机 `~/Library/Rime`，不进安装包、不进 git。
+候选更准、更全，同时日常与整句首选不低于旧词库基线。**已采用第四轮 D 全简体管线**：ICU 派生主词表、简体 AI、简体 essay 及 bgw 模型，离线裁决异体词形；冻结评测 79/18/30/57，完整 RimeChecks 通过。前面的 C/B 结论均保留为历史证据，最新结果见“W-6 第四轮”。**产品打包**与**用户个人数据**分开：个人词表和学习库只由个人层脚本操作，不进安装包、不进 git；正式切换 D 时需由 pi-platform + Claude 执行 t2s 迁移。
 
 ## 调研结论（2026-10-11）
 
@@ -48,9 +48,9 @@
 | W-1 | 评测集与评测脚本，先跑出现状基线 | pi-ui | 已完成，基线 162/200（81%） |
 | W-2 | 引入白霜词库并调整两套方案，回归 RimeChecks | pi-ui | 白霜已撤回；采用 C 原主词库/原设置，回归通过 |
 | W-3 | AI / 开发中文词库与英文扩充，评测校准权重 | pi-ui | 已完成 C 校准：日常 78、整句 17、开发 29、AI 57，总计 181/200 |
-| W-4 | 个人层脚本：按 C 对齐原学习格式、个人习惯词表（含临时目录测试） | pi-platform | 待负责人与 Claude 对齐 C |
+| W-4 | 个人层脚本：D 采用后的 t2s 学习词迁移、个人习惯词表 | pi-platform | 待负责人与 Claude 执行；本任务未碰真实用户数据 |
 | W-5 | Claude 在本机执行个人层脚本、安装、用户试打 | Claude + 用户 | 未开始 |
-| W-6 | 全简体管线 D：词库、预置词汇、模型、方案与 C/D 冻结评测 | pi-ui | 三轮迭代后停止；评测达标但 RimeChecks 失败，产品保持 C |
+| W-6 | 全简体管线 D：词库、预置词汇、模型、方案与 C/D 冻结评测 | pi-ui | 第四轮完成并采用 D；自动验证通过，真实迁移与试打待 Claude |
 
 **文件所有权**：pi-ui：`Rime/`、`THIRD_PARTY_NOTICES.md`、`LICENSES/`、`scripts/eval-candidates.sh`、`Tests/InputMethodTests/Fixtures/`、评测相关测试；pi-platform：`scripts/personal/`、其测试、`.gitignore` 一行。两人都不改 `InputMethod/sources`（pi-ime 正在恢复 RoType 视觉）。
 
@@ -399,3 +399,60 @@ max 没有评测收益，第三轮保留原要求的 sum，继续使用第一轮
 - 冻结评测 SHA-256 仍为 `7b8d9651974895879a2d11a28325eb2ca86e6e046a2b6c1c345b41ab39d15f96`，原 RimeChecks 断言不变。`git diff --check` 退出0。
 - 试验数据仅在 `.build/dictionary/w6/trials/`，当前 git 树移除了此前大夹具；历史提交未重写，因此 git 历史对象体积未回收。只保留小生成器、来源说明、许可证、评测TSV与能力脚本可选参数。生产 `Rime/`、打包配置均未变。
 - 未运行 D 整包构建、安装、注册、真实键盘试打或个人 userdb 操作。D 若未来采用仍需 pi-platform + Claude 执行 t2s 迁移；当前 C 不执行。
+
+## W-6 第四轮：异体裁决并采用 D（单独授权，2026-10-11）
+
+**结论：D 已通过四类冻结门槛和完整 RimeChecks，采用为生产配置。** 本轮相对第三轮 floor 只做异体权重裁决；模型仍为简体 bgw、搭配长度4/3，主词表同词同编码仍为sum。冻结期望与所有原 RimeChecks 断言不变。
+
+### 任务与实现
+
+| 项 | 状态 | 证据 |
+| --- | --- | --- |
+| 全量扫描异体组、以原始简体 essay 裁决 | 完成 | 753,384条来源记录；1,551个多词形映射组，其中1,445组/1,472对具有共同编码；1,110组有降权判定 |
+| 影响量 | 已核对 | 标记1,123词形；实际973个不同词形发生变化：主表121行、essay973行、AI0行，共1,094行；其余150词形原权重≤1 |
+| 同编码和异体依据 | 完成 | 固定OpenCC词组最长匹配+字符映射；有显式编码时优先使用显式编码，无显式编码才取字表读音交集；不把普通同音词混为一组 |
+| 低频判定 | 固定规则 | 原始essay-simp缺失或≤首选词形频率1%时，上限降到1；保留条目和读音，无评测单题加词 |
+| 生产简体资源 | 完成 | `Rime/roarkt_base.dict.yaml`、派生`essay.txt`、`zh-hans-t-essay-bgw.gram`、简体AI；仅生产需要的大文件提交 |
+| 双方案及打包 | 完成 | 去除simplifier、繁体switch和旧字形Lua；不复制原Luna、繁体gram、OpenCC转换目录；重建SharedSupport避免增量构建残留 |
+| userdb迁移 | 待pi-platform + Claude | **D现已采用，真实繁体学习键必须t2s迁移后安排安装试打。** 本任务未触碰用户数据、未执行个人脚本 |
+
+“鍊條→链条”有上游词组映射依据；原始essay-simp中链条1049、炼条缺失。生产essay中链条保留2071、炼条降至1，原日常同音词保护恢复。
+收尾复核发现“葫芦里卖的什么药”原显式编码含`shen men`，不能用单字自动读音假定与另一词形同编码，已排除此项降权并恢复55；最终计数以上表为准，修正后重新跑完测试、评测与构建。
+完整生成方法、表格摘要、资源及上游SHA-256见 `docs/dictionary-simplification.md`；完整审计只在 `.build/dictionary/w6/trials/r4-variants/variant-audit.tsv`，不把大夹具加回git。
+
+### 冻结 C/D 数据
+
+| 类别 | C | D第四轮 | 门槛 | 结果 |
+| --- | --- | --- | --- | --- |
+| 日常 | 78/80 | **79/80** | ≥78 | 通过 |
+| 整句 | 17/20 | **18/20** | ≥17 | 通过 |
+| 开发 | 29/40 | **30/40** | ≥29 | 通过 |
+| AI | 57/60 | **57/60** | ≥57 | 通过 |
+| 总计 | 181/200 | **184/200** | 四类同时通过 | 通过 |
+
+C原181条命中保持，哪里、算力、前端正确；“联调”评测依旧期望联调并计未命中，首选由第三轮错误的炼条恢复为日常链条。没有改期望迎合词库。`candidate-w6-r4.tsv`保存逐项结果，`candidate-final.tsv`更新为D；C历史结果仍保留。
+冻结集SHA-256仍为 `7b8d9651974895879a2d11a28325eb2ca86e6e046a2b6c1c345b41ab39d15f96`。
+
+### 验收证据与真实退出码
+
+| 实际执行 | 退出码 | 结果/范围 |
+| --- | --- | --- |
+| `scripts/eval-candidates.sh`，第四轮临时资源 | 0 | 79/18/30/57 |
+| `scripts/test-rime-capabilities.sh`，第四轮临时资源 | 0 | 原断言全部通过，全拼/双拼、学习/重启/忘记/共享userdb、并发profile隔离 |
+| 最终生产 `zsh scripts/test.sh` | **0** | 165个Swift测试、完整RimeChecks、部署、AppShell通过；词表完整性检查已改读真实生产简体字表/essay，断言未削弱 |
+| 最终生产 `scripts/eval-candidates.sh Rime …/final-results` | **0** | 仍为184/200；与保存第四轮TSV的cmp为0 |
+| 最终 `zsh scripts/build.sh` | **0** | 所有产物签名构建与语音worker冒烟通过；`build.exit`记录真实退出码 |
+| 最终 `scripts/test-rime.sh --bundle 'dist/RockType Input.app'` | **0** | 使用包内deployer/库部署全拼、双拼和英文；断言无旧Luna、繁体gram及OpenCC数据目录 |
+| 最终包内资源/许可cmp、`codesign --verify --strict --deep` | **均0** | 七项生产资源及相关LICENSE、PROVENANCE、NOTICES与源码一致，签名复核通过 |
+| 包内SharedSupport资源冻结评测与TSV cmp | **均0** | 184/200，逐项与保存的第四轮结果一致 |
+| `git diff --check` | **0** | 无空白错误 |
+
+测试日志 `tests-final.log`、评测 `eval-final.log`、构建 `build.log` 均位于 `.build/dictionary/w6/trials/r4-variants/`。个人脚本包装11项中5项因环境依赖跳过，不能用本次结果宣称真实迁移验收通过。
+
+### 资源许可与人工未完成项
+
+- 主表：Luna派生，LGPL-3.0，原头部完整保留；AI仍为MIT。
+- essay：固定rime-essay-simp + 原essay简化频率下限，再做离线异体裁决，LGPL-3.0；原essay精确历史来源限制仍未关闭。
+- 简体gram：`lotem/rime-octagram-data@f8ce3b534733e489a8470a7c2adf5a154e8ea069`，LGPL-3.0，内容未改。
+- OpenCC固定版本的表仅作离线异体依据，Apache-2.0；转换数据不在产品包中，预编译librime中OpenCC代码的许可仍附带。
+- NOTICES、PROVENANCE与包内许可同步。没有安装、注册、启动输入法或访问真实Rime目录；真实userdb迁移、安装后全拼/双拼试打、用户规模延迟仍待Claude/用户验证。未改`InputMethod/sources`或个人迁移脚本。

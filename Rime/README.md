@@ -1,13 +1,13 @@
 # Rime 方案
 
-RockType 输入方案：`roarkt`（全拼）、`roarkt_flypy`（小鹤双拼）、`roarkt_en`（英文词典，不单独显示）。显示名分别为「RockType」「RockType Shuangpin」。内部方案 ID 与用户词库名保持不变。
+RockType 使用全简体方案 D：`roarkt`（全拼）、`roarkt_flypy`（小鹤双拼），共享 `roarkt_zh` 词库和学习数据。英文词典 `roarkt_en` 不单独显示。
 
-产品采用 SPEC-011 校准后的方案 C：原 `luna_pinyin` 繁体词库、预置八股文词频、八股文模型及 `contextual_suggestions: true`，通过原 `tw2s.json` 过滤链输出简体。两套方案共享中文词库与学习数据；模糊音、简拼、纠错、Shift、英文混输和候选翻译行为沿用原配置。
+`roarkt_base` 从 Luna Pinyin 经系统 ICU Hant-Hans 派生，合并同词同编码权重，并校正语义歧义。`essay.txt` 由固定简体 essay 与原 essay 的简化结果取频率下限；有异体映射依据的同音词形再用原始简体 essay 频率裁决。八股文模型为 `zh-hans-t-essay-bgw`，搭配长度最大4、最小3；保留 `contextual_suggestions: true`。两套方案不再运行简繁转换、不提供繁体开关。包内不含旧 Luna、繁体 gram 或 OpenCC 转换资源。
 
-`roarkt_zh.dict.yaml` 额外导入 MIT 自研 `roarkt_ai`，共 1,067 条繁体术语。104 条显式指定多音字拼音，其余由 Rime 根据原字表编码。245 条已有高频词使用 `100%` 继承原预置词频，其他 822 条使用领域优先级 800，避免低绝对权重覆盖高频旧词。术语表不是用户文件提取结果。学习数据库继续使用原词库的繁体键，不应执行为简体主词库设计的迁移。
+MIT 自研 `roarkt_ai` 包含1,067条简体术语，104条显式拼音；其余用共享字表编码。预置频率≥800时用100%继承，否则使用领域优先级800。英文大小写、短语、模糊音、简拼、纠错、Shift、五候选和候选翻译行为保留。
 
-英文码为小写字母；上屏保留词条大小写与标点，例如 `finetune` → `fine-tune`、`mcp` → `MCP`。英文短语仍可用单引号输入。
+**从 C 采用 D 时，原 `roarkt_zh.userdb` 的繁体学习键需要 t2s 迁移。** 由 pi-platform 的脚本配合 Claude 执行；本次开发没有访问或修改真实用户数据。
 
-`scripts/test-rime.sh` 与 `scripts/test-rime-capabilities.sh` 在临时目录验证部署和输入行为。`scripts/eval-candidates.sh [Rime资源目录] [报告目录]` 使用固定 200 条公开常识样例，输出首选命中率、与冻结基线的差异、部署耗时和 librime 按键刷新 P95；总命中数低于基线时退出 2。四类验收门槛由 `scripts/test.sh` 中的 SPM 测试锁定：日常 ≥78/80、整句 ≥17/20、开发 ≥29/40、AI ≥57/60。数据不来自用户文件，测试不读写真实 `~/Library/Rime`。
+`scripts/test.sh` 在临时目录运行冻结评测及 RimeChecks。门槛保持日常≥78/80、整句≥17/20、开发≥29/40、AI≥57/60；正式第四轮结果为79/18/30/57。真实安装、迁移及键盘体验仍待人工验收。
 
-许可证及上游版本见 [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)。词库资源随独立输入法打包，不链接到主 App。早期白霜试验已撤回，其词表与专用许可证不再打包；历史对照数据保存在测试夹具与 [SPEC-011](../specs/011-dictionary.md)。
+来源、许可和生成命令见 [派生记录](../docs/dictionary-simplification.md)、[第三方声明](../THIRD_PARTY_NOTICES.md) 和 [SPEC-011](../specs/011-dictionary.md)。试验大资源仅在 `.build/`，本目录只放生产资源。

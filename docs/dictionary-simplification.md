@@ -1,6 +1,6 @@
 # W-6 全简体管线试验
 
-最新结果见 SPEC-011 的“三轮迭代”。试验大资源只在 `.build/dictionary/w6/`，git 只保留生成器、许可、文档和评测结果；若最终采用 D，才提交生产资源。旧大夹具已从当前树移除，历史提交未重写。
+最新结果见 SPEC-011 的“W-6 第四轮”：D 已通过冻结评测与完整 RimeChecks并采用。生产必需资源提交在 `Rime/`；试验大资源及审计表只在 `.build/dictionary/w6/`。旧大夹具已从当前树移除，历史提交未重写。下文前三轮结论为历史记录。
 
 ## 来源与许可
 
@@ -53,3 +53,62 @@ done
 - bgc 数据 SHA-256：`c52deb56b1642e4f56a18926fffcb4b70385828f921bfac92c5ff4055cce5377`。
 
 **三轮后停止，产品仍为 C。** 最接近交付的是 `r3-floor`：79/18/30/57，保留 C 的181条原命中；RimeChecks 在“链条→炼条”失败。源 essay 的“鍊條”和“鏈條”各2071，ICU 前者变成“炼条”，后者变成“链条”，两者同频；这是尚未处理的词义歧义，不能把评测达标视为全简体质量已通过。没有继续第四轮校正。`r3-semantics` 总分更高（186），但“现存→显存”仍失败。
+
+## 第四轮（单独授权）：异体裁决与生产 D
+
+第三轮停止结论为历史记录；第四轮评测和完整 RimeChecks 通过后，生产切换为 D。
+本轮只做异体权重裁决，未改模型、grammar 参数、冻结期望或同音词断言。
+
+复现（全程临时资源，不访问用户 profile）：
+
+```sh
+bash scripts/dictionary/prepare-trial.sh r4-variants bgw 4 3 sum
+swift scripts/dictionary/correct-trial.swift .build/dictionary/w6/trials/r4-variants InputMethod/data/plum floor
+swift scripts/dictionary/resolve-variants.swift .build/dictionary/w6/trials/r4-variants \
+  .build/dictionary/w6/upstream/essay-simp/essay-zh-hans.txt \
+  InputMethod/librime/deps/opencc/data/dictionary
+bash scripts/eval-candidates.sh .build/dictionary/w6/trials/r4-variants/Rime .build/dictionary/w6/trials/r4-variants/results
+bash scripts/test-rime-capabilities.sh .build/dictionary/w6/trials/r4-variants/Rime
+```
+
+### 裁决边界
+
+- 第三轮生成器新增本地 `origins.tsv`，记录词条来源、原词形、显式编码（若有）和 ICU/语义校正结果，不改变第三轮生成资源。
+- 以固定 OpenCC `556ed22496d650bd0b13b6c163be9814637970ae` 的 `TSPhrases.txt`（词组最长匹配）和 `TSCharacters.txt`（默认映射）作为异体依据。例如词组表明确给出“鍊條→链条”，不是把所有鍊/鏈语境或所有同音词混合。
+- 同一映射结果内还需有共同编码：有显式读音时以显式读音为准，没有显式读音才使用实际单字表逐字读音交集。没有共享读音不裁决。审计表的 code 是一个共同读音见证，不是宣布该词的唯一/常用读音。
+- 仅使用**未修改**的固定 `rime-essay-simp` 频率选词形；另一词形缺失或频率≤首选的1%时，将其各处现有权重上限设为1（原为0/1的不提高）；没有证据时保留，不按评测单题补丁。保留条目/读音，不删除单字导致其他词无法编码。
+- 新 essay 没有对应频率，或两个词形都常用的组，不强行裁决。OpenCC 表只用于离线证据，生产无转换 filter 或相关数据依赖。
+
+### 全量影响
+
+| 统计项 | 数量 |
+| --- | ---: |
+| 来源记录（含原词形/显式读音，不是去重词数） | 753,384 |
+| 映射后仍含不同 ICU 词形的组 | 1,551 |
+| 有共同读音的组 / 词形对 | 1,445 / 1,472 |
+| 有降权判定的组 | 1,110 |
+| 标记低频词形 | 1,123 |
+| 实际发生权重变化的不同词形 | 973 |
+| 主字词表实际改动行 | 121 |
+| essay 实际改动行 | 973 |
+| AI 表实际改动行 | 0 |
+| 合计改动记录 | 1,094 |
+
+其余150个标记词形原权重已≤1，无实质变化。完整审计表与摘要为本地 `variant-audit.tsv` / `variant-summary.txt`，不放入 git。与第三轮逐行比较证实只改相同词形的权重为1，无删除/增词或编码修改。
+“链条”在 essay-simp 中1049，“炼条”缺失；D 中链条保留2071，炼条由2071降为1。两套方案的原始日常同音词断言均通过。
+
+### 生产文件与许可
+
+生产主表67,549条，派生 essay 438,486条，简体AI 1,067条；只有生产资源进入 `Rime/`，中间资源与审计仍在 `.build/`。
+Xcode 不再复制原 Luna、原 essay 或 OpenCC 数据阶段；打包脚本重建产物 SharedSupport，复制简体字表/essay/gram，防止构建目录残留。OpenCC 作为 librime 预编译依赖的代码许可仍保留，不声称重编译并移除了二进制内的 OpenCC。
+
+| 最终资源 | SHA-256 |
+| --- | --- |
+| `Rime/roarkt_base.dict.yaml` | `dfcd7dcf9c08e28ff4a02e146872398ecdf9e6ff70d2c4d1e75982ac38477e9e` |
+| `Rime/essay.txt` | `21aa427a686fafcfb49c3eb5b12fa70ffc7b3523773a2537b7ebadd8f3d8d281` |
+| `Rime/zh-hans-t-essay-bgw.gram` | `d3cb2438c1fdcd6a855dd6ca8f5c1060a29273c6b64c2c2c69af67cd71b6aa7e` |
+| OpenCC `TSCharacters.txt`（仅离线） | `6b5a0a799bea2bb22c001f635eaa3fc2904310f0c08addbff275477a80ecf09a` |
+| OpenCC `TSPhrases.txt`（仅离线） | `504169029c43f7f234b8e2ae470720af3657675c5574ff8aa0feb257e1dc5ce2` |
+
+Luna/essay 派生数据与简体gram为LGPL-3.0，AI为MIT，异体证据OpenCC为Apache-2.0；许可随输入法包附带。来源精确版本及未关闭的历史来源限制见 NOTICES 和 LICENSES/PROVENANCE.md。
+D 正式采用后真实 userdb 仍需 pi-platform + Claude 执行 t2s 迁移；本任务未操作真实数据。
