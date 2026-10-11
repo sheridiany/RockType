@@ -108,7 +108,7 @@ import RoarkTCore
         })
     center.start()
     #expect(transitions == [true])
-    #expect(registrar.entries.count == 3) // Fn is never registered by HotkeyCenter.
+    #expect(registrar.entries.count == 7) // Fn is never registered by HotkeyCenter.
     center.beginRecording(.screenshot)
     #expect(transitions == [true, false] && center.statuses[.voiceHoldToTalk] == .recording)
     trusted = false; center.refreshPermissions()
@@ -136,4 +136,33 @@ import RoarkTCore
     let count = transitions.count
     trusted = false; center.refreshPermissions(); center.cancelRecording()
     #expect(transitions.count == count)
+}
+
+@MainActor @Test func screenshotGroupShortcutsDefaultsOverridesAndClearingSurviveReload() throws {
+    var settings = ShortcutSettings()
+    let actions: [HotkeyCenter.Action] = [.screenshotHistory, .togglePins, .closePins, .nextPin]
+    // A settings document written before these actions contains none of the new keys.
+    for action in actions { settings.bindings[action.core!] = nil }
+    settings = try JSONDecoder().decode(ShortcutSettings.self, from: JSONEncoder().encode(settings))
+    let registrar = ShellRegistrar()
+    let center = HotkeyCenter(read: { settings }, write: { settings = $0 }, showSettings: {}, registrar: registrar, allowed: { true }, trusted: { true })
+    center.start(); defer { center.stop() }
+    var calls: [HotkeyCenter.Action] = []; center.screenshotGroupAction = { calls.append($0) }
+    for action in actions {
+        let shortcut = try #require(center.shortcut(for: action))
+        let handler = try #require(registrar.handler(shortcut)); handler()
+    }
+    #expect(calls == actions)
+    let defaults = Shortcut.defaults.values.map { "\($0.key ?? "nil"):\($0.modifiers.rawValue)" }
+    #expect(Set(defaults).count == defaults.count)
+    center.set(nil, for: .screenshotHistory)
+    settings = try JSONDecoder().decode(ShortcutSettings.self, from: JSONEncoder().encode(settings))
+    center.retry()
+    #expect(center.shortcut(for: .screenshotHistory) == nil)
+    #expect(center.statuses[.screenshotHistory] == .unassigned)
+    #expect(center.statuses[.togglePins] == .registered)
+    center.set(Shortcut.defaults[.screenshot], for: .nextPin)
+    #expect(center.statuses[.nextPin] == .conflict && center.statuses[.screenshot] == .conflict)
+    center.restoreDefault(for: .nextPin); center.restoreDefault(for: .screenshotHistory)
+    #expect(center.statuses[.nextPin] == .registered && center.statuses[.screenshotHistory] == .registered)
 }

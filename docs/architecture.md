@@ -30,7 +30,7 @@ macOS 26 专属的无界面 `TranslationSession` 通过 availability 隔离；�
 | `Core` | `RoarkTCore` | MIT | 标识符、设置/快捷键、翻译校验、操作会话与路由、AI 客户端、语音模型下载/校验等 Foundation 层能力 |
 | `Platform` | `RoarkTPlatform` | MIT | AX 取词、剪贴板、Vision OCR、截图、钥匙串、权限、全局快捷键、Fn、屏幕坐标、Secure Input |
 | `App` | `RoarkTApp` → `RockType.app` | MIT | `AppDelegate` 组装；`Shell` 外壳；`Features` 真实功能；`DesignSystem` 组件 |
-| `App/Surfaces`、`App/Mock`、`App/Gallery` | `RoarkTApp`，开发代码以 `DEBUG` 隔离 | MIT | Mock/Gallery 与原型视图只在 debug 编译；Surfaces 的正式操作设置和 `ImagePreviewView(session:)` 仍在 release |
+| `App/Surfaces`、`App/Mock`、`App/Gallery` | `RoarkTApp`，开发代码以 `DEBUG` 隔离 | MIT | Mock/Gallery 与原型视图只在 debug 编译；Surfaces 的正式操作设置仍在 release；图片预览直接使用 Features 视图 |
 | `Services/TranslationService` | 根包的 `RoarkTTranslationService` | MIT | 签名鉴权、方法角色限制、翻译/AI 协调、端点登记 |
 | `Services/VoiceWorker` | 独立 SPM 包 → `RoarkTVoiceWorker.xpc` | MIT（第三方依各自许可） | MLX 推理；隔离模型依赖、内存与取消退出 |
 | `InputMethod` | `Squirrel.xcodeproj` → `RockType Input.app` | GPL v3（子模块依各自许可） | Squirrel 修改及 librime/plum；不被 MIT 产品 target import 或链接 |
@@ -39,7 +39,7 @@ macOS 26 专属的无界面 `TranslationSession` 通过 availability 隔离；�
 
 R4-UI 为 Mock/Gallery、依赖样本的原型视图和全部 Gallery 启动入口建立完整 `#if DEBUG` 边界。SPM 仍发现这些源文件，但 release 不编译其中的声明；`scripts/build.sh` 用 `nm` 检查正式 App 没有 Gallery/fixtures 符号。`scripts/render-gallery.sh` 显式构建 debug，开发测试可直接调用同一个 GalleryRenderer。
 
-正式 `SettingsSection` 在 `App/Shell/SettingsSection.swift`；正式 `ImagePreviewView(session:)` 只包装 `ScreenshotPreviewContent`，不初始化样本；`ImagePreviewPrototype` 仅在 debug 使用。设计组件按职责命名于 `DesignPrimitives.swift`，短暂浮窗通知由 `TransientNoticeController` 管理。Features 已包含功能视图与控制器；跨功能无业务组件归 DesignSystem。
+正式 `SettingsSection` 在 `App/Shell/SettingsSection.swift`；正式协调器直接创建 `ScreenshotPreviewContent`，没有 Surfaces 包装器；`ImagePreviewPrototype` 仅在 debug 使用。设计组件按职责命名于 `DesignPrimitives.swift`，短暂浮窗通知由 `TransientNoticeController` 管理。Features 已包含功能视图与控制器；跨功能无业务组件归 DesignSystem。
 
 主 App/服务没有 InputMethod 源码或 librime 链接依赖。输入法 Xcode target 当前直接编译部分 MIT 源文件：Identifiers、Settings/Shortcuts、翻译值协议、VoiceCommitTicket/VoiceInsertionPolicy。此事实与 AGENTS“共享只能通过协议声明”的字面范围尚需主控对齐，见审计 A06；不授权把任何 GPL 实现搬到 MIT 目录。进程间请求仍只能用 XPC。
 
@@ -98,6 +98,7 @@ Swift 唯一来源为 `Core/Identifiers.swift`；ObjC 镜像为 `Shared/XPCProto
 | 语音 worker | `com.roarkist.roarkt.voice` |
 | 输入法语音填入端点标识 | `com.roarkist.inputmethod.RoarkT.dictation` |
 | 设置目录 | `~/Library/Application Support/RoarkT/` |
+| 可选截图历史 | `~/Library/Application Support/RockType/ScreenshotHistory/`，由 `Identifiers.screenshotHistoryDirectory(home:)` 生成；默认关闭 |
 | 钥匙串服务名 | `com.roarkist.roarkt.ai` |
 | Rime 方案 ID | `roarkt`（全拼）、`roarkt_flypy`、`roarkt_en` |
 | Rime 用户目录 | `~/Library/Application Support/RoarkT/Rime`，由 `Identifiers.rimeUserDirectory(home:)` 生成 |
@@ -122,6 +123,10 @@ Swift 唯一来源为 `Core/Identifiers.swift`；ObjC 镜像为 `Shared/XPCProto
 | 截图 | `⌃1` |
 | 翻译选区 | `⌃⌥T` |
 | 总结选区 | `⌃⌥S` |
+| 截图历史 | `⌃⌥H` |
+| 隐藏／显示全部贴图 | `⌃⌥P` |
+| 关闭全部贴图 | `⌃⌥X` |
+| 下一张贴图 | `⌃⌥N` |
 | 中英切换 | 轻按 Shift（输入法内） |
 | 译文上屏 | Tab（输入法内） |
 | 输入法内 AI | `⌥Tab` 循环改写 → 润色 → 翻译；需在设置中启用，可改键 |

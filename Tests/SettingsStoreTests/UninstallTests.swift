@@ -9,9 +9,14 @@ import RoarkTCore
     defer { try? fm.removeItem(at: home) }
     let appData = home.appendingPathComponent("Library/Application Support/" + Identifiers.applicationSupportFolder)
     try fm.createDirectory(at: appData.appendingPathComponent("VoiceModels"), withIntermediateDirectories: true)
-    // The display name is RockType, but a same-named folder is not ours and must survive.
+    // Only the explicitly owned screenshot archive is removable inside this folder.
     let displayNamed = home.appendingPathComponent("Library/Application Support/RockType")
     try fm.createDirectory(at: displayNamed, withIntermediateDirectories: true)
+    let screenshots = Identifiers.screenshotHistoryDirectory(home: home)
+    try fm.createDirectory(at: screenshots, withIntermediateDirectories: true)
+    try Data("synthetic archive".utf8).write(to: screenshots.appendingPathComponent("index.json"))
+    let unrelated = displayNamed.appendingPathComponent("unrelated.txt")
+    try Data("preserve".utf8).write(to: unrelated)
     let privateRime = Identifiers.rimeUserDirectory(home: home)
     let otherRime = home.appendingPathComponent("Library/Rime")
     for directory in [privateRime, otherRime] {
@@ -21,6 +26,8 @@ import RoarkTCore
         }
     }
     try UninstallData.remove(in: home)
+    #expect(!fm.fileExists(atPath: screenshots.path))
+    #expect(try Data(contentsOf: unrelated) == Data("preserve".utf8))
     #expect(!fm.fileExists(atPath: appData.path))
     #expect(!fm.fileExists(atPath: privateRime.path))
     #expect(fm.fileExists(atPath: displayNamed.path), "The display name must not change internal data ownership")
@@ -38,7 +45,7 @@ import RoarkTCore
     try fm.createDirectory(at: target.appendingPathComponent("Rime"), withIntermediateDirectories: true)
     let file = target.appendingPathComponent("Rime/roarkt.schema.yaml")
     try Data("keep".utf8).write(to: file)
-    for name in ["Library/Application Support", "Library/Application Support/" + Identifiers.applicationSupportFolder] {
+    for name in ["Library/Application Support", "Library/Application Support/" + Identifiers.applicationSupportFolder, "Library/Application Support/RockType", "Library/Application Support/RockType/ScreenshotHistory"] {
         let home = root.appendingPathComponent(UUID().uuidString)
         let link = home.appendingPathComponent(name)
         try fm.createDirectory(at: link.deletingLastPathComponent(), withIntermediateDirectories: true)

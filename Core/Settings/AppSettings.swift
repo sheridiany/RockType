@@ -114,6 +114,9 @@ public struct ScreenshotSettings: Codable, Equatable, Sendable {
     public var roundedCorners: Bool? = nil
     /// nil retains 10 recent closed pins; zero disables retention. Images never persist to disk.
     public var pinHistoryLimit: Int? = nil
+    public var historyOnDisk: Bool? = nil
+    public var historyDiskCount: Int? = nil
+    public var historyDiskDays: Int? = nil
     public init() {}
 }
 
@@ -158,12 +161,14 @@ public struct ShortcutSettings: Codable, Equatable, Sendable {
     /// No default until the IME AI gesture is decided in M6.
     public var inputMethodAI: Shortcut? = nil
     public var showSettings: Shortcut? = nil
+    /// Missing means new group actions use defaults; true allows an explicitly cleared binding.
+    public var screenshotGroupDefaultsApplied: Bool? = nil
     public init() {}
 }
 
 public struct PrivacySettings: Codable, Equatable, Sendable {
     public var keepRecentResultsInMemory = true
-    // Disk history, continuous clipboard monitoring and bypassing Secure Input are not supported.
+    // This controls text results only; screenshot disk history has a separate explicit opt-in.
     public init() {}
 }
 

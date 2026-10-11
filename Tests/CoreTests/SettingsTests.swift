@@ -34,3 +34,10 @@ import Testing
     #expect(try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(settings)) == settings)
     #expect(AppSettings.defaults.templates == OperationTemplate.defaults)
 }
+
+@Test func screenshotHistoryMissingFieldsStayOffAndOptInRoundTrips() throws {
+    var settings = try JSONDecoder().decode(ScreenshotSettings.self, from: Data(#"{"format":"png","ocrLanguages":["en-US"]}"#.utf8))
+    #expect(settings.historyOnDisk == nil && settings.historyDiskCount == nil && settings.historyDiskDays == nil)
+    settings.historyOnDisk = true; settings.historyDiskCount = 35; settings.historyDiskDays = 14
+    #expect(try JSONDecoder().decode(ScreenshotSettings.self, from: JSONEncoder().encode(settings)) == settings)
+}

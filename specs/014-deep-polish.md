@@ -56,6 +56,7 @@
 | R2-ARCH | 架构整理：`App/Mock`、`App/Gallery` 移出正式 App 目标（或仅 DEBUG）；`App/Surfaces` 与 `App/Features` 职责划分（视图 vs 控制器）；死代码清理；`docs/architecture.md` 同步；不改行为 | pi-ime | 第一阶段完成：全仓审计、IME/语音等价整理与架构同步；测试/构建通过；Gallery/Mock 隔离留后续，见 [证据](evidence/014-R2-ARCH.md) |
 | R3-UI | 截图设置覆盖、完整快捷键速查、关于页版本/更新/许可证、菜单栏新功能入口 | pi-ui | 实现、测试/构建与离屏检查通过；待人工验收，见 [证据](evidence/014-R3-UI.md) |
 | R3-SURF | 覆盖式图片翻译（整图批量路由、译图切换/复制/保存/贴图）、本机二维码/条码识别与链接确认、贴图共用入口；[证据](evidence/014-R3-SURF.md) | pi-surfaces | 已实现，测试/构建通过；待人工验收 |
+| R4-SURF | 截图历史（内存 20 张、本机 OCR 搜索、可选磁盘数量/天数限制与卸载清理）、贴图群组/快捷键、A04 正式预览去包装；[证据](evidence/014-R4-SURF.md) | pi-surfaces | 实现、完整测试/签名构建与离屏验证通过；待人工验收 |
 | R4-UI | 架构 A02/A03/A15：正式导航脱离 Mock、组件按用途命名、Gallery/Mock 的 DEBUG 边界与 A04 预览解耦 | pi-ui | 测试/构建、release 符号与开发渲染通过；待人工验收，见 [证据](evidence/014-R4-UI.md) |
 | R3-IME | 完成 FR-E3 输入法内 AI：⌥Tab 三动作、状态/Tab 上屏/作废与安全输入；接入 InputAIController 生命周期；消除候选双重防抖并测量 | pi-ime | 实现与自动测试/构建通过；待安装后真实试打，见 [证据](evidence/014-R3-IME.md) |
 | R5-UI | A16 现状文档同步、用户功能/快捷键手册、正式界面离屏检查及 UI 区域修正 | pi-ui | 文档、测试/构建与离屏复查通过；人工项已标注，见 [证据](evidence/014-R5-UI.md) |

@@ -4,6 +4,7 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable {
     case screenshot
     case translateSelection
     case summarizeSelection
+    case screenshotHistory, togglePins, closePins, nextPin
 }
 
 public struct Shortcut: Equatable, Codable, Sendable {
@@ -31,5 +32,9 @@ public struct Shortcut: Equatable, Codable, Sendable {
         .screenshot: Shortcut(key: "1", modifiers: .control),
         .translateSelection: Shortcut(key: "t", modifiers: [.control, .option]),
         .summarizeSelection: Shortcut(key: "s", modifiers: [.control, .option]),
+        .screenshotHistory: Shortcut(key: "h", modifiers: [.control, .option]),
+        .togglePins: Shortcut(key: "p", modifiers: [.control, .option]),
+        .closePins: Shortcut(key: "x", modifiers: [.control, .option]),
+        .nextPin: Shortcut(key: "n", modifiers: [.control, .option]),
     ]
 }

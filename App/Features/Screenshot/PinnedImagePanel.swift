@@ -67,13 +67,18 @@ enum PinnedImageAction { case save, ocr, copyText, translate, translateImage, ba
     private var statusItem: NSStatusItem?
     private var protectionTask: Task<Void, Never>?
     private var discarding = false
+    private(set) var allHidden = false
+    private weak var focused: NSPanel?
+    private let show: (NSPanel) -> Void
 
     init(allowed: @escaping () -> Bool = { SecureInput.status() == .allowed },
          copyImage: @escaping (CGImage) throws -> Void = { try ScreenshotOutput.shared.copyImage($0) },
          showsMenu: Bool = true,
+         show: @escaping (NSPanel) -> Void = { $0.orderFrontRegardless() },
          present: @escaping (NSPanel) -> Void = { panel in
              panel.orderFrontRegardless(); panel.makeKey(); panel.makeFirstResponder(panel.contentView)
          }) {
+        self.show = show
         self.allowed = allowed; self.copyImage = copyImage
         self.showsMenu = showsMenu; self.present = present
     }
@@ -97,18 +102,45 @@ enum PinnedImageAction { case save, ocr, copyText, translate, translateImage, ba
         let view = PinnedImageView(image: image, baseSize: frame.size, allowed: allowed, copyImage: copyImage)
         view.controller = self
         panel.contentView = view
-        panels.append(panel)
+        if allHidden { showAll() }
+        panels.append(panel); focused = panel
         updateMenu(); present(panel); startProtection()
         return true
     }
 
     /// Privacy clearing and shutdown must never populate the recent list.
     func closeAll() {
-        discarding = true
+        discarding = true; allHidden = false; focused = nil
         for panel in panels { panel.close() }
         history.clear(); discarding = false
         protectionTask?.cancel(); protectionTask = nil
         updateMenu()
+    }
+
+    @objc func toggleAll() {
+        guard allowed() else { closeAll(); return }
+        if allHidden { showAll() }
+        else if !panels.isEmpty { allHidden = true; panels.forEach { $0.orderOut(nil) }; updateMenu() }
+    }
+    func showAll() {
+        guard allowed() else { closeAll(); return }
+        allHidden = false; panels.forEach(show); updateMenu()
+    }
+    @objc func closeGroup() {
+        guard allowed() else { closeAll(); return }
+        allHidden = false; focused = nil
+        for panel in panels { panel.close() }
+        updateMenu()
+    }
+    @objc func focusNext() {
+        guard allowed(), !panels.isEmpty else { if !allowed() { closeAll() }; return }
+        if allHidden { showAll() }
+        let current = panels.firstIndex(where: { $0.isKeyWindow }) ?? panels.firstIndex(where: { $0 === focused })
+        let next = panels[((current ?? -1) + 1) % panels.count]
+        next.ignoresMouseEvents = false; focused = next; present(next); updateMenu()
+    }
+    func windowDidBecomeKey(_ notification: Notification) {
+        if let panel = notification.object as? NSPanel, panels.contains(where: { $0 === panel }) { focused = panel }
     }
 
     @discardableResult func restoreLast() -> Bool {
@@ -145,6 +177,7 @@ enum PinnedImageAction { case save, ocr, copyText, translate, translateImage, ba
         }
         panel.contentView = nil
         panels.removeAll { $0 === panel }
+        if panels.isEmpty { allHidden = false; focused = nil }
         updateMenu()
         if panels.isEmpty && history.entries.isEmpty { protectionTask?.cancel(); protectionTask = nil }
     }
@@ -169,6 +202,11 @@ enum PinnedImageAction { case save, ocr, copyText, translate, translateImage, ba
         restore.isEnabled = !history.entries.isEmpty; menu.addItem(restore)
         let exit = NSMenuItem(title: "退出全部鼠标穿透", action: #selector(exitMousePassthrough), keyEquivalent: "")
         exit.target = self; exit.isEnabled = panels.contains(where: \.ignoresMouseEvents); menu.addItem(exit)
+        for (title, selector) in [(allHidden ? "显示全部贴图" : "隐藏全部贴图", #selector(toggleAll)),
+                                   ("下一张贴图", #selector(focusNext)), ("关闭全部贴图", #selector(closeGroup))] {
+            let item = NSMenuItem(title: title, action: selector, keyEquivalent: "")
+            item.target = self; item.isEnabled = !panels.isEmpty; menu.addItem(item)
+        }
         menu.addItem(.separator())
         let clear = NSMenuItem(title: "关闭全部并清除贴图记录", action: #selector(clearFromMenu), keyEquivalent: "")
         clear.target = self; menu.addItem(clear)

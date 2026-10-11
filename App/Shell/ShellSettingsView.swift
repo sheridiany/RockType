@@ -276,7 +276,7 @@ struct ShellSettingsView: View {
     }
     private var screenshot: some View {
         Group {
-            Notice(text: "快捷键默认为 ⌃1；仅主动保存时写入文件。")
+            Notice(text: "快捷键默认为 ⌃1；默认不保存历史到磁盘，可在下方开启。")
             DesignSectionTitle(title: "复制与导出")
             ScreenshotOutputSettings(settings: $settings.screenshot)
             DesignCard {
@@ -284,6 +284,7 @@ struct ShellSettingsView: View {
                     Text("PNG").tag(ScreenshotSettings.Format.png); Text("JPEG").tag(ScreenshotSettings.Format.jpeg)
                 }
             }
+            ScreenshotHistorySettings(settings: $settings.screenshot)
             ScreenshotStyleSettings(settings: $settings.screenshot)
             DesignSectionTitle(title: "贴图历史")
             DesignCard {
@@ -314,7 +315,7 @@ struct ShellSettingsView: View {
                 Text("最多 10 条，只保存在内存中。退出或关闭开关后清空最近结果。")
                     .font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(p.secondary)
                 DesignRule()
-                SettingsControlRow("清除当前内容", detail: "清空结果和追问上下文，不删除另存的图片。") {
+                SettingsControlRow("清除当前内容", detail: "清空结果与追问，不删除另存的图片；已开启磁盘保存的截图历史请在历史面板清空。") {
                     Button("清除", action: clearCurrentContent).buttonStyle(DesignButtonStyle(variant: .danger))
                 }
             }
