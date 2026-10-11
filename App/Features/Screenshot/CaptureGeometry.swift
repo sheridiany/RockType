@@ -34,3 +34,45 @@ enum CaptureGeometry {
             .integral.intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))
     }
 }
+
+/// Geometry shared by the prototype's move/resize gestures and floating overlays.
+enum ScreenshotHandle: CaseIterable {
+    case topLeft, top, topRight, right, bottomRight, bottom, bottomLeft, left
+    var title: String {
+        switch self {
+        case .topLeft: "左上"; case .top: "上"; case .topRight: "右上"; case .right: "右"
+        case .bottomRight: "右下"; case .bottom: "下"; case .bottomLeft: "左下"; case .left: "左"
+        }
+    }
+    var movesLeft: Bool { [.topLeft, .bottomLeft, .left].contains(self) }
+    var movesRight: Bool { [.topRight, .bottomRight, .right].contains(self) }
+    var movesTop: Bool { [.topLeft, .top, .topRight].contains(self) }
+    var movesBottom: Bool { [.bottomLeft, .bottom, .bottomRight].contains(self) }
+    func point(in rect: CGRect) -> CGPoint {
+        CGPoint(x: movesLeft ? rect.minX : movesRight ? rect.maxX : rect.midX,
+                y: movesTop ? rect.minY : movesBottom ? rect.maxY : rect.midY)
+    }
+}
+
+
+extension CaptureGeometry {
+    static func nudged(_ rect: CGRect, direction: CaptureDirection, edge: CaptureEdge,
+                       step: CGFloat, bounds: CGRect) -> CGRect {
+        guard !rect.isEmpty else { return rect }
+        let handle: ScreenshotHandle
+        switch (direction, edge) {
+        case (.left, .leading), (.right, .leading): handle = .left
+        case (.left, .trailing), (.right, .trailing): handle = .right
+        case (.up, .leading), (.down, .leading): handle = .top
+        case (.up, .trailing), (.down, .trailing): handle = .bottom
+        }
+        return resized(rect, handle: handle, by: direction.delta(step: step), bounds: bounds)
+    }
+    static func toolbarFrame(selection: CGRect, bounds: CGRect) -> CGRect {
+        let width = max(1, min(bounds.width - 16, 660)), height = min(94, bounds.height)
+        let below = selection.maxY + 12, above = selection.minY - height - 12
+        let y = below + height <= bounds.maxY - 8 ? below : above >= bounds.minY + 8 ? above : bounds.maxY - height - 8
+        return CGRect(x: max(bounds.minX + 8, min(selection.maxX - width, bounds.maxX - width - 8)),
+                      y: max(bounds.minY, y), width: width, height: height)
+    }
+}
