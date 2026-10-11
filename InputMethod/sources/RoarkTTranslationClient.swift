@@ -360,9 +360,7 @@ final class RoarkTTranslationClient: @unchecked Sendable {
 
   private func makeConnection() -> NSXPCConnection {
     let connection = NSXPCConnection(machServiceName: ROARKT_TRANSLATION_SERVICE_NAME, options: [])
-    connection.setCodeSigningRequirement(
-      "anchor apple generic and certificate leaf[subject.OU] = \"\(ROARKT_TEAM_ID)\" and identifier \"\(ROARKT_TRANSLATION_SERVICE_NAME)\""
-    )
+    connection.setCodeSigningRequirement(Identifiers.codeRequirement(for: ROARKT_TRANSLATION_SERVICE_NAME))
     connection.remoteObjectInterface = NSXPCInterface(with: RoarkTTranslationXPCProtocol.self)
     let token = UUID()
     connectionToken = token

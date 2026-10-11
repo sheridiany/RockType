@@ -56,9 +56,9 @@ struct PanelChecks {
       let theme = SquirrelTheme()
       theme.load(config: config, dark: name == "dark")
       let style = RoarkTTranslationPanel.Style(background: theme.backgroundColor, border: theme.borderColor,
-        highlight: theme.highlightedBackColor, candidate: theme.attrs, comment: theme.commentAttrs,
-        label: theme.labelAttrs, cornerRadius: theme.cornerRadius,
-        shortcutCornerRadius: theme.hilitedCornerRadius, alpha: theme.alpha)
+        candidate: theme.attrs, comment: theme.commentAttrs,
+        cornerRadius: theme.cornerRadius,
+        alpha: theme.alpha)
       candidate.update(
         preedit: "zao shang hao", selRange: .empty, caretPos: 12,
         candidates: ["早上好", "早上", "早", "找", "照"], comments: [], labels: [], highlighted: 0, page: 0,
