@@ -35,4 +35,21 @@ NS_ASSUME_NONNULL_BEGIN
     NS_SWIFT_NAME(ping(reply:));
 @end
 
+// Main App text operations use a separate required interface. Candidate clients
+// retain their narrow protocol and cannot call these methods by role checks.
+@protocol RoarkTTextTranslationXPCProtocol <RoarkTTranslationXPCProtocol>
+- (void)translateTextWithSessionID:(NSString *)sessionID
+                       generation:(int64_t)generation
+                             text:(NSString *)text
+                           target:(NSString *)target
+                        withReply:(void (^)(int64_t generation,
+                                            NSString * _Nullable translatedText,
+                                            NSError * _Nullable error))reply
+    NS_SWIFT_NAME(translateText(sessionID:generation:text:target:withReply:));
+
+- (void)cancelTextWithSessionID:(NSString *)sessionID
+            throughGeneration:(int64_t)generation
+    NS_SWIFT_NAME(cancelText(sessionID:throughGeneration:));
+@end
+
 NS_ASSUME_NONNULL_END
