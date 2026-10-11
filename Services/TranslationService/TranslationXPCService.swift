@@ -15,8 +15,11 @@ final class TranslationCoordinator {
     private var tasks: [SessionKey: Task<Void, Never>] = [:]
     private var controllerInputGeneration: Int64 = 0
     let dictationEndpoints = DictationEndpointRegistry()
+    let textTranslations: TextTranslationCoordinator
 
-    init(backend: any DynamicTextTranslating = DynamicTranslatorFactory.make()) {
+    init(backend: any DynamicTextTranslating = DynamicTranslatorFactory.make(),
+         textBackend: any SelectionTextTranslating = SelectionTranslatorFactory.make()) {
+        self.textTranslations = TextTranslationCoordinator(backend: textBackend)
         self.backend = backend
     }
 
@@ -74,6 +77,7 @@ final class TranslationCoordinator {
 
     func removeConnection(_ connectionID: UUID) {
         dictationEndpoints.remove(owner: connectionID)
+        textTranslations.removeConnection(connectionID)
         let keys = latestGenerations.keys.filter { $0.connectionID == connectionID }
         for key in keys {
             tasks.removeValue(forKey: key)?.cancel()
@@ -112,7 +116,7 @@ enum TranslationClientRole {
     }
 }
 
-final class TranslationXPCService: NSObject, RoarkTTranslationXPCProtocol {
+final class TranslationXPCService: NSObject, RoarkTTextTranslationXPCProtocol {
     private final class Reply: @unchecked Sendable {
         private let block: (Int64, String?, String?, String?, Error?) -> Void
 
@@ -268,7 +272,7 @@ final class TranslationXPCListenerDelegate: NSObject, NSXPCListenerDelegate, @un
         connection.setCodeSigningRequirement(Identifiers.codeRequirement(for: role.identifier))
         let service = TranslationXPCService(coordinator: coordinator, role: role,
             rejectConnection: { [weak connection] in connection?.invalidate() })
-        connection.exportedInterface = NSXPCInterface(with: RoarkTTranslationXPCProtocol.self)
+        connection.exportedInterface = NSXPCInterface(with: RoarkTTextTranslationXPCProtocol.self)
         connection.exportedObject = service
         connection.invalidationHandler = { [weak self, service] in
             service.invalidate()
