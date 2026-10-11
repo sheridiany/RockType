@@ -40,7 +40,7 @@ import RoarkTPlatform
         guard readable() else { return }
         if settings().privacy.keepRecentResultsInMemory { environment.recent.add(result) }
         replaceWindow().show(result, template: template, initialRetryUnavailable:
-            result.templateID == ScreenshotSession.imageTemplate.id
+            ScreenshotSession.imageTemplate(forID: result.templateID) != nil
                 ? "追问仅基于文字解释。原图未保留在对话中；重新解释图片请从图片预览确认发送。" : nil)
     }
 
@@ -49,10 +49,10 @@ import RoarkTPlatform
         guard environment.recent.results.contains(where: { $0.id == result.id }) else { return }
         // A deleted custom template does not prevent reading/copying an existing result.
         let template = settings().templates.first { $0.id == result.templateID }
-            ?? (result.templateID == ScreenshotSession.imageTemplate.id ? ScreenshotSession.imageTemplate
-                : OperationTemplate(id: result.templateID, name: "最近结果", icon: "text.bubble", prompt: ""))
+            ?? ScreenshotSession.imageTemplate(forID: result.templateID)
+            ?? OperationTemplate(id: result.templateID, name: "最近结果", icon: "text.bubble", prompt: "")
         replaceWindow().show(result, template: template, initialRetryUnavailable:
-            result.templateID == ScreenshotSession.imageTemplate.id
+            ScreenshotSession.imageTemplate(forID: result.templateID) != nil
                 ? "追问仅基于文字解释。原图未保留在对话中；重新解释图片请从图片预览确认发送。" : nil)
     }
 

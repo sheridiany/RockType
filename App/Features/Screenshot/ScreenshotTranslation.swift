@@ -6,6 +6,7 @@ import RoarkTCore
 @MainActor @Observable final class ScreenshotTranslation {
     enum Phase { case idle, running, done, failed, cancelled }
     private(set) var phase: Phase = .idle
+    private(set) var thinking = false
     private(set) var text = ""
     private(set) var engine = ""
     private(set) var notice: String?
@@ -19,7 +20,7 @@ import RoarkTCore
     }
     func clear() {
         generation += 1; task?.cancel(); task = nil; runner.stop()
-        text = ""; engine = ""; notice = nil; phase = .idle
+        thinking = false; text = ""; engine = ""; notice = nil; phase = .idle
     }
     func cancel() {
         guard phase == .running else { return }
@@ -46,15 +47,16 @@ import RoarkTCore
                     self.clear(); self.phase = .failed; self.notice = "安全输入已启用，翻译已停止。"; return
                 }
                 switch event {
-                case .started, .thinking: break
+                case .started: break
+                case .thinking: if self.text.isEmpty { self.thinking = true }
                 case .engine(let value): self.engine = value
-                case .delta(let value): self.text += value
+                case .delta(let value): self.thinking = false; self.text += value
                 case .completed(let result):
                     guard result.session.id == session.id, result.session.snapshot == snapshot,
                           !result.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                         self.fail("翻译结果不完整，请重试。"); return
                     }
-                    self.text = result.text; self.engine = result.engine; self.phase = .done
+                    self.thinking = false; self.text = result.text; self.engine = result.engine; self.phase = .done
                     self.task = nil; return
                 case .failed(let failure):
                     self.fail(Self.message(failure)); return

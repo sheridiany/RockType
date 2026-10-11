@@ -42,6 +42,7 @@ import os
     /// Must validate the exact current connection/model against the settings connection-test result.
     var imageCapabilityVerified: (AIConnectionSettings, String) -> Bool = { _, _ in false }
     var configureVision: () -> Void = {}
+    var rememberImageConfirmation: (Bool) -> Void = { SettingsStore.shared.settings.screenshot.skipImageAIConfirmation = $0 }
     var performText: (OperationRequest) -> Void = { _ in }
     var imageCompleted: (OperationResult, OperationTemplate) -> Void = { _, _ in }
     private var previewPanel: NSPanel?
@@ -72,6 +73,7 @@ import os
             guard let self, self.running, self.allowed() else { return }
             self.openImage(image, origin: action == .translate ? "贴图 · 核对文字后点击翻译" : "贴图")
             if action == .save { self.session?.save() }
+            else if action == .translate { self.session?.prepareImage(action: .translate) }
             else { self.session?.runOCR(copyAfter: action == .copyText) }
         }
         ScreenCapture.startWarming()
@@ -270,7 +272,7 @@ import os
         guard running, allowed(), !images.isEmpty else { return }
         let sessions = images.enumerated().map { index, image in
             let value = ScreenshotSession(image: image, origin: "批量图片 \(index + 1)", settings: self.readSettings,
-                verified: self.imageCapabilityVerified, allowed: self.allowed)
+                verified: self.imageCapabilityVerified, allowed: self.allowed, rememberImageConfirmation: self.rememberImageConfirmation)
             value.performText = self.performText; value.configureVision = self.configureVision
             value.imageCompleted = self.imageCompleted
             value.onClose = { [weak self] in self?.closePreview() }
@@ -300,7 +302,7 @@ import os
         guard running, allowed() else { return }
         closePreview()
         let value = ScreenshotSession(image: image, origin: origin, settings: readSettings,
-            verified: imageCapabilityVerified, allowed: allowed)
+            verified: imageCapabilityVerified, allowed: allowed, rememberImageConfirmation: rememberImageConfirmation)
         session = value
         value.onClose = { [weak self] in self?.closePreview() }
         value.configureVision = configureVision

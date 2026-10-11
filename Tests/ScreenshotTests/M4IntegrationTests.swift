@@ -85,12 +85,13 @@ final class M4IntegrationTests: XCTestCase {
             space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
         let preview = ScreenshotSession(image: try XCTUnwrap(context.makeImage()), origin: "synthetic",
             settings: { settings }, verified: { _, _ in verified }, allowed: { true },
-            sendImage: { _, _, _ in sent += 1; return "Synthetic explanation" })
+            sendVisual: { _, _, _, _ in sent += 1; return "Synthetic explanation" })
+        preview.text = "Synthetic OCR"
         preview.prepareImage(); preview.confirmImage()
         verified = false
         await settle { !preview.busy }
         XCTAssertEqual(sent, 0)
-        XCTAssertNotNil(preview.notice)
+        XCTAssertNotNil(preview.visual.notice)
         preview.close()
     }
 
@@ -103,8 +104,9 @@ final class M4IntegrationTests: XCTestCase {
             space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
         let preview = ScreenshotSession(image: try XCTUnwrap(context.makeImage()), origin: "synthetic",
             settings: { settings }, verified: { _, _ in true }, allowed: { true },
-            sendImage: { _, _, _ in try await withCheckedThrowingContinuation { finish = $0 } })
+            sendVisual: { _, _, _, _ in try await withCheckedThrowingContinuation { finish = $0 } })
         preview.imageCompleted = { _, _ in completed += 1 }
+        preview.text = "Synthetic OCR"
         preview.prepareImage(); preview.confirmImage()
         await settle { finish != nil }
         preview.close(); finish?.resume(returning: "Late synthetic explanation")
@@ -126,7 +128,7 @@ final class M4IntegrationTests: XCTestCase {
         settings.ai.defaultModel = "synthetic-image"; settings.ai.defaultModelSupportsImages = true
         let preview = ScreenshotSession(image: try XCTUnwrap(context.makeImage()), origin: "synthetic",
             settings: { settings }, verified: { _, _ in true }, allowed: { true },
-            sendImage: { _, _, _ in "Synthetic image explanation" })
+            sendVisual: { _, _, _, _ in "Synthetic image explanation" })
         preview.performText = { operations.perform($0, source: nil, toolbarRect: nil) }
         preview.imageCompleted = { operations.presentCompleted($0, template: $1) }
         preview.text = "Corrected synthetic OCR"
@@ -136,7 +138,10 @@ final class M4IntegrationTests: XCTestCase {
             XCTAssertEqual(operations.window?.state.session?.snapshot.text, preview.text)
             XCTAssertEqual(environment.recent.results.first?.templateID, id)
         }
+        preview.text = "Synthetic OCR"
         preview.prepareImage(); preview.confirmImage()
+        await settle { preview.visual.phase == .done }
+        preview.openImageFollowup()
         await settle { environment.recent.results.first?.text == "Synthetic image explanation" }
         let result = try XCTUnwrap(environment.recent.results.first)
         XCTAssertEqual(operations.window?.state.answer, result.text)

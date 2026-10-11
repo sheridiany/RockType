@@ -1,5 +1,6 @@
 import SwiftUI
 import RoarkTPlatform
+import RoarkTCore
 
 struct ScreenshotPreviewContent: View {
     static var width: CGFloat { min(960, (NSScreen.main?.visibleFrame.width ?? 1120) - 64) }
@@ -8,6 +9,8 @@ struct ScreenshotPreviewContent: View {
     var viewport: CGSize? = nil
     @State private var selectedLine: Int?
     @State private var showBoxes = true
+    @State private var showVisual = true
+    @State private var imageExpanded = false
     @Environment(\.colorScheme) private var scheme
     private var p: Tokens.Palette { Tokens.palette(scheme) }
     private var canUseText: Bool { !session.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !session.busy }
@@ -19,15 +22,16 @@ struct ScreenshotPreviewContent: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Tokens.Space.lg) {
                     imagePreview
-                    if session.confirmingImage { imageConfirmation }
+                    if session.confirmingImage { ScreenshotVisualAIConfirmation(session: session) }
                     else {
                         controls
+                        visualActions
                         ViewThatFits(in: .horizontal) {
                             HStack(alignment: .top, spacing: Tokens.Space.md) {
                                 sourceColumn.frame(minWidth: 300)
-                                translationColumn.frame(minWidth: 300)
+                                resultColumn.frame(minWidth: 300)
                             }
-                            VStack(spacing: Tokens.Space.md) { sourceColumn; translationColumn }
+                            VStack(spacing: Tokens.Space.md) { sourceColumn; resultColumn }
                         }
                     }
                     if let notice = session.notice, !session.busy {
@@ -65,6 +69,10 @@ struct ScreenshotPreviewContent: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("原图对照").font(.system(size: 12, weight: .medium))
+                if !session.confirmingImage {
+                    Button(imageExpanded ? "收起原图" : "展开原图") { imageExpanded.toggle() }
+                        .buttonStyle(.link).font(.system(size: 11))
+                }
                 Spacer()
                 if session.ocrFinished {
                     Toggle("文字框", isOn: $showBoxes).toggleStyle(.checkbox).font(.system(size: 11))
@@ -88,7 +96,7 @@ struct ScreenshotPreviewContent: View {
                             }
                         }
                     }
-                    .frame(maxWidth: .infinity, maxHeight: 190)
+                    .frame(maxWidth: .infinity, maxHeight: session.confirmingImage ? 190 : (imageExpanded ? 300 : 110))
                     .accessibilityLabel(session.confirmingImage ? "即将发送的图片" : "原图，可点击文字框对照")
             }
             if let selectedLine, session.ocrLines.indices.contains(selectedLine) {
@@ -141,7 +149,7 @@ struct ScreenshotPreviewContent: View {
             }.frame(height: 210).background(p.canvas, in: RoundedRectangle(cornerRadius: 7))
             HStack {
                 Button("复制原文") { session.copyText(session.text) }.disabled(!canUseText)
-                Button("总结") { session.runText(templateID: "summarize") }.disabled(!canUseText)
+                Button("仅文字翻译") { showVisual = false; session.translate() }.disabled(!canUseText)
                 Spacer()
                 Text("\(session.text.count) 字").font(.system(size: 11)).monospacedDigit().foregroundStyle(p.secondary)
             }.buttonStyle(DesignButtonStyle(variant: .secondary))
@@ -209,18 +217,36 @@ struct ScreenshotPreviewContent: View {
     }
     private var translationTitle: String {
         switch session.translation.phase {
-        case .running: "正在翻译…"
+        case .running: session.translation.thinking ? "思考中…" : "正在翻译…"
         case .failed: "翻译未完成"
         case .cancelled: "翻译已取消"
         default: "原文与译文并排对照"
         }
     }
-    private var imageConfirmation: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Notice(text: "确认后将把上方图片发送给 \(session.visionModel ?? "视觉模型")。")
+    @ViewBuilder private var resultColumn: some View {
+        if showVisual { ScreenshotVisualAIResult(session: session) }
+        else { translationColumn }
+    }
+    private var visualActions: some View {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Button("返回文字识别") { session.cancel() }
-                Button("确认发送图片") { session.confirmImage() }.buttonStyle(DesignButtonStyle(variant: .primary))
+                Picker("结果类型", selection: $showVisual) {
+                    Text("图片 AI").tag(true)
+                    Text("仅文字翻译").tag(false)
+                }.pickerStyle(.segmented).frame(width: 250)
+                Spacer()
+            }
+            if showVisual {
+                HStack {
+                    Button("截图翻译…") { session.prepareImage(action: .translate) }
+                    Button("截图总结…") { session.prepareImage(action: .summarize) }
+                    Button("理解图片…") { session.prepareImage(action: .explain) }
+                    Spacer(minLength: 0)
+                }.buttonStyle(DesignButtonStyle(variant: .secondary)).disabled(session.busy || session.visionModel == nil)
+                if session.visionModel == nil {
+                    Button("配置并验证视觉模型，以使用图片 AI") { session.configureVision() }
+                        .buttonStyle(.link).font(.system(size: 12))
+                }
             }
         }
     }
@@ -230,11 +256,12 @@ struct ScreenshotPreviewContent: View {
                 Button("复制图片") { session.copyImage() }
                 Button("另存为…") { session.save() }
                 Divider()
-                Button("解释图片…") { session.prepareImage() }.disabled(session.visionModel == nil || session.busy)
+                Button("解释图片…") { showVisual = true; session.prepareImage() }.disabled(session.visionModel == nil || session.busy)
                 Button("配置视觉模型…") { session.configureVision() }
+                Button("恢复图片 AI 每次发送确认") { session.restoreImageConfirmation() }
             }.fixedSize()
             Spacer()
-            Text("翻译仅在点击后发送文字").font(.system(size: 11)).foregroundStyle(p.secondary)
+            Text(showVisual ? "图片 AI 会发送图片与识别文字" : "仅文字翻译不发送图片").font(.system(size: 11)).foregroundStyle(p.secondary)
             Button("关闭") { session.close() }.buttonStyle(DesignButtonStyle(variant: .secondary))
         }
     }

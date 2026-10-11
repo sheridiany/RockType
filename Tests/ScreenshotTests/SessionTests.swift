@@ -45,9 +45,11 @@ final class SessionTests: XCTestCase {
         settings.ai.defaultModel = "synthetic-vision"; settings.ai.defaultModelSupportsImages = true
         var verified = false, sent = 0
         let session = ScreenshotSession(image: try image(), origin: "synthetic", settings: { settings }, verified: { _, _ in verified },
-            allowed: { true }, sendImage: { _, _, bytes in
+            allowed: { true }, sendVisual: { request, _, _, _ in
+                let bytes = request.png
                 XCTAssertNotNil(NSBitmapImageRep(data: bytes)); sent += 1; return "Synthetic reply"
             })
+        session.text = "Synthetic OCR"
         session.prepareImage(); session.confirmImage()
         XCTAssertFalse(session.confirmingImage); XCTAssertEqual(sent, 0)
         verified = true; session.prepareImage()
@@ -76,7 +78,7 @@ final class SessionTests: XCTestCase {
         let runner = RecordingRunner()
         let session = ScreenshotSession(image: try image(), origin: "synthetic", settings: { .defaults }, verified: { _, _ in true },
             allowed: { false }, recognize: { _ in calls += 1; return "" },
-            sendImage: { _, _, _ in calls += 1; return "" })
+            sendVisual: { _, _, _, _ in calls += 1; return "" })
         session.performText = { _ = runner.run($0) }
         session.text = "Synthetic text"
         session.runOCR(); session.runText(templateID: "translate"); session.prepareImage(); session.confirmImage()
