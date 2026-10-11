@@ -30,7 +30,7 @@
 | # | 任务 | 执行 | 状态 |
 | --- | --- | --- | --- |
 | R-1 | `scripts/build-installer.sh`、pre/postinstall、pkg 产出（未公证也可本地安装测试） | pi-surfaces | 已实现；安装待人工验证 |
-| R-2 | `scripts/notarize.sh`（无凭据时清晰报错退出） | pi-surfaces | 未开始 |
+| R-2 | `scripts/notarize.sh`（无凭据时清晰报错退出） | pi-surfaces | 已实现；真实公证待凭据 |
 | R-3 | 卸载流程接到设置 → 关于 | pi-surfaces | 未开始 |
 | R-4 | Sparkle 2 集成、appcast 脚本、设置 → 关于 中“检查更新” | pi-surfaces | 未开始 |
 | R-5 | 第三方声明与许可证文件核对 | pi-surfaces | 未开始 |
@@ -59,3 +59,9 @@
 - 修复 productbuild 已有 `hostArchitectures` 时生成重复 XML 属性的问题；签名 pkg 已产出，`pkgutil --check-signature` 通过（DF7J2VBQD8）。
 - `scripts/test.sh` 通过（116 Swift tests、Rime 部署、外壳检查）；修正前置提交遗留的旧快捷键处理器断言，旧处理器应不再触发动作。
 - 未执行本机安装、切换输入源或升级，仍待 R-6 干净账户验证。
+
+### R-2 验收证据（2026-10-11）
+
+- `scripts/notarize.sh` 使用钥匙串 profile，校验包团队、提交并等待，明确要求 `Accepted` 后再 staple、validate 和 Gatekeeper 安装评估。
+- `scripts/test.sh` 通过；隔离脚本测试覆盖缺 profile、Invalid 不 staple、Accepted 才 staple/validate。直接不带 `ROARKT_NOTARY_PROFILE` 运行清晰退出，符合预期。
+- 真实公证未运行：未提供 profile，不创建或导出凭据，不声称通过 Gatekeeper。
