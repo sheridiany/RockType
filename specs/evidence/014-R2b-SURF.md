@@ -48,3 +48,11 @@
 - 不支持保留原图的多轮视觉追问；当前明确使用已完成的文字结果。需要图片细节时重新从预览发送。
 - 超过 10 MB 的 PNG 或 32 KB 的 OCR 文本会在确认前提示缩小选区/精简文字，不静默截断或缩放。
 - 运行全仓构建/测试不等于输入法安装验收；未安装、注册输入法、加载 LaunchAgent 或注入全局输入。
+
+## 与 main 融合（2026-10-11）
+
+- 合入 main `f84b085`。保留 pi-xpc 的 `ScreenshotImportController`、`presentBatch`、`ScreenshotSaveAsController` 与统一图片导出结构；单图和批量 session 均接入视觉 AI 确认偏好，贴图翻译入口保持视觉确认路径。
+- 设置同时保留 `roundedCorners` 与 `skipImageAIConfirmation`，均允许旧 JSON 缺字段。设置往返测试同时携带两个字段，防止合并丢失任一偏好。
+- 扩展 `MergeImportTests`：批量 session 能恢复每次确认、以编辑文字准备视觉总结；切换到剪贴板导入清除原批次图片及待确认请求，新单图继续使用同一确认偏好回调；导入不弹出保存对话框。
+- 主规格保留 R2-SHOT、R2-UI、R2-ARCH 及 R2b-SURF 的实际进度。逐行核对两边“验收证据”及证据文件均保留。
+- 本次 `scripts/test.sh` 与 `scripts/build.sh` 真实退出码均为 **0**：135 XCTest + 198 Swift Testing 通过，完整签名构建与语音 MLX 自测通过。日志 `/tmp/surfaces-r2b-merge-{test,build}.log`，退出码保存于同名 `.exit` 文件。真实安装版本交互仍待人工验证；未安装、注册输入法或加载 LaunchAgent。

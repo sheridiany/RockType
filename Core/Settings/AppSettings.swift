@@ -107,6 +107,8 @@ public struct ScreenshotSettings: Codable, Equatable, Sendable {
     public var annotationStyles: [String: ScreenshotAnnotationStyle]? = nil
     /// nil/false asks before each explicit image AI action; no image content is persisted.
     public var skipImageAIConfirmation: Bool? = nil
+    /// nil keeps the default rounded output when loading settings written before this option.
+    public var roundedCorners: Bool? = nil
     public init() {}
 }
 

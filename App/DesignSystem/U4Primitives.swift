@@ -2,22 +2,6 @@ import SwiftUI
 
 // Additional surface-specific values derive from the established spacing grid.
 // Existing DesignSystem interfaces remain unchanged.
-extension Tokens {
-    enum U4 {
-        static let candidateWidth = Size.resultWidth
-        static let modeSide = Space.xl * 2
-        static let hudWidth = Space.xxl * 8
-        static let hudDetailWidth = Space.xxl * 12
-        static let waveformWidth = Space.xxl * 3
-        static let waveformHeight = Space.lg
-        static let sidebarWidth = Space.xxl * 7
-        static let fieldWidth = Space.xxl * 9
-        static let toggleWidth = Space.xxl + Space.sm
-        static let toggleHeight = Space.xl
-        static let toggleKnob = Space.lg
-        static let toggleInset = Size.stroke * 2
-    }
-}
 
 struct U4Rule: View {
     @Environment(\.colorScheme) private var scheme
@@ -74,12 +58,15 @@ struct U4Toggle: View {
             Capsule().fill(isOn && enabled ? p.accent : p.bubble)
                 .overlay(alignment: isOn ? .trailing : .leading) {
                     Circle().fill(enabled ? (isOn ? p.onAccent : (scheme == .dark ? p.secondary : p.card)) : p.tertiary)
-                        .frame(width: Tokens.U4.toggleKnob, height: Tokens.U4.toggleKnob)
-                        .padding(Tokens.U4.toggleInset)
+                        .frame(width: Tokens.Size.toggleKnob, height: Tokens.Size.toggleKnob)
+                        .padding(Tokens.Size.toggleInset)
                 }
-                .frame(width: Tokens.U4.toggleWidth, height: Tokens.U4.toggleHeight)
+                .frame(width: Tokens.Size.toggleWidth, height: Tokens.Size.toggleHeight)
                 .overlay(Capsule().stroke(p.pillLine, lineWidth: Tokens.Size.stroke))
-        }.buttonStyle(.plain).accessibilityLabel(title).accessibilityValue(isOn ? "开启" : "关闭")
+        }.buttonStyle(DesignToggleButtonStyle())
+            .accessibilityRepresentation {
+                Toggle(title, isOn: $isOn).toggleStyle(.switch).disabled(!enabled)
+            }
     }
 }
 
@@ -138,5 +125,17 @@ struct U4EditableField: View {
                     }
                 }.padding(Tokens.Space.xxl).frame(width: Tokens.Size.resultWidth)
             }
+    }
+}
+
+/// The compact switch keeps its geometry while exposing a visible keyboard focus ring.
+private struct DesignToggleButtonStyle: ButtonStyle {
+    @Environment(\.isFocused) private var focused
+    @Environment(\.colorScheme) private var scheme
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.75 : 1)
+            .overlay(Capsule().stroke(focused ? Tokens.palette(scheme).focus : .clear,
+                                      lineWidth: Tokens.Size.focusRing).allowsHitTesting(false))
     }
 }

@@ -9,7 +9,7 @@ struct SettingsBrand: View {
                 .foregroundStyle(Tokens.palette(scheme).onAccent)
                 .background(Tokens.palette(scheme).accent, in: RoundedRectangle(cornerRadius: Tokens.Radius.control))
             Text("RockType").font(Tokens.Typography.font(weight: .semibold))
-        }
+        }.accessibilityElement(children: .ignore).accessibilityLabel("RockType")
     }
 }
 
@@ -18,7 +18,7 @@ struct SettingsPageHeading: View {
     @Environment(\.colorScheme) private var scheme
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.sm) {
-            Text(section.title).font(Tokens.Typography.font(22, weight: .semibold))
+            Text(section.title).font(Tokens.Typography.font(Tokens.Typography.pageTitle, weight: .semibold))
                 .accessibilityAddTraits(.isHeader)
             Text(section.detail).font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(Tokens.palette(scheme).secondary)
         }

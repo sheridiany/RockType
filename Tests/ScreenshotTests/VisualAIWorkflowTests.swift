@@ -139,6 +139,7 @@ final class VisualAIWorkflowTests: XCTestCase {
         let old = try JSONEncoder().encode(config)
         XCTAssertNil(try JSONDecoder().decode(AppSettings.self, from: old).screenshot.skipImageAIConfirmation)
         config.screenshot.skipImageAIConfirmation = true
+        config.screenshot.roundedCorners = false
         let restored = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(config))
         XCTAssertEqual(restored, config)
     }

@@ -30,7 +30,7 @@ struct CaptureToolbar: View {
                     action("arrow.uturn.forward", "重做 ⇧⌘Z", redo).disabled(!canRedo)
                     action("text.viewfinder", "预览、OCR、翻译与保存", preview)
                     action("xmark", "取消 Esc", cancel)
-                    action("checkmark", "复制 ↩ / ⌘C · 保存路径 ⇧↩ · P 贴图", complete)
+                    action("checkmark", "复制 ↩ / ⌘C · 另存为 ⌘S · 保存路径 ⇧↩ · OCR ⇧C · P 贴图", complete)
                         .foregroundStyle(p.accent)
                 }.padding(.horizontal, 2)
             }
@@ -59,7 +59,7 @@ struct CaptureToolbar: View {
                     Spacer(minLength: 0)
                     Text("滚轮调节 · ⇧ 约束 · ⌥ 叠画").foregroundStyle(p.secondary)
                 } else {
-                    Text(tool == .eraser ? "点击删除整条标注 · ⌘Z 撤销" : "点击标注选中 · 拖动移动 · 拖动控制点缩放 · ⌫ 删除")
+                    Text(tool == .eraser ? "点击删除整条标注 · ⌘Z 撤销" : "双击空白处复制 · 点击标注编辑 · ⌫ 删除 · ⌥/⌘ 方向键调边")
                         .foregroundStyle(p.secondary)
                     Spacer(minLength: 0)
                 }
