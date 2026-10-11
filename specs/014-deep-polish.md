@@ -59,6 +59,7 @@
 | R3-IME | 完成 FR-E3 输入法内 AI：⌥Tab 三动作、状态/Tab 上屏/作废与安全输入；接入 InputAIController 生命周期；消除候选双重防抖并测量 | pi-ime | 实现与自动测试/构建通过；待安装后真实试打，见 [证据](evidence/014-R3-IME.md) |
 | R5-UI | A16 现状文档同步、用户功能/快捷键手册、正式界面离屏检查及 UI 区域修正 | pi-ui | 文档、测试/构建与离屏复查通过；人工项已标注，见 [证据](evidence/014-R5-UI.md) |
 | R4-IME | A10 输入法保守拆分：先补失焦/取消/迟到/Shift/commit_code/翻页/AI 作废回归，再整理 controller/view 职责；A07 语音协议归 Shared，单份定义、wire 不变 | pi-ime | 回归与构建通过；待安装版人工验收，见 [证据](evidence/014-R4-IME.md) |
+| R5-IME | 语音深化：3 分钟上限/静音分段、HUD 增量预览与慢速降级、两档模型合成实时率及松键延迟分解/预热优化 | pi-ime | 实现与合成验证完成；待安装版真实验收，见 [证据](evidence/014-R5-IME.md) |
 
 ## 规则
 

@@ -85,7 +85,7 @@ final class RoarkTVoiceServer: NSObject, NSXPCListenerDelegate, RoarkTDictationX
         response.call((nil, nil)); return
       }
       ticketOwner = ownerID
-      let token = ticket.capture(context, now: ProcessInfo.processInfo.systemUptime)
+      let token = ticket.capture(context, now: ProcessInfo.processInfo.systemUptime, lifetime: VoiceCommitTicket.dictationLifetime)
       response.call((token, client.bundleIdentifier()))
     }
   }

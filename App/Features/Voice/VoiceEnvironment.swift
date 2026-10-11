@@ -14,6 +14,7 @@ import RoarkTPlatform
     var modelPresent: (VoiceModel) -> Bool = { _ in true }
     var inputSourceSelected: () -> Bool = { false }
     var modelRevision: () -> Int = { 0 }
+    var now: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
     var polish: @MainActor (String) async -> String = { $0 }
 
     static func system(store: SettingsStore, models: VoiceModelStore) -> Self {

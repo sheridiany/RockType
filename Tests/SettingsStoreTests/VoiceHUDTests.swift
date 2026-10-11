@@ -133,3 +133,38 @@ import Testing
         }
     }
 }
+
+@Test @MainActor func voiceLivePreviewIsVisibleNonactivatingAndNeverCopyable() throws {
+    _ = NSApplication.shared
+    let state = VoiceHUDState()
+    let hud = RoarkTVoiceHUD(present: { _ in })
+    let adapter = VoiceHUDController(state: state, hud: hud)
+    let panel = try #require(Mirror(reflecting: hud).children.first { $0.label == "panel" }?.value as? NSPanel)
+    let copy = try #require(Mirror(reflecting: hud).children.first { $0.label == "copyButton" }?.value as? NSButton)
+    let preview = try #require(Mirror(reflecting: hud).children.first { $0.label == "previewText" }?.value as? NSTextField)
+    let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let output = root.appendingPathComponent(".build/ime-evidence")
+    try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+    for (theme, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+        panel.appearance = NSAppearance(named: appearance)
+        state.phase = .recording; state.seconds = 75
+        state.preview = String(repeating: "前面的合成文字。", count: 80) + "这是刚刚说出的最后一句。"
+        for (name, status) in [("live", "实时预览 · 松键后确认"), ("degraded", "预览跟不上 · 松键后识别")] {
+            state.previewStatus = status; adapter.show()
+            state.levels = [0.2, 0.4, 0.7, 0.9, 0.8, 0.5, 0.3, 0.6, 0.4]
+            #expect(hud.presentationSize == NSSize(width: 320, height: 136))
+            #expect(!hud.acceptsKeyboardFocus && copy.isHidden && !preview.isHidden)
+            #expect(preview.stringValue.hasSuffix("这是刚刚说出的最后一句。"))
+            #expect(preview.stringValue.count <= 49)
+            #expect(preview.cell?.wraps == true)
+            #expect(preview.fittingSize.height <= preview.frame.height, "Latest words must fit, not merely exist in the control")
+            let view = try #require(panel.contentView)
+            let bitmap = try #require(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+            view.cacheDisplay(in: view.bounds, to: bitmap)
+            try #require(bitmap.representation(using: .png, properties: [:])).write(to: output.appendingPathComponent("voice-preview-\(name)-\(theme).png"))
+        }
+        state.phase = .recognizing; adapter.show()
+        #expect(preview.stringValue.isEmpty && preview.isHidden)
+    }
+    adapter.hide()
+}

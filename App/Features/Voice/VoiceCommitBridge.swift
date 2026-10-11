@@ -40,7 +40,7 @@ private struct VoiceEndpoint: @unchecked Sendable { let value: NSXPCListenerEndp
                 guard let proxy else { gate.finish(.failure(VoiceFailure.unavailable)); return }
                 proxy.capture(applicationPID: pid) { @Sendable token, app in
                     let value = token.flatMap { token in app.map {
-                        VoiceTarget(token: token, applicationID: $0, deadline: ProcessInfo.processInfo.systemUptime + 110)
+                        VoiceTarget(token: token, applicationID: $0, deadline: ProcessInfo.processInfo.systemUptime + VoiceCommitTicket.dictationLifetime - 10)
                     } }
                     Task { @MainActor in gate.finish(.success(value)) }
                 }
