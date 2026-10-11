@@ -11,12 +11,12 @@ ditto dist/RoarkTVoiceWorker.xpc "$app/Contents/Helpers/RoarkTVoiceWorker.xpc"
 ln -s ../Helpers/RoarkTVoiceWorker.xpc "$app/Contents/XPCServices/RoarkTVoiceWorker.xpc"
 cp App/Info.plist "$app/Contents/Info.plist"
 swiftc -swift-version 6 Core/Identifiers.swift App/Features/Voice/VoiceWorkerProtocol.swift \
-  Tests/VoiceWorkerSmoke/main.swift -o "$app/Contents/MacOS/RoarkT"
+  Tests/VoiceWorkerSmoke/main.swift -o "$app/Contents/MacOS/RockType"
 codesign --force --options runtime --timestamp=none --sign "$identity" "$app"
 codesign --verify --strict --deep "$app"
 "$app/Contents/Helpers/RoarkTVoiceWorker.xpc/Contents/MacOS/RoarkTVoiceWorker" --self-test
-"$app/Contents/MacOS/RoarkT"
+"$app/Contents/MacOS/RockType"
 # Same team, wrong allowed identifier: server must reject it.
 /usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier com.roarkist.inputmethod.RoarkT' "$app/Contents/Info.plist"
 codesign --force --options runtime --timestamp=none --sign "$identity" "$app"
-"$app/Contents/MacOS/RoarkT" --reject
+"$app/Contents/MacOS/RockType" --reject

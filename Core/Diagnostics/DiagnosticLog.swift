@@ -103,7 +103,7 @@ public actor DiagnosticLog {
         let fm = FileManager.default
         guard !fm.fileExists(atPath: destination.path) else { throw Failure.destinationExists }
         let staging = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        let snapshot = staging.appendingPathComponent("RoarkT-Diagnostics", isDirectory: true)
+        let snapshot = staging.appendingPathComponent("RockType-Diagnostics", isDirectory: true)
         try fm.createDirectory(at: snapshot, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         defer { try? fm.removeItem(at: staging) }
         let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601

@@ -87,7 +87,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.button?.target = self
         item.button?.action = #selector(statusClicked)
         item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        item.button?.setAccessibilityLabel("RoarkT 菜单栏")
+        item.button?.setAccessibilityLabel("RockType 菜单栏")
         statusItem = item
         clock.didRefresh = { [weak self] in self?.refreshStatus() }
         NotificationCenter.default.addObserver(self, selector: #selector(settingsChanged), name: SettingsStore.didChange, object: store)
@@ -150,7 +150,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func refreshStatus() {
         statusItem?.button?.title = store.settings.general.showBeijingTime ? " 北京 " + clock.beijingTime : ""
-        statusItem?.button?.toolTip = "RoarkT · 北京 " + clock.beijingDate + " " + clock.beijingTime
+        statusItem?.button?.toolTip = "RockType · 北京 " + clock.beijingDate + " " + clock.beijingTime
     }
 
     @objc private func statusClicked() {
@@ -195,7 +195,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(withTitle: "设计面板…", action: #selector(showGallery), keyEquivalent: "").target = self
         #endif
         menu.addItem(.separator())
-        menu.addItem(withTitle: "退出 RoarkT", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        menu.addItem(withTitle: "退出 RockType", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         return menu
     }
 
@@ -225,7 +225,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return true
         }
         image.isTemplate = true
-        image.accessibilityDescription = "RoarkT"
+        image.accessibilityDescription = "RockType"
         return image
     }
 }

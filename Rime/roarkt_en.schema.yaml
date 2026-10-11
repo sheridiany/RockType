@@ -3,7 +3,7 @@
 
 schema:
   schema_id: roarkt_en
-  name: RoarkT English Dictionary
+  name: RockType English Dictionary
   version: "0.1.0"
   author:
     - RoarkT contributors

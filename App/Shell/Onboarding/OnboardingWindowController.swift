@@ -61,7 +61,7 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: Tokens.Size.settingsWidth,
                                                  height: Tokens.Size.settingsHeight),
                               styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
-        window.title = "欢迎使用 RoarkT"
+        window.title = "欢迎使用 RockType"
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.contentView = NSHostingView(rootView: view)

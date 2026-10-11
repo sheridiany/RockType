@@ -5,11 +5,11 @@
 	<key>CFBundleIdentifier</key>
 	<string>com.roarkist.roarkt</string>
 	<key>CFBundleName</key>
-	<string>RoarkT</string>
+	<string>RockType</string>
 	<key>CFBundleDisplayName</key>
-	<string>RoarkT</string>
+	<string>RockType</string>
 	<key>CFBundleExecutable</key>
-	<string>RoarkT</string>
+	<string>RockType</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

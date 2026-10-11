@@ -47,10 +47,10 @@ private func runDistributionCommand(_ executable: String, _ arguments: [String],
         #expect(result.0 == 0, "\(result.1)")
     }
     let calls = try String(contentsOf: log, encoding: .utf8)
-    #expect(calls.contains("asuser 501 /usr/bin/sudo -H -u fixture-user -- /Applications/RoarkT.app/Contents/Helpers/RoarkTRegisterInputSource register /Library/Input Methods/RoarkT Input.app"))
+    #expect(calls.contains("asuser 501 /usr/bin/sudo -H -u fixture-user -- /Applications/RockType.app/Contents/Helpers/RoarkTRegisterInputSource register /Library/Input Methods/RockType Input.app"))
     #expect(calls.contains("bootout gui/501/com.roarkist.roarkt.translation"))
     #expect(calls.contains("bootstrap gui/501 /Library/LaunchAgents/com.roarkist.roarkt.translation.plist"))
-    #expect(calls.contains("open -g /Applications/RoarkT.app"))
+    #expect(calls.contains("open -g /Applications/RockType.app"))
     #expect(!calls.contains(" select "))
     #expect(!calls.contains("HIToolbox"))
     #expect(!calls.contains("RoarkTRegisterInputSource enable"))

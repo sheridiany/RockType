@@ -7,7 +7,7 @@ import RoarkTCore
     let fm = FileManager.default
     let home = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fm.removeItem(at: home) }
-    for path in ["Library/Application Support/RoarkT/VoiceModels", "Library/Rime/build", "Library/Rime/roarkt_zh.userdb"] {
+    for path in ["Library/Application Support/RockType/VoiceModels", "Library/Rime/build", "Library/Rime/roarkt_zh.userdb"] {
         try fm.createDirectory(at: home.appendingPathComponent(path), withIntermediateDirectories: true)
     }
     let removed = ["roarkt.schema.yaml", "roarkt_flypy.custom.yaml", "roarkt_en.dict.yaml", "build/roarkt.prism.bin"]
@@ -17,7 +17,7 @@ import RoarkTCore
         try Data(content.utf8).write(to: home.appendingPathComponent("Library/Rime/" + name))
     }
     try UninstallData.remove(in: home)
-    #expect(!fm.fileExists(atPath: home.appendingPathComponent("Library/Application Support/RoarkT").path))
+    #expect(!fm.fileExists(atPath: home.appendingPathComponent("Library/Application Support/RockType").path))
     for name in removed + ["roarkt_zh.userdb"] {
         #expect(!fm.fileExists(atPath: home.appendingPathComponent("Library/Rime/" + name).path))
     }

@@ -35,7 +35,7 @@ final class SettingsWindowController {
         if window == nil {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: Tokens.Size.settingsWidth, height: Tokens.Size.settingsHeight),
                                   styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-            window.title = "RoarkT · 设置"
+            window.title = "RockType · 设置"
             window.isReleasedWhenClosed = false
             window.contentMinSize = NSSize(width: Tokens.Size.settingsWidth, height: Tokens.Size.settingsHeight)
             window.contentView = NSHostingView(rootView: SettingsRoot(navigation: navigation, store: store, login: login, connection: connection,

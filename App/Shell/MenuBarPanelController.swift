@@ -86,7 +86,7 @@ struct ShellMenuBarPanel: View {
         let p = Tokens.palette(scheme)
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
             HStack {
-                Label("RoarkT", systemImage: "square.stack.3d.up")
+                Label("RockType", systemImage: "square.stack.3d.up")
                     .font(Tokens.Typography.font(Tokens.Typography.read, weight: .semibold))
                 Spacer()
                 Button(action: showSettings) { Image(systemName: "gearshape") }

@@ -6,12 +6,12 @@ import RoarkTCore
 @MainActor
 enum UninstallController {
     static func confirm() {
-        guard Bundle.main.bundleURL.standardizedFileURL.path == "/Applications/RoarkT.app" else {
-            show("请从 /Applications 中打开已安装的 RoarkT 后卸载。")
+        guard Bundle.main.bundleURL.standardizedFileURL.path == "/Applications/RockType.app" else {
+            show("请从 /Applications 中打开已安装的 RockType 后卸载。")
             return
         }
         let alert = NSAlert()
-        alert.messageText = "卸载 RoarkT？"
+        alert.messageText = "卸载 RockType？"
         alert.informativeText = "将移除主程序、输入法和后台服务，并请求管理员授权。请先切换到其他输入法，退出其他已登录账户。默认保留设置、模型、钥匙串与学习数据。共享词典和无法确认归属的 custom.yaml 始终保留。"
         alert.addButton(withTitle: "卸载")
         alert.addButton(withTitle: "取消")
@@ -27,7 +27,7 @@ enum UninstallController {
 
     private static func show(_ message: String) {
         let alert = NSAlert()
-        alert.messageText = "RoarkT 卸载"
+        alert.messageText = "RockType 卸载"
         alert.informativeText = message
         alert.runModal()
     }
@@ -68,7 +68,7 @@ enum UninstallController {
             guard TISDisableInputSource(source) == noErr else { throw CocoaError(.userCancelled) }
         }
         for app in NSRunningApplication.runningApplications(withBundleIdentifier: Identifiers.inputMethodBundleID)
-            where app.bundleURL?.standardizedFileURL.path == "/Library/Input Methods/RoarkT Input.app" {
+            where app.bundleURL?.standardizedFileURL.path == "/Library/Input Methods/RockType Input.app" {
             _ = app.terminate()
             for _ in 0..<80 where !app.isTerminated { try await Task.sleep(for: .milliseconds(100)) }
             guard app.isTerminated else { throw CocoaError(.userCancelled) }
@@ -86,14 +86,14 @@ enum UninstallController {
         if /bin/launchctl print gui/\(uid)/com.roarkist.roarkt.translation >/dev/null 2>&1; then
           /bin/launchctl bootout gui/\(uid)/com.roarkist.roarkt.translation
         fi
-        /bin/rm -rf '/Library/Input Methods/RoarkT Input.app' /Applications/RoarkT.app
+        /bin/rm -rf '/Library/Input Methods/RockType Input.app' /Applications/RockType.app
         """
         var error: NSDictionary?
         guard let script = NSAppleScript(source: "do shell script " + appleScriptLiteral(command) + " with administrator privileges") else { throw CocoaError(.fileWriteUnknown) }
         script.executeAndReturnError(&error)
         guard error == nil else { throw CocoaError(.userCancelled) }
         // TIS has no public unregister API. Bundle removal plus logout clears registration.
-        show("程序已移除。请注销并重新登录，以清除系统缓存的输入源。RoarkT 现在将退出。")
+        show("程序已移除。请注销并重新登录，以清除系统缓存的输入源。RockType 现在将退出。")
         if let executable = cleanup {
             let process = Process()
             process.executableURL = executable

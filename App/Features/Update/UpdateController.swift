@@ -38,7 +38,7 @@ final class UpdateController: ObservableObject {
                 Task { @MainActor in self?.canCheck = available }
             }
         } catch {
-            message = "更新服务未能启动，请重新打开 RoarkT 后重试。"
+            message = "更新服务未能启动，请重新打开 RockType 后重试。"
             self.controller = nil
         }
     }

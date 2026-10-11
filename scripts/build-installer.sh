@@ -9,26 +9,26 @@ identity=${ROARKT_CODESIGN_IDENTITY:-'Developer ID Application: XIAO BIN (DF7J2V
 installer_identity=${ROARKT_INSTALLER_IDENTITY:-'Developer ID Installer: XIAO BIN (DF7J2VBQD8)'}
 version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' App/Info.plist)
 [[ "$version" =~ '^[0-9]+\.[0-9]+\.[0-9]+$' ]] || { print -u2 'Invalid release version.'; exit 1; }
-for product in 'RoarkT.app' 'RoarkT Input.app'; do
+for product in 'RockType.app' 'RockType Input.app'; do
   [[ -d "dist/$product" ]] || { print -u2 'Run scripts/build.sh first.'; exit 1; }
 done
 work=$(mktemp -d "$repo_dir/.build/installer.XXXXXXXX")
 trap 'rm -rf "$work"' EXIT
 root="$work/root"
-app="$root/Applications/RoarkT.app"
-input="$root/Library/Input Methods/RoarkT Input.app"
+app="$root/Applications/RockType.app"
+input="$root/Library/Input Methods/RockType Input.app"
 mkdir -p "$root/Applications" "$root/Library/Input Methods" "$root/Library/LaunchAgents"
-ditto --norsrc --noextattr dist/RoarkT.app "$app"
+ditto --norsrc --noextattr dist/RockType.app "$app"
 # SPM links this dynamic framework but does not embed it in our manually assembled app.
 sparkle="$repo_dir/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
 [[ -d "$sparkle" ]] || { print -u2 'Run swift package resolve to fetch the pinned Sparkle artifact.'; exit 1; }
 mkdir -p "$app/Contents/Frameworks"
 ditto --norsrc --noextattr "$sparkle" "$app/Contents/Frameworks/Sparkle.framework"
 # SPM includes an absolute build rpath; distribution must resolve from the bundle.
-install_name_tool -add_rpath @executable_path/../Frameworks "$app/Contents/MacOS/RoarkT" 2>/dev/null || {
-  otool -l "$app/Contents/MacOS/RoarkT" | grep -q '@executable_path/../Frameworks' || exit 1
+install_name_tool -add_rpath @executable_path/../Frameworks "$app/Contents/MacOS/RockType" 2>/dev/null || {
+  otool -l "$app/Contents/MacOS/RockType" | grep -q '@executable_path/../Frameworks' || exit 1
 }
-ditto --norsrc --noextattr 'dist/RoarkT Input.app' "$input"
+ditto --norsrc --noextattr 'dist/RockType Input.app' "$input"
 cp Installer/com.roarkist.roarkt.translation.plist "$root/Library/LaunchAgents/"
 ditto Installer/scripts "$work/scripts"
 xcrun swiftc -swift-version 6 -parse-as-library -O Core/Identifiers.swift Installer/tools/SessionControl.swift -o "$work/scripts/RoarkTSessionControl"

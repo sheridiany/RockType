@@ -17,7 +17,7 @@ enum UninstallData {
                 throw CocoaError(.fileWriteNoPermission)
             }
         }
-        let appData = support.appendingPathComponent("RoarkT", isDirectory: true)
+        let appData = support.appendingPathComponent("RockType", isDirectory: true)
         if fm.fileExists(atPath: appData.path) { try fm.removeItem(at: appData) }
         let rime = library.appendingPathComponent("Rime", isDirectory: true)
         guard fm.fileExists(atPath: rime.path) else { return }
@@ -34,7 +34,7 @@ enum UninstallData {
                 if file.lastPathComponent.hasSuffix(".custom.yaml") {
                     guard try file.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink != true,
                           let contents = try? Data(contentsOf: file),
-                          contents.starts(with: Data("# 由 RoarkT 生成；请通过 RoarkT 设置修改。\n".utf8)) else { continue }
+                          contents.starts(with: Data("# 由 RockType 生成；请通过 RockType 设置修改。\n".utf8)) else { continue }
                 }
                 try fm.removeItem(at: file)
             }

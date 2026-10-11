@@ -9,7 +9,7 @@ struct MakeAppcast {
             let package = try Data(contentsOf: URL(fileURLWithPath: args[1]), options: .mappedIfSafe)
             let expanded = URL(fileURLWithPath: args[2])
             let candidates = FileManager.default.enumerator(at: expanded, includingPropertiesForKeys: nil)?
-                .compactMap { $0 as? URL }.filter { $0.path.hasSuffix("/RoarkT.app/Contents/Info.plist") } ?? []
+                .compactMap { $0 as? URL }.filter { $0.path.hasSuffix("/RockType.app/Contents/Info.plist") } ?? []
             guard candidates.count == 1,
                   let info = try PropertyListSerialization.propertyList(from: Data(contentsOf: candidates[0]), format: nil) as? [String: Any],
                   info["CFBundleIdentifier"] as? String == Identifiers.appBundleID else { throw AppcastDocument.Failure.invalidMetadata }

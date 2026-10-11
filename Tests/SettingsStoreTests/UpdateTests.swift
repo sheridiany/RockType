@@ -9,7 +9,7 @@ import Testing
     let signature = try key.signature(for: package).base64EncodedString()
     let info: [String: Any] = ["CFBundleShortVersionString": "0.1.0", "CFBundleVersion": "2",
                                "LSMinimumSystemVersion": "14.0", "SUPublicEDKey": key.publicKey.rawRepresentation.base64EncodedString()]
-    let download = "https://github.com/example/project/releases/download/v0.1.0/RoarkT.pkg"
+    let download = "https://github.com/example/project/releases/download/v0.1.0/RockType.pkg"
     let xml = try AppcastDocument.render(package: package, info: info, download: download, signature: signature)
     #expect(xml.contains("sparkle:installationType=\"guided-package\""))
     #expect(xml.contains("<sparkle:version>2</sparkle:version>"))

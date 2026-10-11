@@ -16,7 +16,7 @@ final class GalleryWindowController {
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered, defer: false
         )
-        window.title = "RoarkT · 设计面板"
+        window.title = "RockType · 设计面板"
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: GalleryView())
         window.contentMinSize = NSSize(width: Tokens.Size.settingsWidth, height: Tokens.Size.settingsHeight)

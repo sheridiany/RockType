@@ -6,8 +6,8 @@ import Foundation
 struct SessionControl {
     @MainActor static func main() {
         let targets = [
-            (Identifiers.appBundleID, "/Applications/RoarkT.app"),
-            (Identifiers.inputMethodBundleID, "/Library/Input Methods/RoarkT Input.app")
+            (Identifiers.appBundleID, "/Applications/RockType.app"),
+            (Identifiers.inputMethodBundleID, "/Library/Input Methods/RockType Input.app")
         ]
         for (identifier, path) in targets {
             for app in NSRunningApplication.runningApplications(withBundleIdentifier: identifier)
@@ -18,7 +18,7 @@ struct SessionControl {
                     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
                 }
                 guard app.isTerminated else {
-                    FileHandle.standardError.write(Data("RoarkT: quit both applications before retrying installation.\n".utf8))
+                    FileHandle.standardError.write(Data("RockType: quit both applications before retrying installation.\n".utf8))
                     exit(1)
                 }
             }

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Installed scripts only operate on the live startup volume.
 set -euo pipefail
-[[ "${3:-/}" == / ]] || { echo 'RoarkT: install on the startup volume only.' >&2; exit 1; }
+[[ "${3:-/}" == / ]] || { echo 'RockType: install on the startup volume only.' >&2; exit 1; }
 service=com.roarkist.roarkt.translation
 agent="/Library/LaunchAgents/$service.plist"
 active_uids() {
