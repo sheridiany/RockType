@@ -29,7 +29,7 @@
 
 | # | 任务 | 执行 | 状态 |
 | --- | --- | --- | --- |
-| R-1 | `scripts/build-installer.sh`、pre/postinstall、pkg 产出（未公证也可本地安装测试） | pi-surfaces | 未开始 |
+| R-1 | `scripts/build-installer.sh`、pre/postinstall、pkg 产出（未公证也可本地安装测试） | pi-surfaces | 已实现；安装待人工验证 |
 | R-2 | `scripts/notarize.sh`（无凭据时清晰报错退出） | pi-surfaces | 未开始 |
 | R-3 | 卸载流程接到设置 → 关于 | pi-surfaces | 未开始 |
 | R-4 | Sparkle 2 集成、appcast 脚本、设置 → 关于 中“检查更新” | pi-surfaces | 未开始 |
@@ -42,12 +42,14 @@
 
 | 项 | 方法 | 结果 | 证据 |
 | --- | --- | --- | --- |
-| pkg 构建、`pkgutil --check-signature` | 命令 | 未运行 | |
-| postinstall 不 enable/select、不写 HIToolbox | 脚本测试（夹具） | 未运行 | |
+| pkg 构建、`pkgutil --check-signature` | 命令 | 进行中 | 本次提供签名构建脚本；最终证据见下方 |
+| postinstall 不 enable/select、不写 HIToolbox | 脚本测试（夹具） | 通过 | `DistributionScriptTests` 执行隔离副本，验证登录用户注册、服务加载、离线卷拒绝 |
 | 公证与 staple | 命令（需用户凭据） | 待人工验证 | |
 | 本机安装 → 首次引导 → 卸载（含/不含数据） | 用户 | 待人工验证 | |
 | Sparkle 从旧版本更新 | 用户 | 待人工验证 | |
 
 ## 进度
+
+- R-1：安装脚本、固定路径应用退出工具、签名 product pkg 构建已实现。`scripts/test.sh` 通过；实际安装与重启输入法待 R-6 人工验证。安装使用规格规定的系统 LaunchAgent 路径。
 
 ## 问题
