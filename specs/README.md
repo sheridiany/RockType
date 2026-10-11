@@ -11,6 +11,6 @@
 | [SPEC-005 划词与 AI](005-m3-selection-ai.md) | M3 | FR-C1–C15 | Ready |
 | [SPEC-006 截图](006-m4-screenshot.md) | M4 | FR-D1–D7 | Ready |
 | [SPEC-007 语音](007-m5-voice.md) | M5 | FR-B1–B6 | Ready |
-| SPEC-008 输入法内 AI | M6 | FR-E3 | Planned |
+| [SPEC-008 输入法内 AI](008-m6-input-ai.md) | M6 | FR-E3 | Ready |
 | [SPEC-009 分发](009-m7-distribution.md) | M7 | FR-F3、F4、NFR-9 | Ready |
 | [SPEC-010 原生能力迁移](010-platform-port.md) | M2/M3 前置 | FR-C1、D3、E2、E6–E8 底层 | Ready |
