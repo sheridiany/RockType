@@ -18,23 +18,27 @@ final class ResultWindowController: NSObject {
     private let panel = ResultPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
                                     backing: .buffered, defer: false)
     private let settings: () -> AppSettings
-    private let feedback: (String) -> Void
+    private let feedback: @MainActor (String) -> Void
     private var running = false
     private var localMonitor: Any?
     private var globalMonitor: Any?
     private var safetyTask: Task<Void, Never>?
-    private var sourceApp: NSRunningApplication?
-    private var sourceWindow: AXUIElement?
+    private var source: OperationSource?
+    private let readable: @MainActor () -> Bool
+    private let aiConfigured: @MainActor () -> Bool
     private var sourceChanged = false
     private var anchor: CGRect?
 
     /// feedback must present an accessible, nonactivating notice after the panel closes.
     /// completed may forward successful results to RecentResults (respect privacy settings).
     init(runner: any OperationRunner, settings: @escaping () -> AppSettings,
-         feedback: @escaping (String) -> Void,
-         completed: @escaping @MainActor (OperationResult) -> Void = { _ in }) {
+         feedback: @escaping @MainActor (String) -> Void,
+         completed: @escaping @MainActor (OperationResult) -> Void = { _ in },
+         readable: @escaping @MainActor () -> Bool = { SecureInput.status() == .allowed },
+         aiConfigured: @escaping @MainActor () -> Bool = { true }) {
         self.settings = settings; self.feedback = feedback
-        state = ResultWindowState(runner: runner, readable: { SecureInput.status() == .allowed }, completed: completed)
+        self.readable = readable; self.aiConfigured = aiConfigured
+        state = ResultWindowState(runner: runner, readable: readable, completed: completed, feedback: feedback)
         super.init()
         panel.isFloatingPanel = true; panel.hidesOnDeactivate = false
         panel.backgroundColor = .clear; panel.isOpaque = false; panel.hasShadow = true
@@ -70,15 +74,15 @@ final class ResultWindowController: NSObject {
         NSWorkspace.shared.notificationCenter.removeObserver(self)
     }
 
-    func show(_ request: OperationRequest, toolbarRect: CGRect? = nil) {
-        guard SecureInput.status() == .allowed else { feedback("当前输入受保护或无法检查，未打开结果。"); return }
-        start(); captureSource(request.session.snapshot.source)
+    func show(_ request: OperationRequest, source: OperationSource? = nil, toolbarRect: CGRect? = nil) {
+        guard readable() else { feedback("当前输入受保护或无法检查，未打开结果。"); return }
+        start(); self.source = source; sourceChanged = false
         state.show(request); present(snapshot: request.session.snapshot, toolbarRect: toolbarRect)
     }
 
     func show(_ result: OperationResult, template: OperationTemplate, toolbarRect: CGRect? = nil) {
-        guard SecureInput.status() == .allowed else { feedback("当前输入受保护或无法检查，未打开结果。"); return }
-        start(); captureSource(result.session.snapshot.source)
+        guard readable() else { feedback("当前输入受保护或无法检查，未打开结果。"); return }
+        start(); source = nil
         // A persisted-in-memory result has no retained AX window identity. Never guess a return target.
         sourceChanged = true
         state.show(result, template: template, settings: settings())
@@ -88,7 +92,7 @@ final class ResultWindowController: NSObject {
     func close() {
         safetyTask?.cancel(); safetyTask = nil
         panel.orderOut(nil); panel.acceptsKeyboard = false
-        state.clear(); sourceApp = nil; sourceWindow = nil; anchor = nil
+        state.stop(); source = nil; anchor = nil
     }
 
     /// Call when settings change. Does not persist content or preferences.
@@ -102,11 +106,24 @@ final class ResultWindowController: NSObject {
     func setPinned() { state.pinned.toggle(); updateWindowStyle() }
     func beginQuestion() {
         guard panel.isVisible, state.request != nil, !state.isBusy else { return }
+        guard aiConfigured() else { feedback("请前往设置配置 AI 连接后追问。"); return }
         panel.acceptsKeyboard = true; panel.makeKeyAndOrderFront(nil)
         state.asking = true
     }
-    func ask() { state.ask(settings: settings()) }
-    func retry() { state.retry(settings: settings()) }
+    func ask() {
+        guard aiConfigured() else { feedback("请前往设置配置 AI 连接后追问。"); return }
+        state.ask(settings: settings())
+    }
+    func retry() {
+        var current = settings()
+        if !aiConfigured() {
+            guard state.request?.template.id == "translate", state.request?.question == nil else {
+                feedback("请前往设置配置 AI 连接后重试。"); return
+            }
+            current.translation.engine = .offlineFirst
+        }
+        state.retry(settings: current)
+    }
     func escape() {
         if state.isBusy { state.cancel() }
         else if state.asking {
@@ -116,19 +133,20 @@ final class ResultWindowController: NSObject {
     }
 
     func copy(original: Bool = false, returning: Bool = false) {
-        guard SecureInput.status() == .allowed else { state.notice = "当前输入受保护或无法检查，未复制。"; return }
+        guard readable() else { feedback("当前输入受保护或无法检查，未复制。"); return }
         let text = original ? state.session?.snapshot.text ?? "" : state.answer
         guard !text.isEmpty else { return }
         do { try Clipboard.shared.writeString(text) }
-        catch { state.notice = "复制失败，请重试。"; return }
+        catch { feedback("复制失败，请重试。"); return }
         guard returning else { state.notice = original ? "原文已复制。" : "结果已复制。"; return }
-        let source = sourceApp
-        let valid = canReturnToSource()
+        let returnSource = source
+        let shouldReturn = !sourceChanged
         close()
-        if valid, let source {
-            if source.isActive || source.activate(options: []) { feedback("结果已复制，可在来源中粘贴。") }
-            else { feedback("结果已复制；无法返回来源，请自行粘贴。") }
-        } else { feedback("结果已复制；来源已失效或你已切换应用，请自行粘贴。") }
+        switch shouldReturn ? returnSource?.returnToSource() ?? .unavailable : .unavailable {
+        case .window: feedback("结果已复制，可在来源中粘贴。")
+        case .application: feedback("结果已复制；原窗口不可用，已返回来源应用，请自行选择粘贴位置。")
+        case .unavailable: feedback("结果已复制；来源已失效或你已切换应用，请自行粘贴。")
+        }
     }
 
     private func present(snapshot: ContentSnapshot, toolbarRect: CGRect?) {
@@ -140,7 +158,7 @@ final class ResultWindowController: NSObject {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(200))
                 guard !Task.isCancelled, let self else { return }
-                if SecureInput.status() != .allowed {
+                if !self.readable() {
                     self.close(); self.feedback("输入状态无法安全检查，结果窗口已关闭。")
                     return
                 }
@@ -148,7 +166,14 @@ final class ResultWindowController: NSObject {
         }
     }
 
+    var isVisible: Bool { panel.isVisible }
+
     private func updateWindowStyle() {
+        switch settings().general.appearance {
+        case .system: panel.appearance = nil
+        case .light: panel.appearance = NSAppearance(named: .aqua)
+        case .dark: panel.appearance = NSAppearance(named: .darkAqua)
+        }
         panel.level = state.pinned ? .floating : .normal
         let opacity = settings().selection.windowOpacity
         panel.alphaValue = opacity.isFinite ? min(1, max(0.3, opacity)) : 1
@@ -182,7 +207,7 @@ final class ResultWindowController: NSObject {
     @objc private func applicationChanged(_ notification: Notification) {
         guard panel.isVisible,
               let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
-        if app.processIdentifier != sourceApp?.processIdentifier && app.processIdentifier != ProcessInfo.processInfo.processIdentifier {
+        if app.processIdentifier != source?.pid && app.processIdentifier != ProcessInfo.processInfo.processIdentifier {
             sourceChanged = true
             outsideClick()
         }
@@ -206,33 +231,4 @@ final class ResultWindowController: NSObject {
         return false
     }
 
-    private func captureSource(_ source: ContentSnapshot.Source) {
-        sourceApp = NSRunningApplication(processIdentifier: source.pid)
-        sourceWindow = nil
-        sourceChanged = sourceApp?.bundleIdentifier != source.bundleID || sourceApp?.isActive != true
-        guard !sourceChanged else { return }
-        let app = AXUIElementCreateApplication(source.pid)
-        AXUIElementSetMessagingTimeout(app, 0.2)
-        sourceWindow = Self.element(kAXFocusedWindowAttribute, of: app)
-    }
-
-    private func canReturnToSource() -> Bool {
-        guard !sourceChanged, let sourceApp, !sourceApp.isTerminated, let sourceWindow,
-              let source = state.session?.snapshot.source,
-              sourceApp.processIdentifier == source.pid, sourceApp.bundleIdentifier == source.bundleID,
-              let front = NSWorkspace.shared.frontmostApplication,
-              front == sourceApp || front.processIdentifier == ProcessInfo.processInfo.processIdentifier else { return false }
-        let app = AXUIElementCreateApplication(source.pid)
-        AXUIElementSetMessagingTimeout(app, 0.2)
-        guard let focused = Self.element(kAXFocusedWindowAttribute, of: app), CFEqual(focused, sourceWindow) else { return false }
-        var role: CFTypeRef?
-        return AXUIElementCopyAttributeValue(sourceWindow, kAXRoleAttribute as CFString, &role) == .success
-    }
-
-    private static func element(_ attribute: String, of element: AXUIElement) -> AXUIElement? {
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success,
-              let value, CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
-        return (value as! AXUIElement)
-    }
 }

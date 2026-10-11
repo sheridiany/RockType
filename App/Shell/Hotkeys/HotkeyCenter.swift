@@ -1,26 +1,19 @@
 import AppKit
 import Observation
-import OSLog
 import RoarkTCore
 import RoarkTPlatform
 
 @MainActor protocol HotkeyRegistering: AnyObject {
     func register(_ shortcut: Shortcut, handler: @escaping @MainActor () -> Void) throws
-    func startFn(handler: @escaping @MainActor () -> Void) throws
     func stop()
 }
 
 @MainActor final class SystemHotkeyRegistrar: HotkeyRegistering {
     private let keys = GlobalHotkeys()
-    private let fn = FnKeyMonitor()
     func register(_ shortcut: Shortcut, handler: @escaping @MainActor () -> Void) throws {
         try keys.register(shortcut, handler: handler)
     }
-    func startFn(handler: @escaping @MainActor () -> Void) throws {
-        fn.onEvent = { if case .press = $0 { handler() } }
-        try fn.start()
-    }
-    func stop() { keys.stop(); fn.stop() }
+    func stop() { keys.stop() }
 }
 
 /// Inject SettingsStore read/write closures. Observation tracks reads inside `readSettings`,
@@ -65,27 +58,30 @@ import RoarkTPlatform
     @ObservationIgnored private let writeSettings: @MainActor (ShortcutSettings) -> Void
     @ObservationIgnored private let showSettings: @MainActor () -> Void
     @ObservationIgnored private let comingSoon: @MainActor (Action) -> Void
-    @ObservationIgnored private let probe: @MainActor () -> Void
+    @ObservationIgnored private let selection: @MainActor (ShortcutAction) -> Void
+    @ObservationIgnored private let voiceListening: @MainActor (Bool) -> Bool
+    @ObservationIgnored private var voiceEnabled = false
     @ObservationIgnored private let allowed: @MainActor () -> Bool
     @ObservationIgnored private let trusted: @MainActor () -> Bool
     @ObservationIgnored private var running = false
     @ObservationIgnored private var observationGeneration = 0
     @ObservationIgnored private var registrationGeneration = 0
+    @ObservationIgnored private var lastTrusted = false
     @ObservationIgnored private var permissionTask: Task<Void, Never>?
-    private static let logger = Logger(subsystem: Identifiers.appBundleID, category: "hotkeys")
 
     init(read: @escaping @MainActor () -> ShortcutSettings,
          write: @escaping @MainActor (ShortcutSettings) -> Void,
          showSettings: @escaping @MainActor () -> Void,
          comingSoon: @escaping @MainActor (Action) -> Void = { _ in },
+         selection: @escaping @MainActor (ShortcutAction) -> Void = { _ in },
          registrar: (any HotkeyRegistering)? = nil,
          allowed: @escaping @MainActor () -> Bool = { SecureInput.status() == .allowed },
          trusted: @escaping @MainActor () -> Bool = { Accessibility.isTrusted() },
-         probe: @escaping @MainActor () -> Void = { logger.info("action=voiceHoldProbe status=pressed") }) {
+         voiceListening: @escaping @MainActor (Bool) -> Bool = { _ in true }) {
         self.readSettings = read; self.writeSettings = write; self.showSettings = showSettings
-        self.comingSoon = comingSoon
+        self.comingSoon = comingSoon; self.selection = selection
         self.registrar = registrar ?? SystemHotkeyRegistrar()
-        self.allowed = allowed; self.trusted = trusted; self.probe = probe
+        self.allowed = allowed; self.trusted = trusted; self.voiceListening = voiceListening
         settings = read()
     }
 
@@ -93,21 +89,26 @@ import RoarkTPlatform
         guard !running else { return }
         running = true
         observeSettings()
-        var wasTrusted = trusted()
+        lastTrusted = trusted()
         permissionTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(2)) } catch { return }
-                guard let self else { return }
-                let isTrusted = self.trusted()
-                if isTrusted != wasTrusted { wasTrusted = isTrusted; self.retry() }
+                self?.refreshPermissions()
             }
         }
+    }
+
+    func refreshPermissions() {
+        guard running else { return }
+        let current = trusted()
+        if current != lastTrusted { lastTrusted = current; retry() }
     }
 
     func stop() {
         running = false; observationGeneration += 1; registrationGeneration += 1
         permissionTask?.cancel(); permissionTask = nil
         registrar.stop(); recording = nil; statuses = [:]
+        suspendVoice()
     }
 
     private func observeSettings() {
@@ -146,10 +147,15 @@ import RoarkTPlatform
 
     func beginRecording(_ action: Action) {
         recording = action; registrationGeneration += 1; registrar.stop()
+        suspendVoice()
         statuses = Dictionary(uniqueKeysWithValues: Action.allCases.map { ($0, .recording) })
     }
     func cancelRecording() { recording = nil; retry() }
-    func retry() { settings = readSettings(); registerAll() }
+    func retry() {
+        settings = readSettings()
+        suspendVoice()
+        registerAll()
+    }
 
     private func registerAll() {
         guard running, recording == nil else { return }
@@ -170,9 +176,10 @@ import RoarkTPlatform
                 if action == .screenshot {
                     if let screenshotAction = self.screenshotAction { screenshotAction() }
                     else { self.notice = "截图尚未接入，请重新启动应用。" }
-                }
-                else if action == .voiceHoldToTalk { self.probe() }
-                else {
+                } else if action == .translateSelection || action == .summarizeSelection, let core = action.core {
+                    self.notice = nil
+                    self.selection(core)
+                } else {
                     self.notice = "\(action.title)即将推出；当前仅验证快捷键。"
                     self.comingSoon(action)
                 }
@@ -182,7 +189,10 @@ import RoarkTPlatform
                     guard shortcut.key == nil, shortcut.modifiers == .function else {
                         statuses[action] = .unsupported; continue
                     }
-                    try registrar.startFn(handler: handler)
+                    guard trusted() else { statuses[action] = .needsAccessibility; continue }
+                    // VoiceInputController alone owns press/release/cancel monitoring.
+                    statuses[action] = .registered
+                    continue
                 } else {
                     guard !shortcut.modifiers.intersection([.control, .option, .command]).isEmpty else {
                         statuses[action] = .unsupported; continue
@@ -193,10 +203,22 @@ import RoarkTPlatform
             } catch GlobalHotkeys.Failure.conflict { statuses[action] = .conflict }
               catch GlobalHotkeys.Failure.unsupportedShortcut { statuses[action] = .unsupported }
               catch GlobalHotkeys.Failure.system(let code) { statuses[action] = .system(code) }
-              catch FnKeyMonitor.Failure.noPermission { statuses[action] = .needsAccessibility }
               catch { statuses[action] = .unavailable }
         }
+        let shouldListen = statuses[.voiceHoldToTalk] == .registered
+        if shouldListen && !voiceEnabled {
+            voiceEnabled = voiceListening(true)
+            if !voiceEnabled { statuses[.voiceHoldToTalk] = .unavailable }
+        } else if !shouldListen { suspendVoice() }
     }
 
-    isolated deinit { permissionTask?.cancel(); registrar.stop() }
+    private func suspendVoice() {
+        if voiceEnabled { _ = voiceListening(false) }
+        voiceEnabled = false
+    }
+
+    isolated deinit {
+        permissionTask?.cancel(); registrar.stop()
+        if voiceEnabled { _ = voiceListening(false) }
+    }
 }

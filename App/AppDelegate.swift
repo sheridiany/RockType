@@ -14,11 +14,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let diagnostics = DiagnosticExportController()
     private let permissions = PermissionCenter()
     private let comingSoon = ComingSoonController()
+    private lazy var voice = VoiceInputController(store: store)
+    private let operationsEnvironment = OperationsEnvironment()
+    private lazy var operations = SelectionOperationsController(
+        environment: operationsEnvironment, settings: { [unowned self] in self.store.settings },
+        aiConfigured: { [unowned self] in self.connection.configured },
+        notice: { [weak self] in self?.comingSoon.show(message: $0) })
+    private lazy var selectionController = SelectionController(
+        settings: { [unowned self] in self.store.settings },
+        perform: { [weak self] request, source, rect in self?.operations.perform(request, source: source, toolbarRect: rect) },
+        search: { [weak self] in self?.operations.search($0, settings: $1) },
+        notice: { [weak self] in self?.comingSoon.show(message: $0) },
+        aiConfigured: { [unowned self] in self.connection.configured })
     private lazy var hotkeys = HotkeyCenter(
         read: { [unowned self] in self.store.settings.shortcuts },
         write: { [unowned self] in self.store.settings.shortcuts = $0 },
         showSettings: { [weak self] in self?.showSettings() },
-        comingSoon: { [weak self] in self?.comingSoon.show($0) })
+        comingSoon: { [weak self] in self?.comingSoon.show($0) },
+        selection: { [weak self] in self?.selectionController.trigger($0) },
+        voiceListening: { [weak self] enabled in
+            guard let self else { return false }
+            self.voice.stop()
+            if enabled { self.voice.start() }
+            let available = !enabled || self.voice.monitoringAvailable
+            if !available { self.voice.stop() }
+            return available
+        })
     private lazy var onboarding = OnboardingWindowController(
         store: store,
         permissions: { [unowned self] in AnyView(PermissionCenterView(center: self.permissions)) },
@@ -30,6 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let window = SettingsWindowController(store: store, login: login, connection: connection,
             sections: ShellSettingsSections(permissions: permissions, hotkeys: hotkeys,
                 showOnboarding: { [weak self] in self?.onboarding.rerun() }))
+        window.clearCurrentContent = { [weak self] in self?.clearCurrentContent() }
         window.exportDiagnostics = { [weak self] in self?.diagnostics.export() }
         return window
     }()
@@ -60,6 +82,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 failure: store.persistenceError == nil ? nil : .storage))
         }
         permissions.start()
+        operationsEnvironment.start()
+        selectionController.start()
         hotkeys.start()
         onboarding.applicationDidFinishLaunching()
     }
@@ -73,6 +97,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--gallery") { clock.stop(); panel.stop(); return }
         connection.cancel()
         hotkeys.stop()
+        voice.stop()
+        selectionController.stop()
+        operations.stop()
+        operationsEnvironment.stop()
         comingSoon.stop()
         permissions.stop()
         clock.stop()
@@ -84,6 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func settingsChanged(_ notification: Notification) {
         connection.refresh(store.settings.ai)
+        operations.settingsChanged()
         refreshStatus()
     }
 
@@ -111,11 +140,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             clock.refresh()
             connection.refresh(store.settings.ai)
             panel.toggle(from: button) {
-                LiveMenuRoot(store: store, clock: clock, connection: connection,
+                LiveMenuRoot(store: store, clock: clock, connection: connection, recent: operationsEnvironment.recent,
+                             reopen: { [weak self] result in self?.panel.close(); self?.operations.reopen(result) },
+                             clear: { [weak self] in self?.clearCurrentContent() },
                              showSettings: { [weak self] in self?.showSettings() },
                              quit: { NSApp.terminate(nil) })
             }
         }
+    }
+
+    private func clearCurrentContent() {
+        selectionController.dismiss()
+        operations.clearCurrentContent()
+        comingSoon.show(message: "当前内容已清除。")
     }
 
     @objc func showSettings() { panel.close(); settingsWindow.show() }
@@ -167,6 +204,9 @@ private struct LiveMenuRoot: View {
     let store: SettingsStore
     let clock: MenuBarClock
     let connection: ShellConnectionModel
+    let recent: InMemoryRecentResults
+    let reopen: (OperationResult) -> Void
+    let clear: () -> Void
     let showSettings: () -> Void
     let quit: () -> Void
     var body: some View {
@@ -174,6 +214,7 @@ private struct LiveMenuRoot: View {
                           aiStatus: connection.testing ? "AI 测试中" :
                             connection.results.prefix(2).allSatisfy({ $0 == "可用" }) ? "AI 文字/流式可用" :
                             connection.configured ? "AI 已配置 · 待验证" : "AI 未配置",
+                          recent: recent.results, reopen: reopen, clear: clear,
                           showSettings: showSettings, quit: quit)
             .preferredColorScheme(store.settings.general.appearance == .system ? nil :
                 store.settings.general.appearance == .dark ? .dark : .light)

@@ -121,7 +121,7 @@ import RoarkTPlatform
         }
         cancel(); let current = generation; result = ""; engine = ""; busy = true; notice = nil
         let snapshot = ContentSnapshot(text: text, source: .init(pid: ProcessInfo.processInfo.processIdentifier,
-            applicationName: "截图 OCR"), method: .paste)
+            applicationName: "截图 OCR"), method: .screenshotOCR)
         let events = runner.run(OperationRequest(session: OperationSession(snapshot: snapshot), template: template, settings: config))
         onResult()
         task = Task { [weak self] in

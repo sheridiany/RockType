@@ -48,6 +48,7 @@ import RoarkTPlatform
     private var sourcePID: Int32?
     private var recordingStarted: TimeInterval?
     private var running = false
+    private(set) var monitoringAvailable = false
     private var globalKeys: Any?
     private var localKeys: Any?
     private var workspaceObservers: [NSObjectProtocol] = []
@@ -86,7 +87,8 @@ import RoarkTPlatform
                 case .cancel: self?.cancel()
                 }
             }
-            do { try monitor.start() } catch {
+            do { try monitor.start(); monitoringAvailable = true } catch {
+                monitoringAvailable = false
                 show(.failed, "需要辅助功能权限；授权后重新启动语音监听。")
             }
             globalKeys = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -124,6 +126,7 @@ import RoarkTPlatform
     }
     func stop() {
         running = false
+        monitoringAvailable = false
         monitor.stop(); cancel()
         watchdog?.cancel(); watchdog = nil
         if let globalKeys { NSEvent.removeMonitor(globalKeys) }

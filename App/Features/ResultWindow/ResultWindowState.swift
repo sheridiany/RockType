@@ -13,7 +13,9 @@ final class ResultWindowState {
     private(set) var engine = ""
     private(set) var history: [OperationTurn] = []
     private(set) var currentQuestion: String?
-    var notice: String?
+    var notice: String? {
+        didSet { if phase == .failed, let notice { feedback(notice) } }
+    }
     var asking = false
     var question = ""
     var pinned = false
@@ -23,12 +25,14 @@ final class ResultWindowState {
     @ObservationIgnored private let runner: any OperationRunner
     @ObservationIgnored private let readable: @MainActor () -> Bool
     @ObservationIgnored private let completed: @MainActor (OperationResult) -> Void
+    @ObservationIgnored private let feedback: @MainActor (String) -> Void
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var revision: UInt64 = 0
 
     init(runner: any OperationRunner, readable: @escaping @MainActor () -> Bool,
-         completed: @escaping @MainActor (OperationResult) -> Void = { _ in }) {
-        self.runner = runner; self.readable = readable; self.completed = completed
+         completed: @escaping @MainActor (OperationResult) -> Void = { _ in },
+         feedback: @escaping @MainActor (String) -> Void = { _ in }) {
+        self.runner = runner; self.readable = readable; self.completed = completed; self.feedback = feedback
     }
 
     func start() { runner.start() }

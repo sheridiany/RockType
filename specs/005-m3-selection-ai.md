@@ -28,12 +28,9 @@
 | M3-1 | 操作引擎、快照、会话、最近结果、搜索、模型选择（C6–C9、C11、C14、C15） | pi-xpc | 完成（待验收） |
 | M3-2 | 翻译服务 `translateText` 与翻译路由（FR-E1 划词路径） | pi-xpc | 完成（待验收） |
 | M3-3 | 划词监听、取词管线、黑白名单、工具栏窗口、快捷键 ⌃⌥T/⌃⌥S 接入（C1–C5） | pi-platform | 完成（待验收） |
-| M3-4 | 结果浮窗窗口与交互、复制并返回、追问、置顶（C12、C13） | pi-surfaces | 未开始 |
-| M3-5 | 设置：操作模板编辑与自定义模板、按功能指定模型（C9、C10、C15 的界面） | pi-surfaces | 未开始 |
-| M3-3 | 划词监听、取词管线、黑白名单、工具栏窗口、快捷键 ⌃⌥T/⌃⌥S 接入（C1–C5） | pi-platform | 未开始 |
 | M3-4 | 结果浮窗窗口与交互、复制并返回、追问、置顶（C12、C13） | pi-surfaces | 完成（待验收） |
 | M3-5 | 设置：操作模板编辑与自定义模板、按功能指定模型（C9、C10、C15 的界面） | pi-surfaces | 完成（待验收） |
-| M3-6 | 集成与验收 | Claude | 未开始 |
+| M3-6 | 集成与验收 | pi-platform / Claude 验收 | 代码集成完成（待验收） |
 
 **接口先行**：pi-xpc 第一个 commit 只提交 `Core/Operations/` 的公开类型（`ContentSnapshot`、`OperationRequest`、`OperationEvent` 流事件、`OperationRunner` 协议、`RecentResults` 接口）与测试桩，在“进度”节登记 hash；pi-platform 与 pi-surfaces 合并该 commit 后开发，用桩实现自测。
 
@@ -81,8 +78,6 @@
 M3-4 检查已按新 AGENTS 规则迁入 `Tests/SurfaceTests/ResultWindowTests.swift`，通过 `Package.swift` 的 `RoarkTSurfaceTests` 运行，不再保留源码内独立测试入口。命令：`scripts/test.sh`（全部）或 `swift test --filter RoarkTSurfaceTests`（专项），同时生成合成内容的四张离屏预览。
 
 
-
-
 ### M3-1 / M3-2 交付记录
 
 - pi-xpc M3-1：`9d41579` 实现 `DefaultOperationRunner`、目标语言/模型选择、模板提示词、仅完成问答的上下文、超长拒绝、代次取消、Secure Input 防护、内存最近 10 条、搜索 URL；`8b02467` 提供 App 组合入口并补齐真实传输取消/隐私开关/空响应检查。
@@ -116,6 +111,7 @@ scripts/test.sh
 ROARKT_SELECTION_RENDER_DIR="$PWD/dist/selection-review" swift test --filter selectionToolbarRendersThemesAndStaysNonactivating
 scripts/render-gallery.sh
 ```
+
 ### M3-5 交付记录（pi-surfaces，2026-10-11）
 - 已合并 main 的真实操作引擎与测试规范，合并时保留 M3-1/M3-2 与 M3-4 双方状态及验收记录。M3-4 独立检查已迁入正式 `RoarkTSurfaceTests`；所有新增测试由 `scripts/test.sh` 运行。
 - 新增 `OperationTemplateSettings` 与 `OperationTemplateEditor`：内置提示词编辑与恢复；自定义模板名称、图标、输入类型、提示词、模型和输出形式；新增自动加入工具栏，删除同时移除启用/排序配置。编辑先保留草稿，保存后一次写入 SettingsStore 的 Binding；取消不更改设置；空名称、无效图标、空提示词、过期草稿不会覆盖已保存内容；内置模板保留文字输入且不能删除。
@@ -131,10 +127,37 @@ scripts/render-gallery.sh
 
 - 待 Claude 决定：各真实模型的输入预算。`OperationRequest.maximumInputBytes` 默认 16,384 UTF-8 字节，对完整提示词及会话一起校验、绝不截断；可由调用方按已验证模型的输入预算覆盖。当前设置没有模型上下文容量元数据，默认值不是对所有模型上限的声明。
 - 待 Claude 确认产品语义：翻译模板自定义提示词用于 AI 路径；`offlineFirst` 成功时仍按规格使用 Apple Translation（该 API 不支持提示词），不会应用自定义提示词。若希望编辑翻译提示词后必走 AI，需要在设置/路由规格中明确。
-- 已由 Claude 在 `44e7aad` 将 M3-1/M3-2 测试迁入 Tests 并接入 Package；原 `.checks/run.sh` 记录为历史证据，当前使用 scripts/test.sh。初始化输入法构建子模块后仍需重新运行完整 build.sh。
+- 已由 Claude 在 `44e7aad` 将 M3-1/M3-2 测试迁入 Tests 并接入 Package；原 `.checks/run.sh` 记录为历史证据，当前使用 scripts/test.sh。M3-6 已在初始化的子模块上通过完整 build.sh（见最终验证）。
 - 待人工验证：真实端点/模型及错误响应；已安装 Apple 语言包的中英与指定目标翻译；macOS < 26 回落；签名 App 到 LaunchAgent 的真实调用；密码框与终端 Secure Keyboard Entry 的无请求/无缓存；结果浮窗追问、复制并返回、最近结果菜单和设计验收（由 M3-3～M3-6 集成）。
 
-- **M3-3 集成交给 Claude**：构造并持有 SelectionController，`settings` 闭包读取 SettingsStore.settings（Observation 自动跟踪）；`perform` 将 OperationRequest 交给 M3-4 结果窗/runner，`search` 调用 `operationsEnvironment.search(snapshot.text, settings: settings.selection)` 并处理 false/错误，`notice` 展示无内容的错误提示；AppDelegate 生命周期调用 start/stop。窗口 followToolbar / automaticallyClose / automaticallyPin / windowOpacity 已在 request.settings 中，具体效果由 M3-4 结果窗处理。
-- **快捷键接线必须由 Claude 完成**：现有 `App/Shell/Hotkeys/HotkeyCenter.swift` 已注册翻译/总结，但 handler 仍调用 comingSoon；它不归 M3-3 所有。可在 AppDelegate 注入的 comingSoon 回调中将这两项分发至 `selectionController.trigger(.translateSelection / .summarizeSelection)`，保留现有冲突提示、录制暂停与即时改键。M3-3 不重复注册 Carbon 快捷键。真实快捷键端到端尚未完成。
-- **来源标识约定**：Platform.SelectionSource 的 windowIdentifier 是 AX 窗口 CFHash 得到的运行期不透明标识，不是 CGWindowID；在取词/工具栏期间另持有 AX 窗口与焦点元素并用 CFEqual 校验。M3-4 若需要实际定位来源窗口，应由 Claude 协调接口，不能把此字符串强转 CGWindowID。
+- **M3-3 原接线约定（M3-6 已实现）**：构造并持有 SelectionController，`settings` 闭包读取 SettingsStore.settings（Observation 自动跟踪）；`perform` 将 OperationRequest 交给 M3-4 结果窗/runner，`search` 调用 `operationsEnvironment.search(snapshot.text, settings: settings.selection)` 并处理 false/错误，`notice` 展示无内容的错误提示；AppDelegate 生命周期调用 start/stop。窗口 followToolbar / automaticallyClose / automaticallyPin / windowOpacity 已在 request.settings 中，具体效果由 M3-4 结果窗处理。
+- **快捷键接线已完成**：HotkeyCenter 的 selection 回调转发到 SelectionController.trigger，保留冲突提示、录制暂停与即时改键；截图仍走 comingSoon。真实快捷键跨应用端到端待人工验证。
+- **来源标识约定**：Platform.SelectionSource 的 windowIdentifier 是 AX 窗口 CFHash 得到的运行期不透明标识，不是 CGWindowID；在取词/工具栏期间另持有 AX 窗口与焦点元素并用 CFEqual 校验。M3-6 已在 App 捕获链中保留 OperationSource / AXUIElement，返回时激活应用后 AXRaise，不转换此标识。
 - 复制回退沿用 SPEC-010 已接受的 changeCount 竞争限制：NSPasteboard 不提供写入者身份/原子 compare-and-swap；外部首次写入、超时后迟到复制无法完全识别。未增加后台剪贴板监听。
+- M3-4 提示宿主已接 ComingSoonController.show(message:)；不截获来源按键，点击追问或 key 状态下 ⌘L。构建最终证据见 M3-6。
+
+
+### M3-6 代码集成证据（2026-10-11）
+
+- 代码集成完成（待验收）。AppDelegate 持有 SelectionController / OperationsEnvironment，生命周期已接入；翻译、总结快捷键转发，截图保持“即将推出”。工具栏操作通过 SelectionOperationsController 创建独占 runner，流式结果、追问、最近结果列表及重开已接入；搜索使用 OperationsEnvironment，复制使用 Clipboard，错误走 ComingSoonController 通用非激活提示。
+- 来源窗口在捕获时保留进程内 AXUIElement，不进入快照或最近结果；复制返回先激活来源应用再 AXRaise，窗口失效退化为应用，应用失效仅复制提示；切换过其他应用不拉回；最近结果重开不猜测窗口。
+- 设置即时读取：触发方式、黑白名单、窗口配置、模型及模板；生产模板页已使用 M3-5 分区。未配置 AI 时禁用工具栏 AI 操作并提示设置，翻译强制离线优先，追问拒绝并提示。最近结果改由完成回调按当前隐私设置写入，避免进行中请求用旧设置回写；菜单及隐私页均有清除当前内容入口。
+- 自动化：scripts/test.sh 通过（19 XCTest + 102 Swift Testing，Rime 与旧标识检查通过）。新增桩 runner 经生产工具栏分发→真实结果窗→最近结果测试，覆盖流式、追问、模型变更、隐私关闭、重开、清除、AI 未配置与保护状态；快捷键覆盖两项转发、录制暂停、改键、迟到回调、保护状态及截图占位。已有持久化/结果窗测试的固定时序等待改为有截止时间的条件等待，解决并行渲染占用 MainActor 导致的误报。
+- 最终完整 build、gallery 与实际启动结果见下方统一验证表。真实应用取词兼容矩阵、权限撤销、Secure Input、离线语言包和真实 AI、AXRaise 返回、中文追问、键盘与 VoiceOver、全屏/多屏与设计验收仍待人工验证。
+
+
+### M3-6 最终验证（含追加 M5 集成）
+
+- 集成基线：`af32a75` 将当时 main `8106843` 合入 agent/platform；M3 主链路 `04d2cd8`、快捷键转发 `14a2eb3`、M5 统一 Fn 所有权 `4419476`。没有 push，没有合并回 main；main 此后并行产生的 M4 / 分发改动未带入本轮验证。
+- 最近结果存储责任：App 的 OperationsEnvironment.makeRunner 不再直接注入 recent；由 SelectionOperationsController 的 completed 回调按完成时最新隐私设置写入。后续其他入口复用 runner 时应接相同回调或协调器，避免绕过动态隐私检查。AX 引用仅随当前窗口生命周期保留。
+
+| 检查 | 结果 | 证据与限制 |
+| --- | --- | --- |
+| scripts/test.sh | 通过 | 19 XCTest + 117 Swift Testing；Rime 三方案、AppShellTests、旧标识扫描均通过。日志 `/tmp/roarkt-m5-tests.log`。 |
+| scripts/build.sh | 通过 | 主 App、翻译服务、MLX worker、输入法、注册工具完整 Release 构建与签名；worker MLX self-test、合法签名 XPC 无效模型拒绝、同 Team 错 identifier 拒绝均通过。日志 `/tmp/roarkt-final-build.log`。 |
+| scripts/render-gallery.sh | 通过 | 208 PNG，位于本 worktree 的 dist/gallery；日志 `/tmp/roarkt-final-gallery.log`。导出成功不代表交互或设计验收。 |
+| 实际 App 启动/退出 | 通过（启动冒烟） | `open -n dist/RoarkT.app` 启动独立实例；按 bundle 实际路径核对 isFinishedLaunching=true、isTerminated=false，两次检查后正常 terminate 退出。日志 `/tmp/roarkt-final-launch.log`；原主仓库运行实例未被操作。未触发真实选区或麦克风。 |
+| 最终差异 | 通过 | git diff --check；规格重复合并记录已去重，保留 M3-1～M3-5 历史证据。 |
+| 人工功能与设计验收 | 待人工验证 | 跨应用取词、Secure Input/密码框/权限撤销、真实 Apple 语言包与 AI、AXRaise 及失效退化、中文追问/纯键盘/VoiceOver、全屏/多屏；真实 Fn/麦克风/模型识别/ticket 填入与 HUD。 |
+
+已知非阻塞构建提示：Core/Voice/LICENSE.md 未声明为 SPM 资源，沿用现有代码；本次没有修改资源归类。
