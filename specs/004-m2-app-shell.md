@@ -26,6 +26,8 @@
 | --- | --- | --- | --- | --- |
 | S1 | 设置模型 + 存储 + AI 客户端 + 连接测试 + 诊断日志 | pi-xpc | — | 完成（待验收） |
 | S2 | 菜单栏、菜单栏面板、设置窗口、开机启动 | pi-ui | S1 的 Settings 模型（先提交）；U3 菜单栏面板 | 未开始 |
+| S1 | 设置模型 + 存储 + AI 客户端 + 连接测试 + 诊断日志 | pi-xpc | — | 未开始 |
+| S2 | 菜单栏、菜单栏面板、设置窗口、开机启动 | pi-ui | S1 的 Settings 模型（先提交）；U3 菜单栏面板 | 完成（待验收） |
 | S3 | 权限中心与全局快捷键接线 | pi-platform | S1 的 Settings 模型 | 未开始 |
 | S4 | 首次引导与输入法“设置”入口 | pi-ime | S1 的 Settings 模型 | 未开始 |
 | S5 | 集成验收 | Claude | S1–S4 | 未开始 |
@@ -104,3 +106,65 @@ Settings 模型已提交：f87c60a。`Core/Settings/AppSettings.swift` 为公共
 - Claude 集成时需在负责输入法的工作树补齐子模块后重跑完整 `scripts/build.sh`；本工作树主 App/翻译服务已签名，不能代替输入法构建验收。
 - 当前 AI Base URL 仅允许 HTTPS（且不允许 userinfo/query/fragment），阻止密钥经明文发送；若产品要支持本机 HTTP 兼容端点，请决定是否只放行 loopback 并另行补充测试。
 - 同一 schemaVersion 当前严格完整解码；不支持的 schema 或缺字段按损坏配置保留副本并回落默认值。后续新增设置字段时需明确默认解码策略；不涉及旧产品迁移。
+### S2 交给 Claude 的集成决定
+
+1. U3 `MenuBarPanelView` 与 U4 `SettingsView` 把按钮动作和模拟状态封装在视图内部，没有生产回调/Binding 接口；它们不在 S2 文件所有权内。本分支保留它们及 Gallery，在 `App/Shell/` 新增生产视图，复用 Tokens、U4Card、U4Toggle、Notice 等组件。请确认该边界方案与生产界面视觉；如要合一，请另安排 Surfaces 所有者提取共享展示接口，不能直接把演示动作带入生产。
+2. S5 在 `AppDelegate` 创建 `SettingsWindowController` 时注入 `ShellSettingsSections`：`permissionsPane()` / `shortcutsPane()` 接 S3，`showOnboarding()` 接 S4。目前显式显示“等待集成”，不展示假授权、不注册模拟快捷键。S4 的首次自动引导也需在 AppDelegate 统一组装；S2 已处理 `--show-settings` 与重复启动时复用设置窗口。
+3. 输入法设置目前保存到统一 SettingsStore；需要 Claude 确认输入法侧实时消费链路归属与验收。语言包真实状态由 S4 提供。界面明确标示同步待集成，未宣称跨进程即时生效。
+4. 当前 `scripts/build.sh` 在完成主 App/翻译服务 Release 构建及签名后，因当前 worktree 输入法子模块未初始化退出 1；请在集成 worktree 初始化固定依赖后跑全产物构建。S2 未改动 InputMethod 或构建脚本。
+
+## S2 验收证据（2026-10-11）
+
+**状态：完成（待验收）**。仅 S2 实现与自动化自查完成，系统交互、设计与 S5 集成仍待 Claude 验收。
+
+### 实现与边界
+
+- RoarkT `R` 模板字形状态栏图标；左键 NSPanel、右键设置 / Debug 设计面板 / 退出；主菜单支持 `⌘,`、`⌘Q` 和文本编辑快捷键。面板点外部关闭、Esc 关闭、切换应用关闭；坐标限制在状态项所在屏幕的可见范围，不请求辅助功能来监听键盘。
+- 北京时间默认关闭，开启显示 `北京 HH:mm`；面板始终显示北京日期/星期和本地时间。固定 `Asia/Shanghai`，按分钟刷新，同时监听唤醒、系统时钟和时区变化；时钟变化不写设置文件。
+- 设置窗口 12 分区，复用单一窗口、支持滚动与浅深主题；通过 S1 SettingsStore 读写真实偏好。菜单栏时钟和主题即时更新；语音/划词/截图/模板执行清楚标为即将推出。输入法跨进程消费及 S3/S4 界面注入见问题节。
+- 开机启动使用 `SMAppService.mainApp`，读取实际系统状态；设置失败或待用户批准时展示原因，返回 App 时重新同步；不在启动时根据旧的偏好自动注册登录项。
+- AI 设置只将非密钥字段写入 SettingsStore；SecureField 编辑密钥、保存/删除走 S1 约定的 Keychain account。四项能力测试调用 S1 AIConnectionTester，逐项显示可用/不可用/未验证及固定错误原因；只发送合成样本。取消、修改配置或密钥后旧结果不能覆盖新状态；Secure Input 开启时拒绝测试，测试期间开启则取消。
+- 关于页 NSSavePanel 导出 S1 的诊断 ZIP；只记录封闭词汇的动作、状态和耗时，不记录连接字段、响应正文、密钥或导出文件路径。目标已存在时不覆盖，提示换新文件名。
+- 没有修改 `App/Surfaces/`、`App/Mock/`、`App/Gallery/`、S1 SettingsStore 或 S3/S4 文件；其他目录变化仅来自规格要求的依赖 merge。没有 push、没有 merge 到 main、没有修改其他 worktree。
+
+### 提交
+
+- `40e911a`：时钟与开机启动封装。
+- `ab78daa`：生产菜单栏面板、设置窗口、持久化绑定与钥匙串表单。
+- `852870b`：AI 能力测试、诊断导出、面板键盘焦点与分钟刷新收尾。
+- 依赖 merge：`fc8203c`（main / U3），`9c23baa`（S1 Settings 模型），`6764fc8`（S1 SettingsStore），`d73747c`（S1 AI），`b120876`（S1 诊断）。
+
+### 验证记录
+
+环境：Apple Silicon，Swift 6，当前 macOS 27；部署目标 macOS 14。
+
+| 命令 / 检查 | 结果 | 证据与限制 |
+| --- | --- | --- |
+| `swift build` | 通过 | 最终 S2 + 已合入 S1/U3 编译成功 |
+| `scripts/test.sh` | 通过 | 最终 57 项 Swift 测试、3 个 Rime 方案新鲜部署、旧标识扫描；S1 的设置/AI/诊断测试包含在内 |
+| `scripts/render-gallery.sh` | 通过 | `dist/gallery/` 共 208 张浅深主题 PNG，D0 入口保持可用；本次未重新执行 U3/U4 全量视觉验收 |
+| 临时 Swift 验证程序 | 通过 | `2026-10-11T15:59Z → 16:00Z` 验证北京 `23:59 → 00:00`、日期 11 → 12、星期一；同一 SettingsWindowController 连续 show 两次及关闭后重开始终只有一个设置窗口；使用临时设置文件并清理 |
+| 生产 Shell 渲染自查 | 通过（自查） | `dist/s2-review/`：12 设置分区 × 2 主题 + 时钟开关 × 2 主题，共 28 PNG；全部查看，默认视口可读，输入法/划词/模板长页通过滚动继续浏览；不包含用户配置或内容。不是完整键盘交互验收 |
+| `scripts/build.sh` | **阻塞（退出 1）** | 主 App、翻译服务 Release 构建与签名验证通过；随后提示 `Initialize dependencies with git submodule update --init --recursive.`，输入法完整构建未执行；未越界初始化/更改其依赖 |
+| `git diff --check` | 通过 | 自有代码无空白错误；最终文档修改后再次检查 |
+
+临时验证源保留在忽略的 `dist/s2-review/verify.swift`，截图同目录。复现命令（先 `swift build`，不读用户密钥、不请求权限、不改变登录项）：
+
+```sh
+swiftc -swift-version 6 -parse-as-library -module-name RoarkTApp \
+  -I .build/arm64-apple-macosx/debug/Modules -I Shared/XPCProtocol/include \
+  $(rg --files App -g '*.swift' | rg -v '^App/main.swift$') \
+  dist/s2-review/verify.swift \
+  $(rg --files .build/arm64-apple-macosx/debug | rg '(RoarkTCore.build|RoarkTPlatform.build)/.*\.o$') \
+  -o /tmp/roarkt-s2-verify
+/tmp/roarkt-s2-verify dist/s2-review
+```
+
+### 待人工验证 / 未验证
+
+- 菜单栏左右键、点外关闭/Esc、真实键盘编辑与 VoiceOver；多显示器/全屏下定位；实际睡眠唤醒与更改系统时区。
+- 已安装并签名 App 的开机启动启用、拒绝/允许批准、关闭、注销后重新登录；本次没有改变用户登录项。
+- 真实密钥保存/更换/删除与真实 AI 端点四项能力测试、Secure Input 中途取消；本次没有使用真实凭据或外部网络，Core URLProtocol 桩通过不代表真实端点验收。
+- NSSavePanel 交互式导出、打开 ZIP；Core 诊断导出与脱敏测试通过，但未以用户身份执行保存对话框。
+- S3 权限/快捷键与 S4 引导组装、输入法菜单打开设置端到端、输入法设置跨进程即时生效。
+- Claude 的生产界面设计验收、macOS 14 真机、NFR-3 空闲功耗实测。
