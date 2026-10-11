@@ -7,7 +7,7 @@ struct InputModeView: View {
         let p = Tokens.palette(scheme)
         HStack(spacing: Tokens.Space.sm) {
             Text(model.badge).font(Tokens.Typography.font(Tokens.Typography.input, weight: .semibold))
-                .frame(width: Tokens.U4.modeSide, height: Tokens.U4.modeSide)
+                .frame(width: Tokens.Size.modeSide, height: Tokens.Size.modeSide)
                 .foregroundStyle(p.accent).background(p.accentSoft, in: RoundedRectangle(cornerRadius: Tokens.Radius.card))
             if model == .scheme {
                 Text(model.detail).font(Tokens.Typography.font(weight: .medium)).padding(.trailing, Tokens.Space.md)

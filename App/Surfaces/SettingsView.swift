@@ -69,7 +69,7 @@ struct SettingsView: View {
             Text("设置预览")
                 .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(p.tertiary)
                 .padding(Tokens.Space.sm)
-        }.padding(Tokens.Space.md).frame(width: Tokens.U4.sidebarWidth).background(p.cardSecondary)
+        }.padding(Tokens.Space.md).frame(width: Tokens.Size.sidebarWidth).background(p.cardSecondary)
     }
 
     @ViewBuilder private var sectionContent: some View {
@@ -116,7 +116,7 @@ struct SettingsView: View {
         row(title) { U4Choice(title: title, value: value(key), options: options) }
     }
     private func field(_ title: String, _ key: String) -> some View {
-        row(title) { U4EditableField(title: title, value: value(key)).frame(width: Tokens.U4.fieldWidth) }
+        row(title) { U4EditableField(title: title, value: value(key)).frame(width: Tokens.Size.fieldWidth) }
     }
 
     private var generalPane: some View {

@@ -22,8 +22,7 @@ struct MenuBarPanelView: View {
         let p = Tokens.palette(scheme)
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
             HStack {
-                Label("RockType", systemImage: "square.stack.3d.up")
-                    .font(Tokens.Typography.font(Tokens.Typography.read, weight: .semibold))
+                SettingsBrand()
                 Spacer()
                 Button { feedback = "设置入口已选中" } label: { Image(systemName: "gearshape") }
                     .buttonStyle(DesignButtonStyle(variant: .ghost)).accessibilityLabel("设置")
@@ -59,9 +58,7 @@ struct MenuBarPanelView: View {
                 }
             }
             if recent.isEmpty {
-                Text("本次运行的结果暂存在这里，退出后清空。")
-                    .font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(p.secondary)
-                    .fixedSize(horizontal: false, vertical: true).padding(.vertical, Tokens.Space.sm)
+                MenuRecentEmptyState()
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(recent.prefix(showAll ? 10 : 5))) { item in

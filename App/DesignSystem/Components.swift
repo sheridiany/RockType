@@ -30,6 +30,7 @@ struct DesignButtonStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.designReduceMotion) private var previewReduceMotion
     @State private var hovering = false
+    @Environment(\.isFocused) private var focused
 
     func makeBody(configuration: Configuration) -> some View {
         let p = Tokens.palette(scheme)
@@ -54,6 +55,9 @@ struct DesignButtonStyle: ButtonStyle {
                         in: RoundedRectangle(cornerRadius: Tokens.Radius.control))
             .overlay(RoundedRectangle(cornerRadius: Tokens.Radius.control)
                 .stroke(variant == .secondary ? p.pillLine : .clear, lineWidth: Tokens.Size.stroke))
+            .overlay(RoundedRectangle(cornerRadius: Tokens.Radius.control)
+                .stroke(focused ? p.focus : .clear, lineWidth: Tokens.Size.focusRing)
+                .allowsHitTesting(false))
             .contentShape(RoundedRectangle(cornerRadius: Tokens.Radius.control))
             .onHover { hovering = $0 }
             .animation((reduceMotion || previewReduceMotion) ? nil : Tokens.Motion.hover, value: active)
@@ -66,7 +70,10 @@ struct Kbd: View {
     init(_ text: String) { self.text = text }
     var body: some View {
         Text(text).font(.system(size: Tokens.Typography.caption, design: .monospaced))
-            .foregroundStyle(Tokens.palette(scheme).tertiary)
+            .foregroundStyle(Tokens.palette(scheme).secondary)
+            .padding(.horizontal, Tokens.Space.xs).padding(.vertical, Tokens.Size.stroke * 2)
+            .background(Tokens.palette(scheme).bubble, in: RoundedRectangle(cornerRadius: Tokens.Radius.control / 2))
+            .accessibilityLabel("快捷键 " + text)
     }
 }
 
