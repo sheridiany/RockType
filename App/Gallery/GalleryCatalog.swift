@@ -19,6 +19,10 @@ enum GalleryCatalog {
             AnyView(ResultExampleView(model: .done))
         },
     ]
+    // U4: independent registration block; surfaces 1–5 are maintained separately.
+    + InputVoiceGallery.entries
+    + OnboardingGallery.entries
+    + SettingsGallery.entries
 }
 
 enum GalleryTheme: String, CaseIterable, Identifiable {
