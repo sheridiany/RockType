@@ -57,3 +57,19 @@ Voice dependency revisions are pinned in `Services/VoiceWorker/Package.resolved`
 `LICENSES/PROVENANCE.md` records the precise notice-source revisions used in this audit. For librime dependencies these are the commits pinned by librime 1.16.0. The shipped Luna Pinyin dictionary is byte-identical to upstream revision 56b934b099dfbeab842320f13aa8b461a6ab3e42 (SHA-256 75bcf6eb3ff62b129882ed89cc22b2d80a5347aa72bcfa2ccc839bac298e7314).
 
 The repository contains prebuilt universal librime and plugin binaries. Their plugin build revisions and full static dependency bill of materials are not recorded. The current essay data also differs from upstream HEAD. Supplying present upstream license texts does not prove the provenance of those binaries/data. Before public distribution, the release owner must recover the exact build inputs or rebuild from pinned source, reconcile any additional notices, and publish the matching complete source. These checks remain open; this inventory is not a claim that source-distribution acceptance has passed. See `GPL-SOURCE.md`.
+
+## RockType authored domain vocabulary (2026-10-11)
+
+`Rime/roarkt_ai.dict.yaml` contains 1,067 original Chinese terms across AI,
+software development, product, design and collaboration, licensed under MIT.
+It is not extracted from user files or copied from upstream domain dictionaries.
+The source asset remains MIT; it is imported into the GPL input method's combined
+Rime dictionary. Rime auto-encodes ordinary entries, with 104 explicit polyphonic
+readings. The weight 800 is an authored ranking priority, not a corpus count.
+
+The English dictionary adds 65 entries and updates 19 existing entries for canonical
+case or technical priority, bringing the total to 30,261. The curation follows the
+previous documented convention: lowercase alphabetic lookup codes, original output
+case and punctuation (`finetune` → `fine-tune`), priority 15,000 while preserving
+higher existing weights. This original contribution does not change the combined
+English data asset's CC-BY-SA-4.0 license or its upstream attribution.

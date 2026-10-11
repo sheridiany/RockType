@@ -21,3 +21,10 @@ Notice snapshots only; plugin/source revisions below do not assert that the exis
 Creative Commons text: official creativecommons/cc-legal-tools-data, docs/licenses/by-sa/4.0/legalcode.txt. Lua text: license comment in lua/lua v5.4.8 lua.h. Voice notices: the revisions in Voice/Package.resolved, including vendored MLX dependencies. Sparkle: official 2.8.0 binary artifact LICENSE. Squirrel notices: repository InputMethod/LICENSE.txt and LICENSE.translation.txt. Original copyright attributions are intentionally preserved.
 
 Rime prelude notice revision: `082425ea0684bca36474415d4a0e8db9b016487e` (https://github.com/rime/rime-prelude).
+
+## SPEC-011 dictionary import (2026-10-11)
+
+- rime-frost: <https://github.com/gaboolic/rime-frost/tree/64d24e89341aee133c0ad0f09b5f47a695e3d508>.
+- The checked upstream root `LICENSE` is copied verbatim to `rime-frost-GPL-3.0.txt` (SHA-256 `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`).
+- Imported source data: `cn_dicts/8105.dict.yaml`, `base.dict.yaml`, `ext.dict.yaml`, `others.dict.yaml`; upstream constituent-source headers retained. The 40 excluded names and modification notices are documented in `THIRD_PARTY_NOTICES.md`.
+- `Rime/roarkt_ai.dict.yaml` is original RockType vocabulary, MIT. The adapted English corpus remains CC-BY-SA-4.0.

@@ -41,5 +41,43 @@ import Testing
   let results = try String(contentsOf: output.appendingPathComponent("results.tsv"), encoding: .utf8)
   let rows = results.split(separator: "\n").dropFirst()
   #expect(rows.count == 200)
-  #expect(rows.filter { $0.hasSuffix("\t1") }.count >= 162)
+  #expect(rows.filter { $0.hasSuffix("\t1") }.count >= 181)
+  #expect(rows.filter { $0.hasPrefix("ai\t") && $0.hasSuffix("\t1") }.count >= 58)
+  #expect(rows.filter { $0.hasPrefix("daily\t") && $0.hasSuffix("\t1") }.count >= 75)
+}
+
+@Test func domainDictionaryReadingsAreEncodableAndUnique() throws {
+  let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+  func dictionaryRows(_ relativePath: String) throws -> [[String]] {
+    let text = try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
+    let body = try #require(text.components(separatedBy: "...\n").last)
+    return body.split(separator: "\n").filter { !$0.hasPrefix("#") }.map {
+      $0.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
+    }
+  }
+  var readings: [Character: Set<String>] = [:]
+  for row in try dictionaryRows("Rime/cn_dicts/8105.dict.yaml") where row.count >= 2 && row[0].count == 1 {
+    readings[row[0].first!, default: []].insert(row[1])
+  }
+  let rows = try dictionaryRows("Rime/roarkt_ai.dict.yaml")
+  #expect((800...1500).contains(rows.count))
+  var terms = Set<String>()
+  var uncodedCount = 0
+  for row in rows {
+    #expect(row.count == 2 || row.count == 3)
+    guard row.count >= 2 else { continue }
+    #expect(terms.insert(row[0]).inserted, "duplicate domain term: \(row[0])")
+    #expect((Int(row[1]) ?? 0) > 0)
+    for character in row[0] {
+      #expect(readings[character] != nil, "character cannot auto-encode: \(character)")
+    }
+    if row.count == 3 {
+      let syllables = row[2].split(separator: " ").map(String.init)
+      #expect(syllables.count == row[0].count, "reading length: \(row[0])")
+      for (character, syllable) in zip(row[0], syllables) {
+        #expect(readings[character, default: []].contains(syllable), "unsupported reading: \(row[0]) \(syllable)")
+      }
+    } else { uncodedCount += 1 }
+  }
+  #expect(uncodedCount > rows.count / 2, "ordinary terms should use the shared Rime character table")
 }

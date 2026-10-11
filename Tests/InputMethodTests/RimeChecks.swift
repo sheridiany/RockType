@@ -134,8 +134,61 @@ struct RimeChecks {
         consume("英文" + suffix)
       }
       print("Shift confirmed-prefix/raw-suffix commit passed: \(args[4])")
+    case "homophones":
+      // Technical priorities must leave the most common everyday homophones first.
+      for (pinyin, flypy, expected) in [
+        ("duiqi", "dvqi", "对其"), ("xiancun", "xmcy", "现存"),
+        ("yibu", "yibu", "一步"), ("zujian", "zujm", "逐渐"),
+        ("huidiao", "hvdn", "毁掉"), ("tongshi", "tsui", "同时"),
+        ("duandian", "drdm", "断电"), ("liantiao", "lmtn", "链条"),
+        ("xiecheng", "xpig", "写成"), ("xiancheng", "xmig", "县城"),
+      ] {
+        input(args[4] == "roarkt_flypy" ? flypy : pinyin)
+        require(page().words.first == expected, "everyday homophone first: \(expected), got \(page().words)")
+      }
+      print("Everyday homophone priorities passed: \(args[4])")
+    case "domain":
+      // Both schemes must encode the same domain terms, including polyphonic readings.
+      let samples: [(String, String, String)] = [
+        ("damoxing", "damoxk", "大模型"),
+        ("tishici", "tiuici", "提示词"),
+        ("zhinengti", "vingti", "智能体"),
+        ("weitiao", "wwtn", "微调"),
+        ("chongpaixu", "ispdxu", "重排序"),
+        ("liantiao", "lmtn", "联调"),
+        ("tiaoshi", "tnui", "调试"),
+        ("huidiao", "hvdn", "回调"),
+        ("xiangliangshujuku", "xllluujuku", "向量数据库"),
+        ("gongjudiaoyong", "gsjudnys", "工具调用"),
+        ("siweilian", "siwwlm", "思维链"),
+        ("hanggao", "hhgc", "行高"),
+        ("yaoshichuan", "ycuiir", "钥匙串"),
+      ]
+      for (pinyin, flypy, expected) in samples {
+        input(args[4] == "roarkt_flypy" ? flypy : pinyin)
+        guard let rank = find(expected) else { fatalError("missing domain reading: \(expected)") }
+        require(api.select_candidate_on_current_page(session, rank % 5), "domain selection")
+        consume(expected)
+      }
+      print("Domain readings and commits passed: \(args[4])")
     case "english":
 
+      // Lowercase lookup preserves canonical case/punctuation when actually committed.
+      for (raw, expected) in [
+        ("llm", "LLM"), ("rag", "RAG"), ("mcp", "MCP"), ("agent", "Agent"),
+        ("prompt", "prompt"), ("token", "token"), ("embedding", "embedding"),
+        ("finetune", "fine-tune"), ("claude", "Claude"), ("gpt", "GPT"),
+        ("gemini", "Gemini"), ("codex", "Codex"), ("cursor", "Cursor"),
+        ("copilot", "Copilot"), ("openai", "OpenAI"), ("anthropic", "Anthropic"),
+        ("swiftui", "SwiftUI"), ("xcode", "Xcode"), ("github", "GitHub"),
+        ("api", "API"), ("sdk", "SDK"), ("json", "JSON"), ("yaml", "YAML"),
+        ("kubernetes", "Kubernetes"),
+      ] {
+        input(raw)
+        guard let rank = find(expected) else { fatalError("missing English casing: \(expected)") }
+        require(api.select_candidate_on_current_page(session, rank % 5), "English selection")
+        consume(expected)
+      }
       input("what'are'you'doing")
       require(find("what are you doing") != nil, "apostrophe phrase candidate")
       let words = page().words

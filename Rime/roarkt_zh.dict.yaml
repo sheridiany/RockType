@@ -3,7 +3,7 @@
 
 ---
 name: roarkt_zh
-version: "0.4.0"
+version: "0.5.0"
 sort: by_weight
 use_preset_vocabulary: false
 import_tables:
@@ -11,6 +11,7 @@ import_tables:
   - cn_dicts/base
   - cn_dicts/ext
   - cn_dicts/others
+  - roarkt_ai
 ...
 
 你好	ni hao	100000

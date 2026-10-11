@@ -9,8 +9,22 @@ func requireLua()
 struct CandidateEvaluation {
   static func main() throws {
     let args = CommandLine.arguments
-    guard args.count == 7 else { fatalError("shared user build fixture schema output required") }
+    guard args.count == 8 else { fatalError("shared user build fixture schema output baseline required") }
     let lines = try String(contentsOfFile: args[4], encoding: .utf8).split(separator: "\n")
+    let baselineRows = try String(contentsOfFile: args[7], encoding: .utf8).split(separator: "\n").dropFirst()
+    var baseline: [String: (hits: Int, total: Int)] = [:]
+    var baselineInputs = Set<String>()
+    for row in baselineRows {
+      let fields = row.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
+      guard fields.count == 5, fields[4] == "0" || fields[4] == "1" else { fatalError("invalid baseline") }
+      guard baselineInputs.insert(fields.prefix(3).joined(separator: "\t")).inserted else { fatalError("duplicate baseline input") }
+      for key in [fields[0], "total"] {
+        var count = baseline[key, default: (0, 0)]
+        count.total += 1
+        count.hits += Int(fields[4])!
+        baseline[key] = count
+      }
+    }
     requireLua()
     let api = rime_get_api_stdbool().pointee
     var traits = RimeTraits.rimeStructInit()
@@ -30,6 +44,7 @@ struct CandidateEvaluation {
     for line in lines where !line.hasPrefix("#") {
       let fields = line.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
       guard fields.count == 3, !fields[1].isEmpty, !fields[2].isEmpty else { fatalError("invalid fixture row") }
+      guard baselineInputs.remove(fields.joined(separator: "\t")) != nil else { fatalError("fixture changed since baseline") }
       let session = api.create_session()
       guard session != 0, api.select_schema(session, args[5]) else { fatalError("schema unavailable") }
       api.set_option(session, "ascii_mode", false)
@@ -57,13 +72,20 @@ struct CandidateEvaluation {
       }
       report += fields.joined(separator: "\t") + "\t\(actual)\t\(hit ? 1 : 0)\n"
     }
-    guard !counts.isEmpty else { fatalError("empty evaluation") }
+    guard !counts.isEmpty, baselineInputs.isEmpty else { fatalError("incomplete evaluation") }
     try report.write(toFile: args[6], atomically: true, encoding: .utf8)
     for key in counts.keys.sorted() {
       let count = counts[key]!
       print(String(format: "%@\t%d/%d\t%.2f%%", key, count.hits, count.total, 100 * Double(count.hits) / Double(count.total)))
     }
+    for key in counts.keys.sorted() {
+      let count = counts[key]!
+      let previous = baseline[key]!
+      let delta = 100 * Double(count.hits - previous.hits) / Double(count.total)
+      print(String(format: "compare_%@\tbaseline=%d/%d\tcurrent=%d/%d\tdelta=%+.2fpp", key, previous.hits, previous.total, count.hits, count.total, delta))
+    }
     timings.sort()
     print(String(format: "key_refresh_p95_ms\t%.3f\tkeys=%d", timings[Int(ceil(Double(timings.count) * 0.95)) - 1], timings.count))
+    if counts["total"]!.hits < baseline["total"]!.hits { exit(2) }
   }
 }

@@ -28,5 +28,5 @@ xcrun swiftc -import-objc-header "$root/Tests/InputMethodTests/RimeBridge.h" -I 
   -Xlinker -rpath -Xlinker "$runtime/lib" -Xlinker -rpath -Xlinker "$runtime/lib/rime-plugins" \
   -o "$temporary/evaluate"
 "$temporary/evaluate" "$temporary/shared" "$temporary/user" "$temporary/build" \
-  "$root/Tests/InputMethodTests/Fixtures/candidate-eval.tsv" roarkt "$output/results.tsv" 2> "$output/runtime.log" | tee "$output/summary.tsv"
+  "$root/Tests/InputMethodTests/Fixtures/candidate-eval.tsv" roarkt "$output/results.tsv" "$root/Tests/InputMethodTests/Fixtures/candidate-baseline.tsv" 2> "$output/runtime.log" | tee "$output/summary.tsv"
 tail -n 3 "$output/deploy.log"
