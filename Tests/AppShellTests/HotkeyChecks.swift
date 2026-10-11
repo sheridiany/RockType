@@ -55,7 +55,7 @@ import RoarkTPlatform
         center.set(replacement, for: .screenshot)
         precondition(prefs.settings.bindings[.screenshot] == replacement)
         precondition(registrar.registered.contains(replacement))
-        staleAction?(); precondition(prefs.actions.count == 3)
+        staleAction?(); precondition(prefs.actions.count == 2 && screenshots == 1, "Stale screenshot handler must not run")
         staleFn?(); precondition(prefs.probes == 1, "Queued old handler must not run after re-registration")
         // A caller other than this view changes the observable Store.
         prefs.settings.bindings[.screenshot] = Shortcut(key: "j", modifiers: .control)
