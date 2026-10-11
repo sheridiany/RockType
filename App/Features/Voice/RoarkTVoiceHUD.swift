@@ -4,12 +4,14 @@ import AppKit
 final class RoarkTVoiceHUD: NSObject {
     enum State: Equatable {
         case preparing, recording, processing
+        case activity(String)
         case success(String)
         case notice(title: String, detail: String)
         case result(String, reason: String = "当前输入框未能接收文字，结果已保留。")
 
         var title: String {
             switch self {
+            case .activity(let text): text
             case .preparing: "模型准备中"
             case .recording: "正在录音"
             case .processing: "正在识别"

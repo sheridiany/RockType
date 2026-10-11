@@ -40,9 +40,9 @@ import RoarkTPlatform
     func show() {
         switch state.phase {
         case .hidden: hud.hide()
-        case .preparing: hud.show(.preparing)
+        case .preparing: hud.show(.activity(state.message))
         case .recording: hud.show(.recording)
-        case .recognizing: hud.show(.processing)
+        case .recognizing: hud.show(.activity(state.message))
         case .done: hud.show(.success(state.message))
         case .failed:
             if state.result.isEmpty {

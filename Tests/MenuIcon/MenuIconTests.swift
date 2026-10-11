@@ -23,7 +23,7 @@ final class MenuIconTests: XCTestCase {
         XCTAssertEqual(try run(["swift", root.appendingPathComponent("scripts/generate-menu-icon.swift").path, pdf.path]), 0)
         XCTAssertEqual(try run(["swift", root.appendingPathComponent("Tests/MenuIcon/test-menu-icon.swift").path, pdf.path]), 0)
         let probe = output.appendingPathComponent("system-renderer-probe")
-        XCTAssertEqual(try run(["clang", "-fobjc-arc", "-framework", "AppKit", root.appendingPathComponent("Tests/MenuIcon/SystemRendererProbe.m").path, "-o", probe.path]), 0)
+        XCTAssertEqual(try run(["--sdk", "macosx", "clang", "-fobjc-arc", "-framework", "AppKit", root.appendingPathComponent("Tests/MenuIcon/SystemRendererProbe.m").path, "-o", probe.path]), 0)
         defer { try? FileManager.default.removeItem(at: probe) }
         let process = Process()
         process.executableURL = probe

@@ -61,8 +61,11 @@ import Testing
     }
     for (phase, name) in [(VoiceHUDState.Phase.preparing, "preparing"), (.recording, "recording"), (.recognizing, "processing"), (.done, "done")] {
         state.phase = phase
-        state.message = "已填入 · 未发送"
+        state.message = phase == .preparing ? "正在绑定输入位置…" : phase == .recognizing ? "正在润色…" : "已填入 · 未发送"
         controller.show()
+        if phase == .preparing || phase == .recognizing {
+            #expect(hud.state.title == state.message, "Keep the live operation status in the restored layout")
+        }
         if phase == .recording {
             state.seconds = 8
             for level in [0.2, 0.6, 0.9, 0.3, 0.8, 0.4, 0.2, 0.7, 0.3] {
