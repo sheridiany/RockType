@@ -55,3 +55,42 @@ import RoarkTCore
         #expect(OnboardingWindowController.launchAction(arguments: ["--render-gallery", "/tmp/gallery", "--show-settings"], completed: completed) == .none)
     }
 }
+
+@MainActor @Test func selectionHotkeysForwardAndRejectStaleOrProtectedEvents() throws {
+    let registrar = ShellRegistrar()
+    var settings = ShortcutSettings()
+    var allowed = true
+    var received: [ShortcutAction] = []
+    var placeholders: [HotkeyCenter.Action] = []
+    let center = HotkeyCenter(read: { settings }, write: { settings = $0 }, showSettings: {},
+        comingSoon: { placeholders.append($0) }, selection: { received.append($0) },
+        registrar: registrar, allowed: { allowed }, trusted: { true })
+    center.start()
+    defer { center.stop() }
+    let translateShortcut = try #require(Shortcut.defaults[.translateSelection])
+    let translate = try #require(registrar.handler(translateShortcut))
+    let summarizeShortcut = try #require(Shortcut.defaults[.summarizeSelection])
+    let summarize = try #require(registrar.handler(summarizeShortcut))
+    translate(); summarize()
+    #expect(received == [.translateSelection, .summarizeSelection])
+    #expect(center.notice == nil && placeholders.isEmpty)
+    allowed = false; translate(); summarize()
+    #expect(received.count == 2)
+    allowed = true
+    center.beginRecording(.translateSelection); translate()
+    #expect(received.count == 2)
+    center.cancelRecording()
+    let replacement = Shortcut(key: "u", modifiers: [.control, .option])
+    center.set(replacement, for: .translateSelection)
+    translate()
+    #expect(received.count == 2)
+    let replacedHandler = try #require(registrar.handler(replacement))
+    replacedHandler()
+    #expect(received.last == .translateSelection && received.count == 3)
+    let screenshot = try #require(Shortcut.defaults[.screenshot])
+    let screenshotHandler = try #require(registrar.handler(screenshot))
+    screenshotHandler()
+    #expect(placeholders == [.screenshot])
+    center.stop(); summarize()
+    #expect(received.count == 3)
+}

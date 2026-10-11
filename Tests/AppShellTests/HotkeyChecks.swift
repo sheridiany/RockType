@@ -8,6 +8,7 @@ import RoarkTPlatform
     var probes = 0
     var settingsOpened = 0
     var actions: [HotkeyCenter.Action] = []
+    var selections: [ShortcutAction] = []
 }
 @MainActor final class Registrar: HotkeyRegistering {
     var registered: [Shortcut] = []
@@ -32,15 +33,15 @@ import RoarkTPlatform
         let prefs = Preferences(), registrar = Registrar()
         let center = HotkeyCenter(read: { prefs.settings }, write: { prefs.settings = $0 },
                                   showSettings: { prefs.settingsOpened += 1 },
-                                  comingSoon: { prefs.actions.append($0) }, registrar: registrar,
+                                  comingSoon: { prefs.actions.append($0) }, selection: { prefs.selections.append($0) }, registrar: registrar,
                                   allowed: { prefs.allowed }, trusted: { true }, probe: { prefs.probes += 1 })
         center.start()
         precondition(registrar.registered.count == 3 && registrar.fn != nil)
         registrar.handlers.forEach { $0() }
-        precondition(prefs.actions == [.screenshot, .translateSelection, .summarizeSelection])
+        precondition(prefs.actions == [.screenshot] && prefs.selections == [.translateSelection, .summarizeSelection])
         prefs.allowed = false
         registrar.handlers.forEach { $0() }
-        precondition(prefs.actions.count == 3, "Secure Input must suppress notices and diagnostics")
+        precondition(prefs.actions.count == 1 && prefs.selections.count == 2, "Secure Input must suppress notices and diagnostics")
         prefs.allowed = true
         let staleAction = registrar.handlers.first
         let staleFn = registrar.fn
@@ -51,7 +52,7 @@ import RoarkTPlatform
         center.set(replacement, for: .screenshot)
         precondition(prefs.settings.bindings[.screenshot] == replacement)
         precondition(registrar.registered.contains(replacement))
-        staleAction?(); precondition(prefs.actions.count == 3)
+        staleAction?(); precondition(prefs.actions.count == 1 && prefs.selections.count == 2)
         staleFn?(); precondition(prefs.probes == 1, "Queued old handler must not run after re-registration")
         // A caller other than this view changes the observable Store.
         prefs.settings.bindings[.screenshot] = Shortcut(key: "j", modifiers: .control)

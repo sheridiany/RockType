@@ -64,6 +64,7 @@ import RoarkTPlatform
     @ObservationIgnored private let writeSettings: @MainActor (ShortcutSettings) -> Void
     @ObservationIgnored private let showSettings: @MainActor () -> Void
     @ObservationIgnored private let comingSoon: @MainActor (Action) -> Void
+    @ObservationIgnored private let selection: @MainActor (ShortcutAction) -> Void
     @ObservationIgnored private let probe: @MainActor () -> Void
     @ObservationIgnored private let allowed: @MainActor () -> Bool
     @ObservationIgnored private let trusted: @MainActor () -> Bool
@@ -77,12 +78,13 @@ import RoarkTPlatform
          write: @escaping @MainActor (ShortcutSettings) -> Void,
          showSettings: @escaping @MainActor () -> Void,
          comingSoon: @escaping @MainActor (Action) -> Void = { _ in },
+         selection: @escaping @MainActor (ShortcutAction) -> Void = { _ in },
          registrar: (any HotkeyRegistering)? = nil,
          allowed: @escaping @MainActor () -> Bool = { SecureInput.status() == .allowed },
          trusted: @escaping @MainActor () -> Bool = { Accessibility.isTrusted() },
          probe: @escaping @MainActor () -> Void = { logger.info("action=voiceHoldProbe status=pressed") }) {
         self.readSettings = read; self.writeSettings = write; self.showSettings = showSettings
-        self.comingSoon = comingSoon
+        self.comingSoon = comingSoon; self.selection = selection
         self.registrar = registrar ?? SystemHotkeyRegistrar()
         self.allowed = allowed; self.trusted = trusted; self.probe = probe
         settings = read()
@@ -167,7 +169,10 @@ import RoarkTPlatform
                 if action == .showSettings { self.showSettings(); return }
                 guard self.allowed() else { return }
                 if action == .voiceHoldToTalk { self.probe() }
-                else {
+                else if action == .translateSelection || action == .summarizeSelection, let core = action.core {
+                    self.notice = nil
+                    self.selection(core)
+                } else {
                     self.notice = "\(action.title)即将推出；当前仅验证快捷键。"
                     self.comingSoon(action)
                 }
