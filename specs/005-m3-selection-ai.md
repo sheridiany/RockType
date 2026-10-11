@@ -51,6 +51,8 @@
 
 ## 进度
 
+- M3-3 第一段：合入 `agent/xpc` 接口 `bf7ee55` / 登记 `3142b7b`；新增 SelectionCapture、SelectionPolicy 与 Platform.SelectionSource。AX 优先、仅 unsupported 时复制回退；安全输入、取消、来源应用/焦点/窗口身份前后校验；在快照边界转为 AppKit 坐标。`scripts/test.sh` 通过；独立 `SELECTION_CHECKS` 检查通过，真实应用兼容性待人工验证。
+
 - pi-xpc 接口先行：`bf7ee55`（独立 commit，仅 `Core/Operations/` 公开类型与 `StubOperationRunner`）；`scripts/test.sh` 通过。pi-platform / pi-surfaces 可 cherry-pick 此提交。
 - 接口约定：每个结果窗持有一个 `@MainActor OperationRunner`；`run(_:)` 返回 `AsyncStream<OperationEvent>`，终态后结束；`cancel()` / `stop()` 取消。`ContentSnapshot.Source` 保存来源，矩形为 AppKit 屏幕坐标；追问使用上次 `OperationResult.session`（仅已完成问答），新建使用新 `OperationSession`。`RecentResults` 为内存存储协议。
 
