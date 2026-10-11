@@ -45,13 +45,17 @@ import RoarkTCore
     var pid: Int32? = 10
     var granted = true
     var validModel = true
+    var settings = VoiceSettings()
+    var selected = false
+    var polish: @MainActor (String) async -> String = { $0 }
     lazy var controller = VoiceInputController(recorder: recorder, worker: worker, bridge: bridge,
-        environment: VoiceEnvironment(settings: { VoiceSettings() }, allowed: { self.allowed },
+        environment: VoiceEnvironment(settings: { self.settings }, allowed: { self.allowed },
             pid: { self.pid }, held: { self.held }, microphoneGranted: { self.granted },
             validate: { _ in
                 guard self.validModel else { throw VoiceFailure.model }
                 return URL(fileURLWithPath: "/synthetic-model")
-            }, shortcutEnabled: { true }), presentsHUD: false)
+            }, shortcutEnabled: { true }, inputSourceSelected: { self.selected },
+            polish: { await self.polish($0) }), presentsHUD: false)
     func begin() async {
         controller.start(monitorEvents: false); controller.press()
         for _ in 0..<20 { await Task.yield() }
@@ -140,4 +144,73 @@ import RoarkTCore
     #expect(accepted)
     let reused = ticket.consume(third, context: context, now: 1, deadline: 10)
     #expect(!reused)
+}
+
+@MainActor @Test func voicePreparationDoesNotRecordReusesWarmModelAndReleasesWhenDisabled() async {
+    let h = VoiceHarness()
+    h.settings.automaticallyPrepareModel = true
+    h.selected = true; h.held = false
+    h.controller.start(monitorEvents: false)
+    for _ in 0..<30 { await Task.yield() }
+    #expect(h.worker.prepared == 1)
+    #expect(h.recorder.starts == 0)
+    h.held = true; h.controller.press()
+    for _ in 0..<30 { await Task.yield() }
+    await h.recognize()
+    #expect(h.worker.prepared == 1)
+    h.worker.resolve("预加载路径合成结果")
+    for _ in 0..<30 { await Task.yield() }
+    let stopped = h.worker.stopped
+    h.settings.automaticallyPrepareModel = false
+    h.controller.refreshPreparation()
+    #expect(h.worker.stopped > stopped)
+    #expect(!h.recorder.active)
+    h.controller.stop()
+}
+
+@MainActor @Test func voicePreparationWaitsForSelectedSourceAndReloadsNewModel() async {
+    let h = VoiceHarness()
+    h.settings.automaticallyPrepareModel = true; h.held = false
+    h.controller.start(monitorEvents: false)
+    for _ in 0..<30 { await Task.yield() }
+    #expect(h.worker.prepared == 0)
+    h.selected = true; h.controller.refreshPreparation()
+    for _ in 0..<30 { await Task.yield() }
+    #expect(h.worker.prepared == 1)
+    h.settings.model = .large; h.controller.refreshPreparation()
+    for _ in 0..<30 { await Task.yield() }
+    #expect(h.worker.prepared == 2)
+    #expect(h.recorder.starts == 0)
+    h.controller.stop()
+}
+
+@MainActor @Test func voiceCancellationDuringPolishCannotCommitLateAIResult() async {
+    let h = VoiceHarness()
+    var pending: CheckedContinuation<String, Never>?
+    h.settings.polishWithAI = true
+    h.polish = { _ in await withCheckedContinuation { pending = $0 } }
+    await h.begin(); await h.recognize()
+    h.worker.resolve("AI 前的合成原文")
+    for _ in 0..<30 { await Task.yield() }
+    #expect(pending != nil)
+    h.controller.cancel()
+    pending?.resume(returning: "迟到的 AI 合成文本")
+    for _ in 0..<30 { await Task.yield() }
+    #expect(h.bridge.texts.isEmpty)
+    #expect(h.controller.state.result.isEmpty)
+    h.controller.stop()
+}
+
+@MainActor @Test func voiceNewHoldStopsBusyWorkerEvenWithAutomaticPreparation() async {
+    let h = VoiceHarness()
+    h.settings.automaticallyPrepareModel = true; h.selected = true
+    await h.begin(); await h.recognize()
+    let stopped = h.worker.stopped
+    h.held = true; h.controller.press()
+    #expect(h.worker.stopped > stopped)
+    h.worker.resolve("上一轮合成结果")
+    for _ in 0..<30 { await Task.yield() }
+    #expect(h.bridge.texts.isEmpty)
+    #expect(h.controller.state.phase == .recording)
+    h.controller.stop()
 }

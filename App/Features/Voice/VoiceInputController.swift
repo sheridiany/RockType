@@ -1,5 +1,6 @@
 import AppKit
 import AVFoundation
+import Carbon
 import RoarkTCore
 import RoarkTPlatform
 
@@ -12,6 +13,9 @@ import RoarkTPlatform
     var validate: @MainActor (VoiceModel) async throws -> URL
     var shortcutEnabled: () -> Bool
     var modelPresent: (VoiceModel) -> Bool = { _ in true }
+    var inputSourceSelected: () -> Bool = { false }
+    var modelRevision: () -> Int = { 0 }
+    var polish: @MainActor (String) async -> String = { $0 }
 
     static func system(store: SettingsStore, models: VoiceModelStore) -> Self {
         Self(settings: { store.settings.voice }, allowed: { SecureInput.status() == .allowed },
@@ -20,7 +24,10 @@ import RoarkTPlatform
              microphoneGranted: { AVCaptureDevice.authorizationStatus(for: .audio) == .authorized },
              validate: { try await models.validate($0) },
              shortcutEnabled: { store.settings.shortcuts.bindings[.voiceHoldToTalk] == Shortcut(key: nil, modifiers: .function) },
-             modelPresent: { models.isPresent($0) })
+             modelPresent: { models.isPresent($0) },
+             inputSourceSelected: { InputSourceSnapshot.current().selectedRoarkTID != nil },
+             modelRevision: { models.revision },
+             polish: { await VoicePolisher(settings: { store.settings }).polish($0) })
     }
 }
 
@@ -45,6 +52,14 @@ import RoarkTPlatform
     private var localKeys: Any?
     private var workspaceObservers: [NSObjectProtocol] = []
     private var deletionObserver: NSObjectProtocol?
+    private var settingsObserver: NSObjectProtocol?
+    private var inputSourceObserver: NSObjectProtocol?
+    private var preparation: Task<Void, Never>?
+    private var preparationID = UUID()
+    private var preparedModel: VoiceModel?
+    private var attemptedPreparation: String?
+    private var observedSettings: VoiceSettings?
+    private var idleTicks = 0
 
     init(store: SettingsStore = .shared, models: VoiceModelStore = .shared,
          recorder: (any VoiceRecording)? = nil, worker: (any VoiceRecognizing)? = nil,
@@ -88,10 +103,18 @@ import RoarkTPlatform
             }
         }
         if monitorEvents {
-        deletionObserver = NotificationCenter.default.addObserver(forName: VoiceModelStore.willDelete, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.cancel() }
+            settingsObserver = NotificationCenter.default.addObserver(forName: SettingsStore.didChange, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.refreshPreparation() }
+            }
+            inputSourceObserver = DistributedNotificationCenter.default().addObserver(
+                forName: NSNotification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String), object: nil, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.refreshPreparation() }
+                }
+            deletionObserver = NotificationCenter.default.addObserver(forName: VoiceModelStore.willDelete, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.cancel() }
+            }
         }
-        }
+        refreshPreparation()
         watchdog = Task { [weak self] in
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .milliseconds(50)) } catch { return }
@@ -110,11 +133,17 @@ import RoarkTPlatform
         workspaceObservers = []
         if let deletionObserver { NotificationCenter.default.removeObserver(deletionObserver) }
         deletionObserver = nil
+        if let settingsObserver { NotificationCenter.default.removeObserver(settingsObserver) }
+        if let inputSourceObserver { DistributedNotificationCenter.default().removeObserver(inputSourceObserver) }
+        settingsObserver = nil; inputSourceObserver = nil
     }
 
     func press() {
         guard running, environment.shortcutEnabled(), environment.allowed(), environment.held() else { return }
-        cancel()
+        let idle = ![.preparing, .recording, .recognizing].contains(state.phase)
+        let keepPrepared = idle && environment.settings().automaticallyPrepareModel && environment.inputSourceSelected() &&
+            preparedModel == VoiceModel(environment.settings().model)
+        reset(preservingPrepared: keepPrepared)
         guard environment.microphoneGranted() else {
             show(.failed, "请在设置 → 权限中允许麦克风，再按住 Fn。")
             return
@@ -165,43 +194,62 @@ import RoarkTPlatform
         task = Task { [weak self] in
             guard let self else { return }
             do {
-                let directory = try await environment.validate(model)
-                guard session == id, !Task.isCancelled, environment.allowed() else { return }
-                try await worker.prepare(directory: directory)
-                guard session == id, !Task.isCancelled, environment.allowed() else { return }
+                if preparedModel != model {
+                    let directory = try await environment.validate(model)
+                    guard session == id, !Task.isCancelled, environment.allowed() else { return }
+                    try await worker.prepare(directory: directory)
+                    guard session == id, !Task.isCancelled, environment.allowed() else { return }
+                    preparedModel = model
+                }
                 let text = try await worker.transcribe(audio)
                 guard session == id, !Task.isCancelled, environment.allowed() else { return }
                 let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !normalized.isEmpty else { throw VoiceFailure.empty }
                 state.result = normalized
+                if environment.settings().polishWithAI { show(.recognizing, "正在润色…") }
+                let polished = await environment.polish(normalized)
+                guard session == id, !Task.isCancelled, environment.allowed() else { return }
+                state.result = polished
                 let eligible = environment.pid() == sourcePID &&
-                    VoiceInsertionPolicy.allowsAutomaticInsertion(text: normalized, applicationID: target.applicationID)
-                let accepted = eligible ? ((try? await bridge.commit(normalized, target: target)) ?? false) : false
+                    VoiceInsertionPolicy.allowsAutomaticInsertion(text: polished, applicationID: target.applicationID)
+                let accepted = eligible ? ((try? await bridge.commit(polished, target: target)) ?? false) : false
                 guard session == id, !Task.isCancelled, environment.allowed() else { return }
                 bridge.cancel(target); self.target = nil
-                worker.stop()
+                if !environment.settings().automaticallyPrepareModel || !environment.inputSourceSelected() {
+                    worker.stop(); preparedModel = nil
+                }
                 show(accepted ? .done : .failed, accepted ? "已填入 · 未发送" : "输入位置已变化或提交超时，请复制结果。")
             } catch {
                 guard session == id, !Task.isCancelled else { return }
-                worker.stop(); bridge.cancel(target); self.target = nil
+                worker.stop(); preparedModel = nil; bridge.cancel(target); self.target = nil
                 show(.failed, "识别未完成，请检查模型下载与校验状态后重试。")
             }
         }
     }
-    func cancel() {
+    func cancel() { reset(preservingPrepared: false) }
+
+    private func reset(preservingPrepared: Bool) {
         session = UUID()
+        preparationID = UUID(); preparation?.cancel(); preparation = nil
+        attemptedPreparation = nil
         task?.cancel(); task = nil
-        recorder.cancel(); worker.stop(); bridge.cancel(target)
+        recorder.cancel(); bridge.cancel(target)
+        if !preservingPrepared { worker.stop(); preparedModel = nil }
         target = nil; sourcePID = nil; recordingStarted = nil
         state.result = ""; state.phase = .hidden; state.message = ""
+        state.seconds = 0; state.levels = Array(repeating: 0.05, count: 9)
         hud?.hide()
     }
     private func tick() {
         guard running else { return }
-        if !environment.allowed() || !environment.shortcutEnabled() {
-            if state.phase != .hidden { cancel() }
-            return
+        idleTicks += 1
+        if idleTicks >= 20 { idleTicks = 0; refreshPreparation() }
+        guard state.phase != .hidden else { return }
+        if !environment.allowed() {
+            if [.preparing, .recording, .recognizing].contains(state.phase) || !state.result.isEmpty { cancel() }
+            return // Keep permission guidance visible; it contains no captured content.
         }
+        if !environment.shortcutEnabled() { cancel(); return }
         if state.phase == .preparing, !environment.held() { cancel(); return }
         guard state.phase == .recording, let recordingStarted else { return }
         if !recorder.isRecording { cancel(); return }
@@ -212,6 +260,46 @@ import RoarkTPlatform
         state.seconds = Int(elapsed)
         state.levels.removeFirst(); state.levels.append(recorder.level)
     }
+    /// Input-source/settings changes only load a verified local model. Never opens the mic.
+    func refreshPreparation() {
+        guard running else { return }
+        let settings = environment.settings()
+        if let previous = observedSettings, previous != settings { cancel() }
+        observedSettings = settings
+        let selected = environment.inputSourceSelected()
+        let shouldPrepare = settings.automaticallyPrepareModel && selected
+        let active = [.preparing, .recording, .recognizing].contains(state.phase)
+        if !shouldPrepare {
+            // An in-flight dictation may finish; do not stop its worker merely on source change.
+            if !active {
+                preparationID = UUID(); preparation?.cancel(); preparation = nil
+                if preparedModel != nil || attemptedPreparation != nil { worker.stop(); preparedModel = nil }
+                attemptedPreparation = nil
+            }
+            return
+        }
+        let model = VoiceModel(settings.model)
+        guard !active, !environment.held(), environment.modelPresent(model), preparedModel != model else { return }
+        let key = model.rawValue + ":" + String(environment.modelRevision())
+        guard preparation == nil, attemptedPreparation != key else { return }
+        attemptedPreparation = key
+        let id = UUID(); preparationID = id
+        preparation = Task { [weak self] in
+            guard let self else { return }
+            defer { if preparationID == id { preparation = nil } }
+            do {
+                let directory = try await environment.validate(model)
+                guard preparationID == id, !Task.isCancelled else { return }
+                try await worker.prepare(directory: directory)
+                guard preparationID == id, !Task.isCancelled else { return }
+                preparedModel = model
+            } catch {
+                guard preparationID == id else { return }
+                worker.stop(); preparedModel = nil
+            }
+        }
+    }
+
     private func show(_ phase: VoiceHUDState.Phase, _ message: String) {
         state.phase = phase; state.message = message; hud?.show()
     }
