@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>RoarkT</string>
+	<string>RockType</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -60,7 +60,7 @@
 				<key>tsInputModeScriptKey</key>
 				<string>smUnicodeScript</string>
 				<key>tsInputModeLocalizedNameKey</key>
-				<string>RoarkT（全拼）</string>
+				<string>RockType Pinyin</string>
 				<key>RoarkTSchemaID</key>
 				<string>roarkt</string>
 			</dict>
@@ -96,7 +96,7 @@
 				<key>tsInputModeScriptKey</key>
 				<string>smUnicodeScript</string>
 				<key>tsInputModeLocalizedNameKey</key>
-				<string>RoarkT（小鹤双拼）</string>
+				<string>RockType Shuangpin</string>
 				<key>RoarkTSchemaID</key>
 				<string>roarkt_flypy</string>
 			</dict>
@@ -122,6 +122,6 @@
 	<key>TICapsLockLanguageSwitchCapable</key>
 	<true/>
 	<key>CFBundleDisplayName</key>
-	<string>RoarkT</string>
+	<string>RockType</string>
 </dict>
 </plist>

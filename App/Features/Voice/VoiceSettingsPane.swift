@@ -31,14 +31,14 @@ struct VoiceSettingsPane: View {
                 }
             }
             U4Card {
-                Toggle("选中 RoarkT 输入法时自动准备模型", isOn: $settings.automaticallyPrepareModel)
+                Toggle("选中 RockType 输入法时自动准备模型", isOn: $settings.automaticallyPrepareModel)
                 Text("只加载已下载模型，不开启麦克风；关闭后释放模型内存。")
                     .font(Tokens.Typography.font(Tokens.Typography.caption))
                 Toggle("AI 润色语音结果", isOn: $settings.polishWithAI).disabled(!aiConfigured)
                 Text(aiConfigured ? "开启后发送本次识别文本给所配置的 AI；失败时使用原文。" : "请先配置 AI 连接，才能启用润色。")
                     .font(Tokens.Typography.font(Tokens.Typography.caption))
             }
-            Notice(text: "按住 Fn 说话，松开识别；Esc 取消。不自动发送。请在系统键盘设置中检查 Fn 与听写、输入源切换的冲突；RoarkT 不会更改系统快捷键。")
+            Notice(text: "按住 Fn 说话，松开识别；Esc 取消。不自动发送。请在系统键盘设置中检查 Fn 与听写、输入源切换的冲突；RockType 不会更改系统快捷键。")
         }
     }
 }

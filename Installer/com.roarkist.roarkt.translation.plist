@@ -6,7 +6,7 @@
 	<string>com.roarkist.roarkt.translation</string>
 	<key>ProgramArguments</key>
 	<array>
-		<string>/Applications/RoarkT.app/Contents/Helpers/RoarkTTranslationService</string>
+		<string>/Applications/RockType.app/Contents/Helpers/RoarkTTranslationService</string>
 	</array>
 	<key>MachServices</key>
 	<dict>

@@ -22,4 +22,38 @@ word lists. Modifications on 2026-10-11: exclude 12 base and 28 ext entries cont
 proper names such as 巴洛克); all other data and weights are unchanged. `8105` and
 `others` are verbatim. The optional zero-weight Tencent list, larger character tables,
 correction list, cell dictionaries, upstream Lua and upstream schemas are not imported.
-RoarkT retains its own keyboard behavior and the existing octagram model.
+RockType retains its own keyboard behavior and the existing octagram model.
+
+## Distributed components
+
+This inventory covers the main app, the separate GPL input method, the translation helper and the voice worker. License texts are shipped in each app's `Contents/Resources/Licenses/`. The MIT programs do not link to the input method. Original copyright notices are retained; copied MIT portions in the input method retain `Squirrel/LICENSE.translation.txt`, and the shared voice implementation retains `Voice/LICENSE.md`.
+
+| Component / upstream | License | Included notice |
+| --- | --- | --- |
+| Modified [Squirrel](https://github.com/rime/squirrel) input method | GPL-3.0-or-later | `Squirrel/LICENSE.txt`, `GPL-3.0.txt`, `GPL-SOURCE.md` |
+| [librime](https://github.com/rime/librime), submodule a251145d3aafa33871824a40bbec04c966bd8b56 (1.16.0) | BSD-3-Clause | `librime/LICENSE` |
+| [plum](https://github.com/rime/plum), submodule 4c28f11f451facef809b380502874a48ba964ddb; includes the bundled rime-install script | LGPL-3.0 | `plum/LICENSE` + `GPL-3.0.txt` |
+| [librime-lua](https://github.com/hchunhui/librime-lua), [librime-octagram](https://github.com/lotem/librime-octagram), [librime-predict](https://github.com/rime/librime-predict) | BSD-3-Clause | Each named license directory |
+| [Lua](https://github.com/lua/lua) | MIT | `lua/LICENSE`, from Lua 5.4.8 `lua.h` |
+| [Boost](https://github.com/boostorg/boost) | BSL-1.0 | `boost/LICENSE_1_0.txt` |
+| [glog](https://github.com/google/glog), [LevelDB](https://github.com/google/leveldb) | BSD-3-Clause | `glog/COPYING`, `leveldb/LICENSE` |
+| [marisa-trie](https://github.com/s-yata/marisa-trie) | BSD-2-Clause (selected from upstream BSD/LGPL dual license) | `marisa-trie/COPYING.md` |
+| [OpenCC](https://github.com/BYVoid/OpenCC) code and conversion dictionaries | Apache-2.0 | `opencc/LICENSE` |
+| [yaml-cpp](https://github.com/jbeder/yaml-cpp) | MIT | `yaml-cpp/LICENSE` |
+| [Rime Luna Pinyin](https://github.com/rime/rime-luna-pinyin), [essay](https://github.com/rime/rime-essay), [prelude](https://github.com/rime/rime-prelude) data | LGPL-3.0 | Named directories + `GPL-3.0.txt`; existing upstream dictionary header credits retained |
+| [Rime double-pinyin](https://github.com/rime/rime-double-pinyin) Xiaohe rules | GPL-3.0-or-later | `GPL-3.0.txt`; attribution in `Rime/roarkt_flypy.schema.yaml` |
+| FrequencyWords / OpenSubtitles English data, adapted as described above | CC-BY-SA-4.0 | `CC-BY-SA-4.0.txt` |
+| [Sparkle](https://github.com/sparkle-project/Sparkle) 2.8.0, revision 9a1d2a19d3595fcf8d9c447173f9a1687b3dcadb | MIT and bundled dependency notices | `Sparkle/LICENSE` includes bsdiff, sais-lite, Ed25519 and helper notices |
+| [MLX Swift](https://github.com/ml-explore/mlx-swift), [MLX Swift LM](https://github.com/ml-explore/mlx-swift-lm), [MLX Audio Swift](https://github.com/Blaizzy/mlx-audio-swift) | MIT | `Voice/mlx-swift/`, `Voice/mlx-swift-lm/`, `Voice/mlx-audio-swift/` |
+| MLX Swift vendored MLX, mlx-c, fmt, nlohmann/json, metal-cpp | MIT / upstream notices | `Voice/mlx-swift/Source/Cmlx/` retains each bundled license |
+| Apple Swift ASN.1, Collections, Crypto, Numerics, Syntax | Apache-2.0 with Swift runtime library exception | `Voice/swift-*/LICENSE.txt`; upstream NOTICE files included where present |
+| Hugging Face Swift HuggingFace, Jinja, Transformers | Apache-2.0 | `Voice/swift-huggingface/`, `Voice/swift-jinja/`, `Voice/swift-transformers/` |
+| [EventSource](https://github.com/mattt/EventSource), [yyjson](https://github.com/ibireme/yyjson) | MIT | `Voice/EventSource/LICENSE.md`, `Voice/yyjson/LICENSE` |
+
+Voice dependency revisions are pinned in `Services/VoiceWorker/Package.resolved`; the matching lockfile is included as `Licenses/Voice/Package.resolved`. Some packages are build-time or transitive dependencies; notices are included conservatively for the entire resolved dependency graph. Model weights are not in the installer. The user downloads `mlx-community/Qwen3-ASR-0.6B-8bit` or `mlx-community/Qwen3-ASR-1.7B-8bit` separately; model repository terms continue to apply.
+
+## Release provenance and outstanding source checks
+
+`LICENSES/PROVENANCE.md` records the precise notice-source revisions used in this audit. For librime dependencies these are the commits pinned by librime 1.16.0. The shipped Luna Pinyin dictionary is byte-identical to upstream revision 56b934b099dfbeab842320f13aa8b461a6ab3e42 (SHA-256 75bcf6eb3ff62b129882ed89cc22b2d80a5347aa72bcfa2ccc839bac298e7314).
+
+The repository contains prebuilt universal librime and plugin binaries. Their plugin build revisions and full static dependency bill of materials are not recorded. The current essay data also differs from upstream HEAD. Supplying present upstream license texts does not prove the provenance of those binaries/data. Before public distribution, the release owner must recover the exact build inputs or rebuild from pinned source, reconcile any additional notices, and publish the matching complete source. These checks remain open; this inventory is not a claim that source-distribution acceptance has passed. See `GPL-SOURCE.md`.

@@ -22,7 +22,7 @@ struct MenuBarPanelView: View {
         let p = Tokens.palette(scheme)
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
             HStack {
-                Label("RoarkT", systemImage: "square.stack.3d.up")
+                Label("RockType", systemImage: "square.stack.3d.up")
                     .font(Tokens.Typography.font(Tokens.Typography.read, weight: .semibold))
                 Spacer()
                 Button { feedback = "设置入口已选中" } label: { Image(systemName: "gearshape") }

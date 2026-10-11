@@ -15,7 +15,7 @@ struct OnboardingView: View {
         let p = Tokens.palette(scheme)
         VStack(alignment: .leading, spacing: Tokens.Space.xl) {
             HStack {
-                Text("欢迎使用 RoarkT").font(Tokens.Typography.font(Tokens.Typography.input, weight: .semibold))
+                Text("欢迎使用 RockType").font(Tokens.Typography.font(Tokens.Typography.input, weight: .semibold))
                 Spacer()
                 Text("\((OnboardingStep.allCases.firstIndex(of: model.step) ?? 0) + 1) / \(OnboardingStep.allCases.count)")
                     .monospacedDigit().foregroundStyle(p.secondary)
@@ -74,7 +74,7 @@ struct OnboardingView: View {
         case .input:
             Text("系统设置 → 键盘 → 文本输入 → 编辑 → ＋ → 简体中文")
                 .font(Tokens.Typography.font(Tokens.Typography.meta))
-            HStack { Text("RoarkT（全拼） / RoarkT（小鹤双拼）"); Spacer(); Kbd("Shift 中英切换") }
+            HStack { Text("RockType Pinyin / RockType Shuangpin"); Spacer(); Kbd("Shift 中英切换") }
             U4EditableField(title: "在这里试打 nihao，按空格选择中文", value: $trial)
             Text("候选每页 5 项，译文独立显示，Tab 上屏。")
                 .font(Tokens.Typography.font(Tokens.Typography.caption))

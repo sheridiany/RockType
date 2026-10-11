@@ -2,7 +2,7 @@
 
 基于 Squirrel 的 GPL v3 独立输入法进程，最低 macOS 14，Swift 6。开发构建与安装使用仓库根目录的 `scripts/build.sh` 与 `scripts/install-dev.sh`；安装仅注册输入源。
 
-- `Squirrel.xcodeproj` 保留上游工程/target 名 `Squirrel`，产物为 `RoarkT Input.app`，Swift 模块为 `RoarkTInput`。
+- `Squirrel.xcodeproj` 保留上游工程/target 名 `Squirrel`，产物为 `RockType Input.app`，Swift 模块为 `RoarkTInput`。
 - `sources/` 中的候选翻译客户端只引用 `Shared/XPCProtocol/include` 的协议头；请求校验直接编译 `Core/Translation/DynamicTranslationProtocol.swift` 与 `Core/Identifiers.swift`，ticket/填入策略直接编译 `Core/Voice/` 的同一份 MIT 源码（原授权见 `LICENSE.translation.txt`）。MIT 产品不反向引用输入法源码。
 - `scripts/package-rime.sh` 将根目录 `Rime/` 的方案、Lua 与八股文模型打包到 `Contents/SharedSupport`；运行时不迁移、覆盖或备份其他方案的用户文件。
 - librime / plum / Sparkle 为固定提交的子模块。`lib/`、`bin/` 为 Apple Silicon 预编译依赖；`data/plum/` 仅保留 8 份共享配置/词库/模型，总计约 46 MiB，其中约 40 MiB 为八股文模型。`scripts/test-rime.sh` 使用本仓库运行时；加 `--bundle <app路径>` 可检查实际打包资源的部署。词库中的人名、艺术名词不代表产品标识。

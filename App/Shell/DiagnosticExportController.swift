@@ -9,8 +9,8 @@ final class DiagnosticExportController {
     func export() {
         guard !exporting else { return }
         let panel = NSSavePanel()
-        panel.title = "导出 RoarkT 诊断"
-        panel.nameFieldStringValue = "RoarkT-Diagnostics-\(Int(Date().timeIntervalSince1970)).zip"
+        panel.title = "导出 RockType 诊断"
+        panel.nameFieldStringValue = "RockType-Diagnostics-\(Int(Date().timeIntervalSince1970)).zip"
         panel.allowedContentTypes = [.zip]
         panel.canCreateDirectories = true
         panel.message = "仅导出动作类型、状态、耗时与脱敏错误，不含正文、截图或密钥。请选择新文件名。"

@@ -17,7 +17,7 @@ enum UninstallData {
                 throw CocoaError(.fileWriteNoPermission)
             }
         }
-        let appData = support.appendingPathComponent("RoarkT", isDirectory: true)
+        let appData = support.appendingPathComponent("RockType", isDirectory: true)
         if fm.fileExists(atPath: appData.path) { try fm.removeItem(at: appData) }
         let rime = library.appendingPathComponent("Rime", isDirectory: true)
         guard fm.fileExists(atPath: rime.path) else { return }
@@ -30,11 +30,16 @@ enum UninstallData {
                   try directory.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink != true else { continue }
             for file in try fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
                 where ownedRimeName(file.lastPathComponent) {
+                // Only product-marked custom files are ours; user-authored patches stay.
+                if file.lastPathComponent.hasSuffix(".custom.yaml") {
+                    guard try file.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink != true,
+                          let contents = try? Data(contentsOf: file),
+                          contents.starts(with: Data("# 由 RockType 生成；请通过 RockType 设置修改。\n".utf8)) else { continue }
+                }
                 try fm.removeItem(at: file)
             }
         }
-        // Only remove byte-identical files that the product shipped. No heuristic YAML editing.
-        // Current input method does not generate a shared default.custom.yaml ownership marker;
-        // preserve that ambiguous file and explain this in the confirmation UI.
+        // Shared default.custom.yaml and squirrel.custom.yaml have no product ownership
+        // marker in the current writer and are always preserved.
     }
 }

@@ -1,5 +1,6 @@
 import Foundation
 import Darwin
+import Security
 
 @main
 struct CleanupUserData {
@@ -9,7 +10,13 @@ struct CleanupUserData {
         let deadline = Date().addingTimeInterval(30)
         while kill(parent, 0) == 0 && Date() < deadline { Thread.sleep(forTimeInterval: 0.1) }
         guard kill(parent, 0) != 0 && errno == ESRCH else { exit(1) }
-        do { try UninstallData.remove(in: FileManager.default.homeDirectoryForCurrentUser) }
+        do {
+            try UninstallData.remove(in: FileManager.default.homeDirectoryForCurrentUser)
+            let status = SecItemDelete([kSecClass as String: kSecClassGenericPassword,
+                                       kSecAttrService as String: Identifiers.keychainService] as CFDictionary)
+            guard status == errSecSuccess || status == errSecItemNotFound else { throw CocoaError(.fileWriteNoPermission) }
+            UserDefaults.standard.removePersistentDomain(forName: Identifiers.appBundleID)
+        }
         catch {
             // No content or user paths in logs. Surface failures after the main app has quit.
             let script = NSAppleScript(source: "display alert \"RoarkT 数据清理未完成\" message \"程序已卸载；请手动检查 RoarkT 设置目录。其他输入法文件已保留。\"")

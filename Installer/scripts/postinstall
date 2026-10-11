@@ -1,0 +1,16 @@
+#!/bin/bash
+set -euo pipefail
+script_dir=$(cd "$(dirname "$0")" && pwd)
+source "$script_dir/session-common.sh"
+while IFS= read -r uid; do
+  [[ -n "$uid" ]] || continue
+  run_as_user "$uid" /Applications/RockType.app/Contents/Helpers/RoarkTRegisterInputSource register '/Library/Input Methods/RockType Input.app'
+  /bin/launchctl enable "gui/$uid/$service"
+  /bin/launchctl bootstrap "gui/$uid" "$agent"
+done < <(active_uids)
+console_uid=$(/usr/bin/stat -f '%u' /dev/console)
+if [[ "$console_uid" =~ ^[0-9]+$ ]] && (( console_uid >= 500 )); then
+  run_as_user "$console_uid" /usr/bin/open -g /Applications/RockType.app
+else
+  echo 'RockType: log in and open /Applications/RockType.app to add the input source.'
+fi

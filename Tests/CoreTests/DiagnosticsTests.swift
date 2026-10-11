@@ -56,7 +56,7 @@ import Testing
     process.arguments = ["-x", "-k", archive.path, unpacked.path]
     try process.run(); process.waitUntilExit()
     #expect(process.terminationStatus == 0)
-    let directory = unpacked.appendingPathComponent("RoarkT-Diagnostics")
+    let directory = unpacked.appendingPathComponent("RockType-Diagnostics")
     let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
     #expect(files.map(\.lastPathComponent) == ["diagnostics.log"])
     let text = try String(contentsOf: files[0], encoding: .utf8)

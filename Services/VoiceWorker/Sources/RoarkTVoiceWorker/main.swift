@@ -60,7 +60,7 @@ private final class Service: NSObject, NSXPCListenerDelegate, VoiceWorkerProtoco
 
 if CommandLine.arguments.contains("--self-test") {
     guard (MLXArray([1, 2, 3]) + 1).sum().item(Int.self) == 9 else { exit(1) }
-    print("RoarkT voice MLX self-test passed")
+    print("RockType voice MLX self-test passed")
     exit(0)
 }
 private let service = Service()

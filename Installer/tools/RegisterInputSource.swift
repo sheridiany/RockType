@@ -46,7 +46,7 @@ struct RegisterInputSource {
         case "list":
             let registered = Set(sources().compactMap(identifier))
             sourceIDs.filter(registered.contains).forEach { print($0) }
-            guard sourceIDs.allSatisfy(registered.contains) else { fail("Both RoarkT input sources are not registered") }
+            guard sourceIDs.allSatisfy(registered.contains) else { fail("Both RockType input sources are not registered") }
         case "disable":
             for source in sources() where sourceIDs.contains(identifier(source) ?? "") {
                 guard let value = TISGetInputSourceProperty(source, kTISPropertyInputSourceIsEnabled),
