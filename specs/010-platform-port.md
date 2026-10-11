@@ -37,7 +37,7 @@
 | --- | --- | --- | --- |
 | P1 | Placement + ScreenGeometry + 单元测试（迁移 `placement_test.go` 的全部用例） | pi | 完成（待验收） |
 | P2 | Clipboard（含复制回退）、SecureInput、Accessibility、SelectionReader | pi | 完成（待验收） |
-| P3 | OCR（用 `../RoarkTools/internal/platform/testdata/ocr-sample.png` 复制到 `Tests/PlatformTests/Fixtures/` 做测试）、Keychain（测试用独立服务名并清理） | pi | 未开始 |
+| P3 | OCR（用 `../RoarkTools/internal/platform/testdata/ocr-sample.png` 复制到 `Tests/PlatformTests/Fixtures/` 做测试）、Keychain（测试用独立服务名并清理） | pi | 完成（待验收） |
 | P4 | GlobalHotkeys、FnKeyMonitor、Permissions | pi | 未开始 |
 | P5 | 验收 | Claude | 未开始 |
 
@@ -46,8 +46,8 @@
 | 项 | 方法 | 结果 | 证据 |
 | --- | --- | --- | --- |
 | Placement 用例全部通过 | `swift test` | 通过 | P1：原 placement_test.go 全部 4 个场景，另测 right/edge/panel 与上方副屏坐标；scripts/test.sh 通过（3 个 XCTest + 2 个 Core 测试）。超大浮窗由调用方限制尺寸。 |
-| OCR 样例识别出预期文字 | `swift test` | 未运行 | |
-| Keychain 读写删 | `swift test` | 未运行 | |
+| OCR 样例识别出预期文字 | `swift test` | 通过 | P3：迁入指定合成 PNG，真实 Vision 检出 OCR / 12345 / 本地识别，行框归一化且左上原点；非法图片与安全输入拒绝测试通过。 |
+| Keychain 读写删 | `swift test` | 通过 | P3：随机独立服务名实测缺失、添加、更新、读取、exists、删除及重复删除，defer 清理；scripts/test.sh 共 14 个 XCTest + 2 个 Core 测试通过。 |
 | 复制回退不覆盖用户新剪贴板 | 单元测试（模拟 changeCount）+ 手工 | 自动化通过；待人工验证 | P2：scripts/test.sh 通过（9 个 XCTest + 2 个 Core 测试）。模拟完整多条目多类型恢复、用户新复制不覆盖、安全输入拒绝、超时、来源切换、取消。 |
 | 真实应用中 AX 取词 / 复制回退 | M3 接入后手工 | 待人工验证 | |
 | `⌃1` 注册与冲突检测、Fn 按住/松开 | 手工 | 待人工验证 | |
@@ -56,3 +56,5 @@
 
 - P2：NSPasteboard 没有写入者身份或原子 compare-and-swap；复制回退把发送 ⌘C 后首次观察到的 changeCount 视为本次写入，后续变化则保留用户内容并报错。首次变化由外部写入、超时后的迟到复制、跨进程检查与恢复间的竞争无法仅靠 changeCount 完全排除，需 Claude 在 M3 兼容矩阵中验收并决定是否增加交互限制。
 - P2：无法确认焦点元素是否受保护时保守拒绝读取；AX / 剪贴板内容不记录日志、不持久化。真实应用、密码框、终端 Secure Keyboard Entry 均待人工验证。
+
+- P3：OCR 在后台执行，取消后丢弃结果（当前 Vision perform 完成后才能结束计算）；不请求网络、不写文件。OCR / Keychain 的自动化内容测试注入允许读取策略，真实系统安全输入联动仍待人工验证。
