@@ -67,8 +67,8 @@ import RoarkTXPCProtocol
         let connection = makeConnection(), current = UUID()
         epoch = current; self.connection = connection
         connection.remoteObjectInterface = NSXPCInterface(with: RoarkTInputAIXPCProtocol.self)
-        connection.interruptionHandler = { [weak self] in Task { @MainActor in self?.disconnect(current) } }
-        connection.invalidationHandler = { [weak self] in Task { @MainActor in self?.disconnect(current) } }
+        connection.interruptionHandler = { @Sendable [weak self] in Task { @MainActor in self?.disconnect(current) } }
+        connection.invalidationHandler = { @Sendable [weak self] in Task { @MainActor in self?.disconnect(current) } }
         connection.resume(); return connection
     }
 

@@ -102,8 +102,8 @@ public final class TextTranslationXPCClient: TextTranslationClient {
         connection.remoteObjectInterface = NSXPCInterface(with: RoarkTTextTranslationXPCProtocol.self)
         epoch = UUID()
         let current = epoch
-        connection.interruptionHandler = { [weak self] in Task { @MainActor in self?.disconnect(current) } }
-        connection.invalidationHandler = { [weak self] in Task { @MainActor in self?.disconnect(current) } }
+        connection.interruptionHandler = { @Sendable [weak self] in Task { @MainActor in self?.disconnect(current) } }
+        connection.invalidationHandler = { @Sendable [weak self] in Task { @MainActor in self?.disconnect(current) } }
         self.connection = connection; connection.resume()
         return connection
     }

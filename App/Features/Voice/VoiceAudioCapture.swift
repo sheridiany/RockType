@@ -9,7 +9,7 @@ import Foundation
     func cancel()
 }
 
-private final class VoiceSamples: @unchecked Sendable {
+final class VoiceSamples: @unchecked Sendable {
     private let lock = NSLock()
     private var samples = Data()
     private var accepting = true
@@ -66,16 +66,8 @@ private final class VoiceConversionInput: @unchecked Sendable {
               let output = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16_000, channels: 1, interleaved: false),
               let converter = AVAudioConverter(from: format, to: output) else { throw VoiceFailure.unavailable }
         let samples = VoiceSamples()
-        input.installTap(onBus: 0, bufferSize: 2048, format: format) { buffer, _ in
-            let capacity = AVAudioFrameCount(ceil(Double(buffer.frameLength) * 16_000 / format.sampleRate)) + 32
-            guard let converted = AVAudioPCMBuffer(pcmFormat: output, frameCapacity: capacity) else { return }
-            let source = VoiceConversionInput(buffer)
-            var error: NSError?
-            let status = converter.convert(to: converted, error: &error) { _, state in
-                source.provide(state)
-            }
-            if error == nil, status != .error { samples.append(converted) }
-        }
+        Self.installTap(on: input, processor: VoiceTapProcessor(input: format, output: output,
+                                                                converter: converter, samples: samples))
         self.engine = engine; self.samples = samples
         do { try engine.start() } catch { cancel(); throw error }
     }
@@ -86,4 +78,39 @@ private final class VoiceConversionInput: @unchecked Sendable {
         return data
     }
     func cancel() { _ = finish() }
+
+    /// Built outside the main actor: AVAudioEngine calls the tap on its realtime thread, and a
+    /// closure formed in a @MainActor method would trap on Swift 6's isolation check.
+    nonisolated private static func installTap(on input: AVAudioInputNode, processor: VoiceTapProcessor) {
+        input.installTap(onBus: 0, bufferSize: 2048, format: processor.inputFormat) { buffer, _ in
+            processor.process(buffer)
+        }
+    }
+}
+
+/// Converts tapped audio to 16 kHz mono on the audio thread. Converter state is only
+/// touched from that one serial tap callback.
+final class VoiceTapProcessor: @unchecked Sendable {
+    let inputFormat: AVAudioFormat
+    private let output: AVAudioFormat
+    private let converter: AVAudioConverter
+    private let samples: VoiceSamples
+    fileprivate init(input: AVAudioFormat, output: AVAudioFormat, converter: AVAudioConverter, samples: VoiceSamples) {
+        self.inputFormat = input; self.output = output; self.converter = converter; self.samples = samples
+    }
+    func process(_ buffer: AVAudioPCMBuffer) {
+        let capacity = AVAudioFrameCount(ceil(Double(buffer.frameLength) * 16_000 / inputFormat.sampleRate)) + 32
+        guard let converted = AVAudioPCMBuffer(pcmFormat: output, frameCapacity: capacity) else { return }
+        let source = VoiceConversionInput(buffer)
+        var error: NSError?
+        let status = converter.convert(to: converted, error: &error) { _, state in source.provide(state) }
+        if error == nil, status != .error { samples.append(converted) }
+    }
+    /// Test seam: a processor over synthetic formats, exercised from a background thread.
+    static func forTesting(input: AVAudioFormat) -> (VoiceTapProcessor, () -> Data)? {
+        guard let output = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16_000, channels: 1, interleaved: false),
+              let converter = AVAudioConverter(from: input, to: output) else { return nil }
+        let samples = VoiceSamples()
+        return (VoiceTapProcessor(input: input, output: output, converter: converter, samples: samples), { samples.take() })
+    }
 }

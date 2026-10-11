@@ -56,10 +56,10 @@ final class TranslationServiceClient {
         connection.remoteObjectInterface = NSXPCInterface(with: RoarkTTranslationXPCProtocol.self)
         connectionID = UUID()
         let id = connectionID
-        connection.interruptionHandler = { [weak self] in
+        connection.interruptionHandler = { @Sendable [weak self] in
             Task { @MainActor in self?.disconnect(id) }
         }
-        connection.invalidationHandler = { [weak self] in
+        connection.invalidationHandler = { @Sendable [weak self] in
             Task { @MainActor in self?.disconnect(id) }
         }
         self.connection = connection
