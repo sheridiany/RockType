@@ -53,3 +53,25 @@ extension OCRTests {
         XCTAssertFalse(result.lines.isEmpty)
     }
 }
+
+extension OCRTests {
+    func testIncompleteTableKeepsEmptyCellAndColumnsStaySeparate() {
+        func line(_ text: String, _ x: CGFloat, _ y: CGFloat, _ width: CGFloat = 0.1) -> OCR.Line {
+            .init(text: text, rect: CGRect(x: x, y: y, width: width, height: 0.04))
+        }
+        let table = OCR.Result(lines: [line("Name", 0.1, 0.1), line("Count", 0.4, 0.1), line("Price", 0.7, 0.1),
+            line("Apple", 0.1, 0.2), line("24", 0.7, 0.2),
+            line("Pear", 0.1, 0.3), line("18", 0.4, 0.3), line("36", 0.7, 0.3)])
+        XCTAssertEqual(table.text, "Name\tCount\tPrice\nApple\t\t24\nPear\t18\t36")
+        let columns = OCR.Result(lines: [line("The first column starts here.", 0.05, 0.1, 0.3), line("The second column starts here.", 0.6, 0.1, 0.3),
+            line("Continue the first column here.", 0.05, 0.2, 0.3), line("Continue the second column here.", 0.6, 0.2, 0.3)])
+        XCTAssertEqual(columns.text, "The first column starts here.\nContinue the first column here.\n\nThe second column starts here.\nContinue the second column here.")
+    }
+    func testCancelledOCRDoesNotReturnText() async throws {
+        let data = try await OCRQualityTests.render(OCRQualityTests.samples[0])
+        let task = Task { try await OCR().recognize(data) }
+        task.cancel()
+        do { _ = try await task.value; XCTFail("Cancelled recognition must not succeed") }
+        catch { XCTAssertTrue(error is CancellationError) }
+    }
+}

@@ -7,7 +7,10 @@ import RoarkTPlatform
 @MainActor @Observable final class ScreenshotSession {
     private(set) var image: CGImage?
     let origin: String
-    var text = ""
+    let translation: ScreenshotTranslation
+    var text = "" { didSet { if text != oldValue { translation.clear() } } }
+    enum OCRPhase { case idle, running, done, empty, failed, cancelled }
+    private(set) var ocrPhase: OCRPhase = .idle
     private(set) var ocrFinished = false
     private(set) var ocrLines: [OCR.Line] = []
     var ocrLanguages: [String]
@@ -38,6 +41,7 @@ import RoarkTPlatform
          verified: @escaping (AIConnectionSettings, String) -> Bool,
          allowed: @escaping () -> Bool = { SecureInput.status() == .allowed },
          recognize: ((Data) async throws -> String)? = nil,
+         translationRunner: (any OperationRunner)? = nil,
          sendImage: @escaping (AIConnectionSettings, String, Data) async throws -> String = { connection, model, data in
              let key = try Keychain().get(account: connection.id) ?? ""
              let service = ScreenshotAIService(client: AIClient(connection: connection),
@@ -46,6 +50,9 @@ import RoarkTPlatform
              return try await service.run(action: .explain, png: data, model: model,
                  imageCapabilityVerified: true, apiKey: key)
          }) {
+        self.translation = ScreenshotTranslation(runner: translationRunner ?? DefaultOperationRunner(
+            offline: TextTranslationXPCClient(), apiKey: { try Keychain().get(account: settings().ai.id) ?? "" },
+            isAllowed: allowed), allowed: allowed)
         self.image = image; self.origin = origin; self.settings = settings; self.verified = verified
         self.ocrLanguages = settings().screenshot.ocrLanguages
         self.allowed = allowed; self.recognize = recognize; self.sendImage = sendImage
@@ -61,12 +68,14 @@ import RoarkTPlatform
         }
     }
     func cancel() {
+        translation.cancel()
+        if ocrPhase == .running { ocrPhase = .cancelled; notice = "识别已取消，可以重新开始。" }
         generation += 1; task?.cancel(); task = nil; busy = false
         confirmingImage = false; pendingConnection = nil; pendingModel = nil
     }
     func close() {
         guard !closed else { return }
-        closed = true; cancel(); protection?.cancel(); protection = nil
+        closed = true; cancel(); translation.clear(); protection?.cancel(); protection = nil
         savePanel?.cancel(nil); savePanel = nil
         image = nil; ocrLines = []; text = ""; result = ""; notice = nil; onClose()
     }
@@ -104,6 +113,7 @@ import RoarkTPlatform
     func runOCR(copyAfter: Bool = false) {
         guard check(), let data = png() else { return }
         cancel(); let current = generation; busy = true; notice = "本机识别中…"; ocrFinished = false
+        translation.clear(); ocrPhase = .running
         let languages = ocrLanguages, paragraphs = mergeParagraphs
         task = Task { [weak self] in
             guard let self else { return }
@@ -114,14 +124,19 @@ import RoarkTPlatform
                 let output = recognized.formatted(paragraphs: paragraphs)
                 guard !Task.isCancelled, self.check(current) else { return }
                 self.ocrLines = recognized.lines
+                self.ocrPhase = output.isEmpty ? .empty : .done
                 self.text = output; self.ocrFinished = true; self.busy = false
                 self.notice = output.isEmpty ? "没有识别到文字，可输入文字或换用更清晰的图片。" : nil
                 if copyAfter && !output.isEmpty { self.copyText(output) }
             } catch {
                 guard self.check(current), !Task.isCancelled else { return }
-                self.busy = false; self.notice = "本机识别失败，请重试。"
+                self.busy = false; self.ocrPhase = .failed; self.notice = "本机识别失败，请重试。"
             }
         }
+    }
+    func translate() {
+        guard check(), !busy else { return }
+        translation.run(text: text, settings: settings())
     }
     /// Reads the edited value at click time, never the uncorrected OCR result.
     func runText(templateID: String) {
