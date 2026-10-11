@@ -42,6 +42,11 @@ public struct ClipboardSnapshot: Sendable, Equatable {
 
 @MainActor public final class Clipboard {
     public static let shared = Clipboard()
+    /// Identifies only this app's synthetic copy shortcut so selection listeners do not cancel it.
+    private static let selectionCopyTag: Int64 = 0x524B5443
+    public static func isSelectionCopyEvent(_ event: CGEvent?) -> Bool {
+        event?.getIntegerValueField(.eventSourceUserData) == selectionCopyTag
+    }
     private let backend: any ClipboardBackend
     private let checkReadable: @MainActor () throws -> Void
     private let sourcePID: @MainActor () -> pid_t?
@@ -60,6 +65,8 @@ public struct ClipboardSnapshot: Sendable, Equatable {
             }
             down.flags = .maskCommand
             up.flags = .maskCommand
+            down.setIntegerValueField(.eventSourceUserData, value: Self.selectionCopyTag)
+            up.setIntegerValueField(.eventSourceUserData, value: Self.selectionCopyTag)
             down.post(tap: .cgAnnotatedSessionEventTap)
             up.post(tap: .cgAnnotatedSessionEventTap)
         }
