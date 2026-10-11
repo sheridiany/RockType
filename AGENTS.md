@@ -30,6 +30,12 @@
 - `scripts/test.sh`：全部自动化测试。提交前必须通过。
 - 签名身份默认 `Developer ID Application: XIAO BIN (DF7J2VBQD8)`，可用 `ROARKT_CODESIGN_IDENTITY` 覆盖。
 
+## 本机环境（用户的真实电脑）
+
+- 不要运行 `scripts/install-dev.sh` / `uninstall-dev.sh`，不要从 worktree 启动或注册输入法、加载 LaunchAgent。用户正在用 main 的安装版本做真实验收；需要安装验证时在汇报中提出，由 Claude 从 main 执行。
+- 可以用 `open dist/RoarkT.app` 做启动冒烟检查，但检查完立即退出该进程。
+- 只在自己的 worktree 中工作；不在主仓库切分支、提交或留下未提交改动。
+
 ## 交付要求
 
 - 完成后在对应规格的“任务”与“验收证据”中更新状态，写清：做了什么、怎么验证、结果、未验证项。
