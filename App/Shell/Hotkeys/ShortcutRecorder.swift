@@ -107,7 +107,7 @@ struct HotkeySettingsView: View {
             Section {
                 Text("截图、翻译、总结即将推出。语音当前仅记录一次按住 Fn 的诊断事件，不录音。")
                 Text("Fn 由系统共同监听；如同时触发系统听写或输入源切换，请在键盘设置中调整 Fn 行为。")
-                Text("输入法内 AI 快捷键将在 M6 开放。")
+                Text("输入法内 AI 快捷键即将推出。")
                 if let notice = center.notice { Text(notice) }
             }
         }
