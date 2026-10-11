@@ -10,6 +10,8 @@ The capitalization/spelling reference is the macOS `/usr/share/dict/words` symli
 
 `Rime/roarkt_flypy.schema.yaml` adapts the Xiaohe algebra and preedit rules from the official [rime-double-pinyin](https://github.com/rime/rime-double-pinyin) project. That schema is GPL-3.0-or-later; upstream authors are retained in its header. The complete license is in `LICENSES/GPL-3.0.txt`.
 
+The menu icon generator/diagnostic checks and native voice HUD (`RoarkTVoiceHUD`, waveform and rendering checks) adapt RoType's MIT sources. Copyright (c) 2026 RoType contributors; the original license is retained in `LICENSES/LICENSE-RoType-MIT.txt`. Product symbols and labels are renamed; the existing voice lifecycle, XPC and Secure Input boundaries remain RockType's. Input method panels remain GPL v3 within `InputMethod/`, separate from these MIT sources.
+
 ## Distributed components
 
 This inventory covers the main app, the separate GPL input method, the translation helper and the voice worker. License texts are shipped in each app's `Contents/Resources/Licenses/`. The MIT programs do not link to the input method. Original copyright notices are retained; copied MIT portions in the input method retain `Squirrel/LICENSE.translation.txt`, and the shared voice implementation retains `Voice/LICENSE.md`.

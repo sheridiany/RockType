@@ -1,99 +1,119 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 import AppKit
 
-/// Independent D0 card; never a numbered candidate or an activating window.
+// A compact action row, not a virtual Rime candidate or an activating window.
 final class RoarkTTranslationPanel: NSPanel {
-  private let row = TranslationRow(frame: .zero)
+  struct Style {
+    let background: NSColor
+    let border: NSColor?
+    let highlight: NSColor?
+    let candidate: [NSAttributedString.Key: Any]
+    let comment: [NSAttributedString.Key: Any]
+    let label: [NSAttributedString.Key: Any]
+    let cornerRadius: CGFloat
+    let shortcutCornerRadius: CGFloat
+    let alpha: CGFloat
+
+    func actionAttributes(ready: Bool, appearance: NSAppearance) -> [NSAttributedString.Key: Any] {
+      var attributes = candidate
+      if !ready {
+        let ink = comment[.foregroundColor] as? NSColor ?? .secondaryLabelColor
+        // Desaturate custom comment colors too, so retained text reads as disabled.
+        appearance.performAsCurrentDrawingAppearance {
+          attributes[.foregroundColor] = ink.usingColorSpace(.deviceGray)?.withAlphaComponent(0.7) ?? ink
+        }
+      }
+      return attributes
+    }
+  }
+
+  private let shortcutLabel = NSTextField(labelWithString: "")
+  private let action = TranslationActionButton(title: "", target: nil, action: nil)
+  private let surface = NSView()
   var onActivate: (() -> Void)?
 
   init() {
-    super.init(
-      contentRect: .zero, styleMask: [.nonactivatingPanel, .borderless], backing: .buffered,
-      defer: false)
+    super.init(contentRect: NSRect(x: 0, y: 0, width: 320, height: 34),
+               styleMask: [.nonactivatingPanel, .borderless], backing: .buffered, defer: false)
     isOpaque = false
     backgroundColor = .clear
     hasShadow = true
     hidesOnDeactivate = false
     collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-    contentView = row
-    row.onActivate = { [weak self] in self?.onActivate?() }
+    surface.wantsLayer = true
+    surface.layer?.masksToBounds = true
+    surface.layer?.borderWidth = 0.5
+    contentView = surface
+    for label in [shortcutLabel] {
+      label.alignment = .center
+      label.wantsLayer = true
+      surface.addSubview(label)
+    }
+    action.isBordered = false
+    action.alignment = .left
+    action.cell?.wraps = true
+    action.cell?.lineBreakMode = .byWordWrapping
+    action.target = self
+    action.action = #selector(activate)
+    surface.addSubview(action)
     setAccessibilityLabel("候选翻译区")
   }
+
   override var canBecomeKey: Bool { false }
   override var canBecomeMain: Bool { false }
 
-  func show(_ state: RoarkTCandidateTranslationSession, beside parent: NSPanel) {
-    guard state.ticket != nil, parent.isVisible else {
-      orderOut(nil)
-      return
-    }
+  func show(_ state: RoarkTCandidateTranslationSession, beside parent: NSPanel, style: Style) {
+    guard let ticket = state.ticket, parent.isVisible else { orderOut(nil); return }
     appearance = parent.appearance
     level = parent.level
-    row.ready = state.commit != nil
-    row.retry = state.canRetry
-    row.title = state.isLoading ? "翻译中" : (state.failure != nil ? "不可用" : "候选翻译")
-    // The session may retain the last translation while a new ticket loads.
-    // It is never displayed for another candidate, even during the debounce interval.
-    row.text = state.isLoading ? "正在翻译…" : state.displayText
-    row.toolTip = state.commit?.text ?? state.failure
-    row.setAccessibilityLabel("\(row.title)：\(row.text)")
-    row.setAccessibilityHelp(row.retry ? "点击或按 Tab 重试" : row.ready ? "点击或按 Tab 上屏" : "继续输入无需等待")
+    alphaValue = style.alpha
+    surface.layer?.cornerRadius = style.cornerRadius
+    shortcutLabel.layer?.cornerRadius = style.shortcutCornerRadius
+    // Resolve dynamic AppKit colors under the same appearance as the candidate window.
+    effectiveAppearance.performAsCurrentDrawingAppearance {
+      surface.layer?.backgroundColor = style.background.cgColor
+      surface.layer?.borderColor = (style.border ?? .clear).cgColor
+      shortcutLabel.layer?.backgroundColor = (style.highlight ?? .clear).cgColor
+    }
+    let scope = ticket.snapshot.scope == "whole" ? "整句" : "当前词"
+    shortcutLabel.stringValue = "Tab"
+    shortcutLabel.isHidden = state.commit == nil && !state.canRetry
+    shortcutLabel.attributedStringValue = NSAttributedString(string: "Tab", attributes: style.label)
+    // A pending ticket may retain text from a previous candidate. Never draw it.
+    let text = state.isLoading ? "正在翻译…" : state.displayText
+    let attributes = style.actionAttributes(ready: state.commit != nil, appearance: effectiveAppearance)
+    let font = attributes[.font] as? NSFont ?? .systemFont(ofSize: NSFont.systemFontSize)
+    action.attributedTitle = NSAttributedString(string: text, attributes: attributes)
+    action.isEnabled = state.commit != nil || state.canRetry
+    action.toolTip = state.commit?.text ?? state.failure
+    action.setAccessibilityLabel("\(scope)翻译：\(text)")
+    action.setAccessibilityHelp(state.canRetry ? "点击或按 Tab 重试，不会提交旧译文" : "翻译完成后点击译文或按 Tab 上屏")
     let screen = parent.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? parent.frame
-    setFrame(
-      RoarkTPanelDesign.place(
-        size: NSSize(width: parent.frame.width, height: 60), caret: parent.frame, screen: screen),
-      display: true)
-    row.needsDisplay = true
+    let width = min(max(parent.frame.width, 300), screen.width)
+    let shortcutSize = shortcutLabel.attributedStringValue.size()
+    let shortcutWidth = max(26, ceil(shortcutSize.width) + 8)
+    let textWidth = width - shortcutWidth - 28
+    let measured = (text as NSString).boundingRect(
+      with: NSSize(width: textWidth, height: 100), options: [.usesLineFragmentOrigin],
+      attributes: [.font: font])
+    let height = max(34, ceil(max(measured.height, shortcutSize.height)) + 12)
+    var origin = NSPoint(x: parent.frame.minX, y: parent.frame.minY - height - 3)
+    if origin.y < screen.minY { origin.y = parent.frame.maxY + 3 }
+    origin.x = max(screen.minX, min(origin.x, screen.maxX - width))
+    origin.y = max(screen.minY, min(origin.y, screen.maxY - height))
+    setFrame(NSRect(origin: origin, size: NSSize(width: width, height: height)), display: true)
+    action.frame = NSRect(x: 12, y: 3, width: textWidth, height: height - 6)
+    shortcutLabel.frame = NSRect(x: width - shortcutWidth - 8, y: (height - shortcutSize.height) / 2,
+                                width: shortcutWidth, height: shortcutSize.height)
     orderFront(nil)
   }
+
+  @objc private func activate() { onActivate?() }
 }
 
-private final class TranslationRow: NSView {
-  var title = ""
-  var text = ""
-  var ready = false
-  var retry = false
-  var onActivate: (() -> Void)?
-  override var isFlipped: Bool { true }
-  override init(frame: NSRect) {
-    super.init(frame: frame)
-    setAccessibilityElement(true)
-    setAccessibilityRole(.button)
-  }
-  required init?(coder: NSCoder) { nil }
+private final class TranslationActionButton: NSButton {
   override func accessibilityPerformPress() -> Bool {
-    guard ready || retry else { return false }
-    onActivate?()
+    guard isEnabled else { return false }
+    performClick(nil)
     return true
-  }
-  override func mouseUp(with event: NSEvent) {
-    guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
-    _ = accessibilityPerformPress()
-  }
-  override func draw(_ dirtyRect: NSRect) {
-    RoarkTPanelDesign.surface(bounds)
-    let ink = ready ? RoarkTPanelDesign.foreground : RoarkTPanelDesign.secondary
-    if let image = NSImage(systemSymbolName: "character.bubble", accessibilityDescription: nil) {
-      let tinted = image.copy() as! NSImage
-      tinted.lockFocus()
-      (ready ? RoarkTPanelDesign.accent : RoarkTPanelDesign.secondary).set()
-      NSRect(origin: .zero, size: tinted.size).fill(using: .sourceAtop)
-      tinted.unlockFocus()
-      tinted.draw(in: NSRect(x: 12, y: 22, width: 16, height: 16))
-    }
-    let textWidth = max(0, bounds.width - 36 - 12 - ((ready || retry) ? 38 : 0))
-    RoarkTPanelDesign.text(
-      title, in: NSRect(x: 36, y: 12, width: textWidth, height: 14), size: 11,
-      color: RoarkTPanelDesign.secondary)
-    RoarkTPanelDesign.text(text, in: NSRect(x: 36, y: 30, width: textWidth, height: 18), color: ink)
-    if ready || retry {
-      let rect = NSRect(x: bounds.width - 42, y: 20, width: 30, height: 20)
-      RoarkTPanelDesign.line.setStroke()
-      let path = NSBezierPath(roundedRect: rect, xRadius: 7, yRadius: 7)
-      path.lineWidth = 0.5
-      path.stroke()
-      RoarkTPanelDesign.text(
-        "Tab", in: rect.insetBy(dx: 5, dy: 3), size: 11, color: RoarkTPanelDesign.secondary)
-    }
   }
 }

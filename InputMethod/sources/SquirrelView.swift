@@ -24,6 +24,7 @@ extension NSAttributedString.Key {
 }
 
 final class SquirrelView: NSView {
+  var onSelect: ((Int) -> Void)?
   let textView: NSTextView
 
   private let squirrelLayoutDelegate: SquirrelLayoutDelegate
@@ -51,6 +52,27 @@ final class SquirrelView: NSView {
   }
   var textContainer: NSTextContainer {
     textLayoutManager.textContainer!
+  }
+
+  override func isAccessibilityElement() -> Bool { true }
+  override func accessibilityRole() -> NSAccessibility.Role? { .group }
+  override func accessibilityLabel() -> String? { "候选" }
+  override func accessibilityChildren() -> [Any]? {
+    // Keep the existing keyboard/VoiceOver action with the restored text layout.
+    candidateRanges.enumerated().compactMap { index, range in
+      guard hilightedIndex >= 0, let textRange = convert(range: range),
+            let text = textContentStorage.attributedString else { return nil }
+      let element = CandidateAccessibilityElement()
+      element.setAccessibilityParent(self)
+      element.setAccessibilityRole(.button)
+      element.setAccessibilityLabel(text.attributedSubstring(from: range).string)
+      element.setAccessibilitySelected(index == hilightedIndex)
+      let rect = contentRect(range: textRange).offsetBy(
+        dx: textView.textContainerInset.width, dy: textView.textContainerInset.height)
+      element.setAccessibilityFrame(window?.convertToScreen(textView.convert(rect, to: nil)) ?? .zero)
+      element.press = { [weak self] in self?.onSelect?(index) }
+      return element
+    }
   }
 
   override init(frame frameRect: NSRect) {
@@ -765,5 +787,13 @@ private extension SquirrelView {
       layer.addSublayer(upLayer)
     }
     return (layer, downPath, upPath)
+  }
+}
+
+private final class CandidateAccessibilityElement: NSAccessibilityElement {
+  var press: (() -> Void)?
+  override func accessibilityPerformPress() -> Bool {
+    press?()
+    return true
   }
 }

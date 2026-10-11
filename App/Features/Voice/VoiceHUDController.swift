@@ -1,5 +1,4 @@
 import AppKit
-import SwiftUI
 import Observation
 import RoarkTPlatform
 
@@ -8,67 +7,50 @@ import RoarkTPlatform
     var phase: Phase = .hidden
     var message = ""
     var result = ""
-    var levels = Array(repeating: 0.05, count: 9)
+    var levels = Array(repeating: 0.05, count: 9) {
+        didSet { onMeterChange?() }
+    }
     var seconds = 0
+    @ObservationIgnored var onMeterChange: (() -> Void)?
 }
 
+/// Adapts the existing lifecycle to the original compact native presentation.
 @MainActor final class VoiceHUDController {
     let state: VoiceHUDState
     var onCancel: () -> Void = {}
-    private var panel: NSPanel?
-    init(state: VoiceHUDState) { self.state = state }
-    func show() {
-        if panel == nil {
-            let panel = VoicePanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-            panel.isFloatingPanel = true; panel.hidesOnDeactivate = false
-            panel.level = .floating; panel.isOpaque = false; panel.backgroundColor = .clear
-            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-            panel.contentView = NSHostingView(rootView: LiveVoiceHUD(state: state, cancel: { [weak self] in self?.onCancel() }))
-            self.panel = panel
+    private let hud: RoarkTVoiceHUD
+
+    init(state: VoiceHUDState, hud: RoarkTVoiceHUD = RoarkTVoiceHUD()) {
+        self.state = state
+        self.hud = hud
+        hud.onCancel = { [weak self] in self?.onCancel() }
+        hud.onCopy = { [weak self] in
+            guard let self, !state.result.isEmpty, SecureInput.status() == .allowed else { return }
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(state.result, forType: .string)
         }
-        guard let panel else { return }
-        let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
-        let frame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 800, height: 600)
-        panel.setFrame(NSRect(x: frame.midX - 190, y: frame.minY + 36, width: 380, height: 180), display: true)
-        panel.orderFrontRegardless()
+        state.onMeterChange = { [weak self] in
+            guard let self, state.phase == .recording else { return }
+            // The recorder supplies normalized amplitude; preserve the original drawing scale.
+            let level = state.levels.last ?? 0
+            hud.updateRecording(elapsed: TimeInterval(state.seconds), decibels: Float(level * 45 - 55))
+        }
     }
-    func hide() { panel?.orderOut(nil) }
-}
-private final class VoicePanel: NSPanel {
-    override var canBecomeKey: Bool { false }
-    override var canBecomeMain: Bool { false }
-}
-private struct LiveVoiceHUD: View {
-    let state: VoiceHUDState
-    let cancel: () -> Void
-    @Environment(\.colorScheme) private var scheme
-    var body: some View {
-        let palette = Tokens.palette(scheme)
-        VStack(alignment: .leading, spacing: Tokens.Space.sm) {
-            HStack {
-                Image(systemName: state.phase == .recording ? "mic.fill" : "waveform")
-                    .foregroundStyle(state.phase == .recording ? palette.danger : palette.accent)
-                Text(state.message).font(Tokens.Typography.font(Tokens.Typography.meta))
-                Spacer()
-                Button(action: cancel) { Image(systemName: "xmark") }
-                    .buttonStyle(.plain).accessibilityLabel("取消或关闭语音")
+
+    func show() {
+        switch state.phase {
+        case .hidden: hud.hide()
+        case .preparing: hud.show(.activity(state.message))
+        case .recording: hud.show(.recording)
+        case .recognizing: hud.show(.activity(state.message))
+        case .done: hud.show(.success(state.message))
+        case .failed:
+            if state.result.isEmpty {
+                hud.show(.notice(title: "语音输入", detail: state.message))
+            } else {
+                hud.show(.result(state.result, reason: state.message))
             }
-            if state.phase == .recording {
-                HStack(alignment: .center, spacing: Tokens.Space.xs) {
-                    ForEach(Array(state.levels.enumerated()), id: \.offset) { _, level in
-                        Capsule().fill(palette.foreground).frame(width: 4, height: max(3, level * 26))
-                    }
-                    Text("\(state.seconds) 秒 · 松开 Fn 识别").font(Tokens.Typography.font(Tokens.Typography.caption))
-                }.frame(height: 28).accessibilityLabel("录音波形，已录制 \(state.seconds) 秒")
-            }
-            if !state.result.isEmpty {
-                Text(state.result).font(Tokens.Typography.font(Tokens.Typography.meta)).lineLimit(3)
-                Button("复制识别结果") {
-                    guard SecureInput.status() == .allowed else { return }
-                    NSPasteboard.general.clearContents(); NSPasteboard.general.setString(state.result, forType: .string)
-                }.buttonStyle(DesignButtonStyle())
-            }
-        }.padding(Tokens.Space.md).frame(width: 350, alignment: .leading)
-            .foregroundStyle(palette.foreground).modifier(DesignSurface())
+        }
     }
+    func hide() { hud.hide() }
 }
