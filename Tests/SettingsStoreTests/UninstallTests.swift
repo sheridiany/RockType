@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import RoarkTCore
 @testable import RoarkTApp
 
 @Test func uninstallRemovesOnlyOwnedDataAndPreservesSharedRime() throws {
@@ -10,9 +11,10 @@ import Testing
         try fm.createDirectory(at: home.appendingPathComponent(path), withIntermediateDirectories: true)
     }
     let removed = ["roarkt.schema.yaml", "roarkt_flypy.custom.yaml", "roarkt_en.dict.yaml", "build/roarkt.prism.bin"]
-    let preserved = ["default.custom.yaml", "squirrel.custom.yaml", "luna_pinyin.userdb", "user.yaml", "installation.yaml", "roarkt_other.schema.yaml"]
+    let preserved = ["roarkt.custom.yaml", "default.custom.yaml", "squirrel.custom.yaml", "luna_pinyin.userdb", "user.yaml", "installation.yaml", "roarkt_other.schema.yaml"]
     for name in removed + preserved {
-        try Data("fixture".utf8).write(to: home.appendingPathComponent("Library/Rime/" + name))
+        let content = name == "roarkt_flypy.custom.yaml" ? RimeSettingsPatch.marker + "\npatch: {}\n" : "fixture"
+        try Data(content.utf8).write(to: home.appendingPathComponent("Library/Rime/" + name))
     }
     try UninstallData.remove(in: home)
     #expect(!fm.fileExists(atPath: home.appendingPathComponent("Library/Application Support/RoarkT").path))

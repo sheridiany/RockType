@@ -80,3 +80,8 @@
 - appcast 脚本从钥匙串签署已公证 pkg，从包内读取版本/公钥并验证签名，生成 `guided-package` enclosure；不上传、不生成私钥。
 - `scripts/test.sh` 通过（121 Swift tests）；覆盖包篡改、错误公钥、未配置 feed、无效 URL 拒绝。独立 appcast 工具编译通过。
 - 真实 appcast 签名与跨版本更新未运行：待仓库 URL、EdDSA 公钥及用户钥匙串私钥、公证 profile。自动启动接线留给 Claude；真实安装包最终构建记录见后续验收。
+
+### 合入 main 后补验
+
+- 已在本 worktree 合入 `7245678` 所在 main（合并提交 `9a94dff`），未修改主仓库。合并冲突采用 main 已接入真实选区动作的快捷键断言；全量测试通过。
+- R-3 随 main 新增的 Rime 配置归属标记收紧清理：`roarkt*.custom.yaml` 仅带生成标记时删除，用户手写补丁保留；全量测试通过，覆盖标记删除与手写保留。
