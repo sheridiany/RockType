@@ -10,13 +10,15 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Helpers" "$app/Contents/XPCService
 ditto dist/RoarkTVoiceWorker.xpc "$app/Contents/Helpers/RoarkTVoiceWorker.xpc"
 ln -s ../Helpers/RoarkTVoiceWorker.xpc "$app/Contents/XPCServices/RoarkTVoiceWorker.xpc"
 cp App/Info.plist "$app/Contents/Info.plist"
-swiftc -swift-version 6 Core/Identifiers.swift App/Features/Voice/VoiceWorkerProtocol.swift \
+swiftc -swift-version 6 -target arm64-apple-macos14.0 Core/Identifiers.swift App/Features/Voice/VoiceWorkerProtocol.swift \
   Tests/VoiceWorkerSmoke/main.swift -o "$app/Contents/MacOS/RockType"
 codesign --force --options runtime --timestamp=none --sign "$identity" "$app"
 codesign --verify --strict --deep "$app"
 "$app/Contents/Helpers/RoarkTVoiceWorker.xpc/Contents/MacOS/RoarkTVoiceWorker" --self-test
-"$app/Contents/MacOS/RockType"
+open -n -g -W "$app" --args --status-file "$root/accepted.status"
+[[ -f "$root/accepted.status" && "$(cat "$root/accepted.status")" == 0 ]] || exit 1
 # Same team, wrong allowed identifier: server must reject it.
 /usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier com.roarkist.inputmethod.RoarkT' "$app/Contents/Info.plist"
 codesign --force --options runtime --timestamp=none --sign "$identity" "$app"
-"$app/Contents/MacOS/RockType" --reject
+open -n -g -W "$app" --args --reject --status-file "$root/rejected.status"
+[[ -f "$root/rejected.status" && "$(cat "$root/rejected.status")" == 0 ]] || exit 1
