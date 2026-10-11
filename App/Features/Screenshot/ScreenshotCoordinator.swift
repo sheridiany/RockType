@@ -45,6 +45,12 @@ import os
     func start() {
         guard !running else { return }
         running = true
+        PinnedImageController.shared.onAction = { [weak self] image, action in
+            guard let self, self.running, self.allowed() else { return }
+            self.openImage(image, origin: action == .translate ? "贴图 · 核对文字后点击翻译" : "贴图")
+            if action == .save { self.session?.save() }
+            else { self.session?.runOCR(copyAfter: action == .copyText) }
+        }
         ScreenCapture.startWarming()
         warmupTask = Task { await OCR.prewarm() }
     }
