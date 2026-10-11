@@ -31,11 +31,36 @@ private struct AIResponse: Sendable {
 private actor HeldAI {
     var pending: [CheckedContinuation<String, Never>] = []
     var calls = 0
+    let started: AsyncStream<Void>
+    private let starts: AsyncStream<Void>.Continuation
+    init() { (started, starts) = AsyncStream<Void>.makeStream() }
     func run() async -> String {
         calls += 1
-        return await withCheckedContinuation { pending.append($0) }
+        return await withCheckedContinuation {
+            pending.append($0)
+            starts.yield(())
+        }
     }
     func release() { let old = pending; pending = []; old.forEach { $0.resume(returning: "Synthetic late result") } }
+}
+
+/// Time advances only when the test says so. Cancelled waits are also released,
+/// exercising the coordinator's cancellation check before applying a deadline.
+private actor ManualAIDeadline {
+    let started: AsyncStream<Duration>
+    private let starts: AsyncStream<Duration>.Continuation
+    private var pending: [CheckedContinuation<Void, Never>] = []
+    init() { (started, starts) = AsyncStream<Duration>.makeStream() }
+    func wait(for duration: Duration) async {
+        await withCheckedContinuation {
+            pending.append($0)
+            starts.yield(duration)
+        }
+    }
+    func fire() {
+        let old = pending; pending = []
+        old.forEach { $0.resume() }
+    }
 }
 
 @Test @MainActor func inputAIRequiresValidConfigurationAndOwnerLifetime() async {
@@ -72,19 +97,29 @@ private actor HeldAI {
 }
 
 @Test @MainActor func inputAISupersessionCancellationAndDeadlineFinishWithoutBackendCooperation() async {
-    let held = HeldAI()
-    let coordinator = InputAICoordinator(isSecure: { false }, complete: { _, _ in await held.run() })
+    let held = HeldAI(), deadline = ManualAIDeadline()
+    var backendStarts = held.started.makeAsyncIterator()
+    var deadlineStarts = deadline.started.makeAsyncIterator()
+    let coordinator = InputAICoordinator(isSecure: { false },
+        waitForDeadline: { await deadline.wait(for: $0) }, complete: { _, _ in await held.run() })
     let connection = UUID(), session = UUID().uuidString
     #expect(coordinator.configure(aiConfig(timeout: "0.2"), owner: UUID()) == nil)
     let first = Task { await aiPerform(coordinator, connection: connection, session: session) }
-    while await held.calls < 1 { await Task.yield() }
+    await backendStarts.next()
+    #expect(await deadlineStarts.next() == .milliseconds(200))
     let second = Task { await aiPerform(coordinator, connection: connection, session: session, generation: 2) }
     #expect(await first.value.code == 103)
-    while await held.calls < 2 { await Task.yield() }
+    await backendStarts.next()
+    #expect(await deadlineStarts.next() == .milliseconds(200))
     coordinator.cancel(connectionID: connection, sessionID: session, throughGeneration: 2)
     #expect(await second.value.code == 103)
     #expect(await aiPerform(coordinator, connection: connection, session: session, generation: 2).code == 102)
-    #expect(await aiPerform(coordinator).code == 106)
+
+    let timedOut = Task { await aiPerform(coordinator) }
+    await backendStarts.next()
+    #expect(await deadlineStarts.next() == .milliseconds(200))
+    await deadline.fire()
+    #expect(await timedOut.value.code == 106)
     await held.release()
     coordinator.cancel(connectionID: connection, sessionID: session, throughGeneration: 9)
     #expect(await aiPerform(coordinator, connection: connection, session: session, generation: 8).code == 102)

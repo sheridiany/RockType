@@ -34,7 +34,7 @@
 | --- | --- | --- | --- |
 | 鉴权：输入法不能 configureAI，主 App 不能 rewriteCandidate | 服务测试 | 通过 | `InputAITests` 角色拒绝与共享 generation 测试；真实签名安装场景待人工 |
 | 未配置 / 配置清空后返回明确错误 | 服务测试 | 通过 | 空配置、无配置、非法替换配置、配置所属连接断开均撤销 |
-| generation 取消与迟到丢弃 | 服务测试 | 通过 | 忽略取消的受控 backend；取消立即回复、deadline 独立终止、旧结果丢弃 |
+| generation 取消与迟到丢弃 | 服务测试 | 通过；负载下测试稳定性已修复 | 忽略取消的受控 backend；显式启动信号与手动 deadline；连续 5 次全量测试退出 0，见下方复核 |
 | 密钥不落盘、不进日志 | 代码检查 + 测试 | 自动化与代码检查通过 | 内存配置；AIClient ephemeral 会话；固定错误映射，未透传服务商错误内容；主 App 持久化测试确认未写入密钥 |
 | 打字期间 AI 请求不影响按键延迟 | 手工 | 待人工验证 | |
 | 真实 AI 改写 / 润色 / 翻译上屏 | 手工 | 待人工验证 | |
@@ -66,6 +66,15 @@
 - 最终 `scripts/test.sh` 退出 0（144 项 Swift Testing + 32 项 XCTest、Rime 临时目录部署、Hotkey/Permission checks）；已有 `Core/Voice/LICENSE.md` 未声明资源警告不影响退出码。
 - `scripts/build.sh` 退出 0：主 App、翻译服务、输入法、语音 worker 构建及签名完成，脚本内语音 MLX self-test、签名 XPC helper 往返与错误身份拒绝均通过。产物仅位于本 worktree 的 `dist/`（指向 `.build/dist.noindex`）。
 - `git diff --check` 最终退出 0。未运行 install-dev/uninstall-dev、未注册或启动输入法、未加载 LaunchAgent、未启动本 worktree 的主 App；安装和真实交互留给 Claude 从 main 验收。
+
+### 取消/超时测试稳定性修复（2026-10-11）
+
+- 先 `git merge main`，快进至 `699b828`，仅在 `agent/xpc` 修改。
+- 根因：`inputAISupersessionCancellationAndDeadlineFinishWithoutBackendCooperation` 的取消断言与 200ms 真实 deadline 竞争；全量负载下，第二请求调度前第一请求可能已超时。临时在第二请求前插入 450ms 延迟，定向测试复现同一 `first.value.code == 103` 失败（退出 1）。
+- 修复：后端使用 `AsyncStream` 启动信号替代 `Task.yield` 轮询；测试注入手动 deadline 等待器，确认三次后端/计时器均启动后，分别验证替代取消、显式取消、主动触发超时及 generation 水位。生产默认仍为 `Task.sleep`，等待前后检查取消；没有放宽断言或增加真实超时。
+- 相同 450ms 延迟下修复版定向测试退出 0；随后移除临时延迟，连续执行完整 `scripts/test.sh`，第 1、2、3、4、5 次真实退出码均为 **0**。每次包含 157 项 Swift Testing、40 项 XCTest，以及 Rime/快捷键/权限检查。
+- 本次日志：`/tmp/rocktype-ai-stability-1.log` 至 `/tmp/rocktype-ai-stability-5.log`。最终 `git diff --check` 退出 0。
+- 未运行安装、输入法注册、LaunchAgent 加载或主 App 启动；本次测试修复不新增人工验收项，既有 E-3/E-4 人工验收仍待完成。
 
 ## 问题
 
