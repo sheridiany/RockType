@@ -8,14 +8,9 @@ import RoarkTCore
         public let status: OSStatus
     }
     public let service: String
-    private let checkReadable: @MainActor () throws -> Void
 
     public init(service: String = Identifiers.keychainService) {
         self.service = service
-        self.checkReadable = { try SecureInput.requireReadable() }
-    }
-    init(service: String, checkReadable: @escaping @MainActor () throws -> Void) {
-        self.service = service; self.checkReadable = checkReadable
     }
 
     private func query(_ account: String) -> [String: Any] {
@@ -38,7 +33,6 @@ import RoarkTCore
     }
 
     public func get(account: String) throws -> String? {
-        try checkReadable()
         var attributes = query(account)
         attributes[kSecReturnData as String] = true
         attributes[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -49,13 +43,11 @@ import RoarkTCore
         guard let data = value as? Data, let secret = String(data: data, encoding: .utf8) else {
             throw Failure(status: errSecDecode)
         }
-        try checkReadable()
         return secret
     }
 
     /// Queries metadata only; never permits an authorization dialog.
     public func exists(account: String) throws -> Bool {
-        try checkReadable()
         var attributes = query(account)
         attributes[kSecReturnAttributes as String] = true
         attributes[kSecMatchLimit as String] = kSecMatchLimitOne

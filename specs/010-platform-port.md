@@ -27,7 +27,7 @@
 ## 规则
 
 - Swift 6 严格并发；AppKit/AX 调用标注 `@MainActor` 或明确线程。
-- 所有读取先检查 Secure Input；处于 Secure Input 时返回明确状态，不尝试读取或复制回退（FR-E8）。
+- 读取当前焦点内容前检查 Secure Input；处于 Secure Input 时返回明确状态，不尝试取词或复制回退（FR-E8）。OCR 处理已提供的图片、Keychain 读取自身密钥不受全局 Secure Input 门控（Claude 验收决定）；后续语音填入及缓存写入仍需保护。
 - 不记录任何选中文字、剪贴板内容到日志。
 - 文件所有权：只改 `Platform/`、`Tests/PlatformTests/`、`Package.swift` 中**新增** `RoarkTPlatformTests` 测试 target 一处、本规格。不改 `App/`、`Core/`（如需 Core 新类型，写在规格“问题”节由 Claude 处理）。
 
@@ -46,20 +46,21 @@
 | 项 | 方法 | 结果 | 证据 |
 | --- | --- | --- | --- |
 | Placement 用例全部通过 | `swift test` | 通过 | P1：原 placement_test.go 全部 4 个场景，另测 right/edge/panel 与上方副屏坐标；scripts/test.sh 通过（3 个 XCTest + 2 个 Core 测试）。超大浮窗由调用方限制尺寸。 |
-| OCR 样例识别出预期文字 | `swift test` | 通过 | P3：迁入指定合成 PNG，真实 Vision 检出 OCR / 12345 / 本地识别，行框归一化且左上原点；非法图片与安全输入拒绝测试通过。 |
-| Keychain 读写删 | `swift test` | 通过 | P3：随机独立服务名实测缺失、添加、更新、读取、exists、删除及重复删除，defer 清理；scripts/test.sh 共 14 个 XCTest + 2 个 Core 测试通过。 |
+| OCR 样例识别出预期文字 | `swift test` | 通过 | P3：迁入指定合成 PNG，真实 Vision 检出 OCR / 12345 / 本地识别，行框归一化且左上原点；非法图片测试通过；验收修正后直接使用公共 OCR() API，不再注入安全输入策略。 |
+| Keychain 读写删 | `swift test` | 通过 | P3：随机独立服务名实测缺失、添加、更新、读取、exists、删除及重复删除，defer 清理；验收修正后直接使用公共 Keychain(service:) API，移除安全输入拒绝测试。 |
 | 复制回退不覆盖用户新剪贴板 | 单元测试（模拟 changeCount）+ 手工 | 自动化通过；待人工验证 | P2：scripts/test.sh 通过（9 个 XCTest + 2 个 Core 测试）。模拟完整多条目多类型恢复、用户新复制不覆盖、安全输入拒绝、超时、来源切换、取消。 |
 | 真实应用中 AX 取词 / 复制回退 | M3 接入后手工 | 待人工验证 | |
 | `⌃1` 注册与冲突检测、Fn 按住/松开 | 手工 | 待人工验证 | P4 自动化仅覆盖默认键位映射、Fn 短按/长按/组合键/取消/安全输入状态机；真实注册、冲突及硬件事件没有验收。 |
 | 权限状态及设置入口 | 手工 | 待人工验证 | API 直接查询 AX、屏幕录制和麦克风状态；无启动时自动授权。首次、拒绝、授予、撤销及设置页面跳转均需主 App 集成后验收。 |
-| 全量自动化与签名构建 | scripts/test.sh；scripts/build.sh | 通过 | 2026-10-11，Apple Silicon，Swift 6.3.2，macOS SDK 26.5，部署目标 macOS 14：21 个 Platform XCTest + 2 个 Core 测试通过；现有脚本产出主 App / 翻译服务并通过签名校验。git diff --check 通过。未运行真实 macOS 14 设备验收。 |
+| 全量自动化与签名构建 | scripts/test.sh；scripts/build.sh | 通过 | 2026-10-11，Apple Silicon，Swift 6.3.2，macOS SDK 26.5，部署目标 macOS 14：验收修正前 21 个 Platform XCTest + 2 个 Core 测试通过；现有脚本产出主 App / 翻译服务并通过签名校验。git diff --check 通过。未运行真实 macOS 14 设备验收。 |
+| Claude 验收修正：OCR / Keychain 不受 Secure Input 门控 | scripts/test.sh；git diff --check | 通过 | 2026-10-11：移除两处门控、checkReadable 注入及两项拒绝测试；19 个 Platform XCTest + 2 个 Core 测试通过（真实 OCR 样例、独立钥匙串读写删与清理、既有复制回退安全测试）。本轮未重跑签名构建；真实应用、快捷键及 Fn 仍待人工验证。 |
 
 ## 问题
 
-- P2：NSPasteboard 没有写入者身份或原子 compare-and-swap；复制回退把发送 ⌘C 后首次观察到的 changeCount 视为本次写入，后续变化则保留用户内容并报错。首次变化由外部写入、超时后的迟到复制、跨进程检查与恢复间的竞争无法仅靠 changeCount 完全排除，需 Claude 在 M3 兼容矩阵中验收并决定是否增加交互限制。
+- P2：NSPasteboard 没有写入者身份或原子 compare-and-swap；复制回退把发送 ⌘C 后首次观察到的 changeCount 视为本次写入，后续变化则保留用户内容并报错。首次变化由外部写入、超时后的迟到复制、跨进程检查与恢复间的竞争无法仅靠 changeCount 完全排除，**已决定（Claude）**：保留现有 changeCount 竞争限制记录，不新增交互限制；真实应用仍在 M3 兼容矩阵中验收。
 - P2：无法确认焦点元素是否受保护时保守拒绝读取；AX / 剪贴板内容不记录日志、不持久化。真实应用、密码框、终端 Secure Keyboard Entry 均待人工验证。
-- P3：OCR 在后台执行，取消后丢弃结果（当前 Vision perform 完成后才能结束计算）；不请求网络、不写文件。OCR / Keychain 的自动化内容测试注入允许读取策略，真实系统安全输入联动仍待人工验证。
-- P4：Fn 默认最短按住 180ms（可配置），只监听、不吞键；与系统听写/输入源切换的冲突处理及阈值由 Claude 在 M5 确认。长按期间的录音、模型和业务超时不在本规格内。
-- P4：快捷键按物理 ANSI 键位解释，Fn-only / 未支持键名明确报错；检查系统已启用的 symbolic hotkeys，并将 Carbon 重复注册错误映射为 conflict。其他应用自行拦截事件、非 ANSI 布局与动态系统设置变化仍需人工验收；若需按当前布局字符注册，由 Claude 明确键位语义。
+- P3：OCR 在后台执行，取消后丢弃结果（当前 Vision perform 完成后才能结束计算）；不请求网络、不写文件。OCR / Keychain 的自动化内容测试直接使用公共 API。
+- P4：**已决定（Claude）**：Fn 按住阈值保留 180ms 默认值，后续可配置。只监听、不吞键；与系统听写/输入源切换的冲突处理仍在 M5 验收。长按期间的录音、模型和业务超时不在本规格内。
+- P4：**已决定（Claude）**：快捷键按物理 ANSI 键位解释即可，Fn-only / 未支持键名明确报错；检查系统已启用的 symbolic hotkeys，并将 Carbon 重复注册错误映射为 conflict。其他应用自行拦截事件、非 ANSI 布局与动态系统设置变化仍需人工验收，不增加按当前布局字符注册。
 - P4：AX / 屏幕录制预检只能区分 granted / notGranted；麦克风可区分 notDetermined / denied / restricted。更详细的引导状态需由 App 层管理。
-- 集成注意：依照“所有读取先检查”规则，默认 OCR / Keychain 读取也使用焦点安全检查；没有 AX 权限或无法确认焦点时拒绝。Claude 需确认设置页 AI 凭据读取和导入图片 OCR 是否要采用不同的权限策略；本任务不放宽规则、不修改 Core/App。
+- **已决定（Claude）**：OCR / Keychain 去掉 SecureInput.requireReadable()、checkReadable 注入及相关拒绝测试。Secure Input 是系统全局状态，其他应用的密码框或终端 Secure Keyboard Entry 可能长期开启，不应阻止读取自身密钥或识别已有图片。FR-E8 约束当前焦点内容的读取/写入；SelectionReader、Clipboard 复制回退以及后续语音填入、缓存写入保留保护。本次未修改取词及剪贴板实现。

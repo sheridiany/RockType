@@ -13,15 +13,11 @@ public struct OCR: Sendable {
         public var text: String { lines.map(\.text).joined(separator: "\n") }
     }
     public enum Failure: Error { case invalidImage, recognitionFailed }
-    private let checkReadable: @MainActor @Sendable () throws -> Void
-
-    public init() { checkReadable = { try SecureInput.requireReadable() } }
-    init(checkReadable: @escaping @MainActor @Sendable () throws -> Void) { self.checkReadable = checkReadable }
+    public init() {}
 
     /// Runs Vision locally, away from the main actor. No network, disk writes or logging.
     public func recognize(_ data: Data) async throws -> Result {
         try Task.checkCancellation()
-        try await checkReadable()
         let worker = Task.detached(priority: .userInitiated) {
             try Task.checkCancellation()
             guard let source = CGImageSourceCreateWithData(data as CFData, nil),
@@ -42,7 +38,6 @@ public struct OCR: Sendable {
         }
         let result = try await withTaskCancellationHandler { try await worker.value } onCancel: { worker.cancel() }
         try Task.checkCancellation()
-        try await checkReadable()
         return result
     }
 }
