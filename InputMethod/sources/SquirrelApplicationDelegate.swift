@@ -90,8 +90,8 @@ final class SquirrelApplicationDelegate: NSObject, NSApplicationDelegate {
 
     var squirrelTraits = RimeTraits.rimeStructInit()
     squirrelTraits.setCString(Bundle.main.sharedSupportPath!, to: \.shared_data_dir)
-    squirrelTraits.setCString(SquirrelApp.userDir.path(), to: \.user_data_dir)
-    squirrelTraits.setCString(SquirrelApp.logDir.path(), to: \.log_dir)
+    squirrelTraits.setCString(SquirrelApp.userDir.path(percentEncoded: false), to: \.user_data_dir)
+    squirrelTraits.setCString(SquirrelApp.logDir.path(percentEncoded: false), to: \.log_dir)
     squirrelTraits.setCString("Squirrel", to: \.distribution_code_name)
     squirrelTraits.setCString("鼠鬚管", to: \.distribution_name)
     squirrelTraits.setCString(Bundle.main.object(forInfoDictionaryKey: kCFBundleVersionKey as String) as! String, to: \.distribution_version)
@@ -283,11 +283,11 @@ private extension SquirrelApplicationDelegate {
 
   func createDirIfNotExist(path: URL) {
     let fileManager = FileManager.default
-    if !fileManager.fileExists(atPath: path.path()) {
+    if !fileManager.fileExists(atPath: path.path(percentEncoded: false)) {
       do {
         try fileManager.createDirectory(at: path, withIntermediateDirectories: true)
       } catch {
-        print("Error creating user data directory: \(path.path())")
+        print("Error creating user data directory: \(path.path(percentEncoded: false))")
       }
     }
   }

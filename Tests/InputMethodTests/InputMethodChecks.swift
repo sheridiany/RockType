@@ -16,3 +16,16 @@ final class InputMethodChecks: XCTestCase {
         XCTAssertEqual(process.terminationStatus, 0, "Production session/modifier/panel checks failed")
     }
 }
+
+final class InputMethodPathChecks: XCTestCase {
+    /// `URL.path()` percent-encodes spaces, so "Application Support" became a second
+    /// "Application%20Support" Rime directory that silently ignored the user's data.
+    func testFileSystemPathsAreNotPercentEncoded() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let sources = root.appendingPathComponent("InputMethod/sources")
+        for name in try FileManager.default.contentsOfDirectory(atPath: sources.path) where name.hasSuffix(".swift") {
+            let text = try String(contentsOf: sources.appendingPathComponent(name), encoding: .utf8)
+            XCTAssertFalse(text.contains(".path()"), "\(name) uses percent-encoded URL.path(); use path(percentEncoded: false)")
+        }
+    }
+}
