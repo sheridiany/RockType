@@ -2,6 +2,8 @@ import Foundation
 import Testing
 import RoarkTCore
 import RoarkTXPCProtocol
+@testable import RoarkTTranslationService
+@testable import RoarkTApp
 
 @MainActor private final class TextBackend: SelectionTextTranslating {
     var calls = 0

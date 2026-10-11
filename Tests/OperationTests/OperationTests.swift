@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import RoarkTCore
+@testable import RoarkTApp
 
 private func snapshot() -> ContentSnapshot {
     ContentSnapshot(text: "Synthetic paragraph\n\n- synthetic item", source: .init(pid: 42,
