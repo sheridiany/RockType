@@ -25,7 +25,8 @@ OPENCC_DATA = data/opencc/TSCharacters.ocd2 \
 DEPS_CHECK = $(RIME_LIBRARY) $(PLUM_DATA) $(OPENCC_DATA)
 
 OPENCC_DATA_OUTPUT = librime/share/opencc/*.*
-PLUM_DATA_OUTPUT = plum/output/*.*
+# Product default.yaml and the pinned language model remain repository-owned.
+PLUM_DATA_OUTPUT = $(addprefix plum/output/,key_bindings.yaml punctuation.yaml symbols.yaml pinyin.yaml luna_pinyin.dict.yaml essay.txt)
 PLUM_OPENCC_OUTPUT = plum/output/opencc/*.*
 RIME_PACKAGE_INSTALLER = plum/rime-install
 

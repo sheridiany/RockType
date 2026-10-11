@@ -1,11 +1,11 @@
 # Rime default settings
 # encoding: utf-8
 
-config_version: 'rotype-2026.09.03.1'
+config_version: 'roarkt-2026.10.11.1'
 
 schema_list:
-  - schema: rotype
-  - schema: rotype_flypy
+  - schema: roarkt
+  - schema: roarkt_flypy
 
 switcher:
   caption: 〔方案選單〕
