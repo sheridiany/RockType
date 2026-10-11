@@ -25,8 +25,8 @@
 
 | # | 任务 | 执行 | 状态 |
 | --- | --- | --- | --- |
-| M3-1 | 操作引擎、快照、会话、最近结果、搜索、模型选择（C6–C9、C11、C14、C15） | pi-xpc | 未开始 |
-| M3-2 | 翻译服务 `translateText` 与翻译路由（FR-E1 划词路径） | pi-xpc | 未开始 |
+| M3-1 | 操作引擎、快照、会话、最近结果、搜索、模型选择（C6–C9、C11、C14、C15） | pi-xpc | 完成（待验收） |
+| M3-2 | 翻译服务 `translateText` 与翻译路由（FR-E1 划词路径） | pi-xpc | 完成（待验收） |
 | M3-3 | 划词监听、取词管线、黑白名单、工具栏窗口、快捷键 ⌃⌥T/⌃⌥S 接入（C1–C5） | pi-platform | 未开始 |
 | M3-4 | 结果浮窗窗口与交互、复制并返回、追问、置顶（C12、C13） | pi-surfaces | 完成（待验收） |
 | M3-5 | 设置：操作模板编辑与自定义模板、按功能指定模型（C9、C10、C15 的界面） | pi-surfaces | 未开始 |
@@ -40,9 +40,9 @@
 
 | 项 | 方法 | 结果 | 证据 |
 | --- | --- | --- | --- |
-| 操作引擎流式、取消、迟到结果丢弃、超长报错 | 单元测试（`URLProtocol` 桩） | 未运行 | |
-| 翻译路由：离线成功 / 离线失败回落 AI / 仅 AI | 单元测试 + 手工 | 未运行 | |
-| 搜索 URL 编码 | 单元测试 | 未运行 | |
+| 操作引擎流式、取消、迟到结果丢弃、超长报错 | 单元测试（`URLProtocol` 桩） | 通过（自动化） | `Core/Operations/.checks/run.sh`：11 项通过；包括真实 AIClient 流式和取消底层 URLSession、无视取消的晚到回调、完整会话输入限额、安全输入切换、错误/空响应不入库、模型选择、追问/新建、最近结果。 |
+| 翻译路由：离线成功 / 离线失败回落 AI / 仅 AI | 单元测试 + 手工 | 自动化通过；真实引擎待人工验证 | 操作检查覆盖三条路由及翻译/助手/模板模型优先级。`Services/TranslationService/.checks/run.sh`：9 项通过，覆盖指定目标参数、角色权限、代次/连接隔离、结构保留，以及真实匿名 XPC 往返、取消、断线/超时后的重建。Apple 语言包与真实 AI 未验收。 |
+| 搜索 URL 编码 | 单元测试 | 通过 | 操作检查覆盖中文、空格、特殊符号、emoji 编码还原；拒绝空查询和非 HTTPS/错误占位模板。 |
 | 划词：TextEdit、Safari、VS Code、企业微信 直接读取或复制回退 | 手工兼容矩阵 | 待人工验证 | |
 | Secure Input / 密码框无工具栏、无读取 | 手工 | 待人工验证 | |
 | 结果浮窗不抢焦点，复制并返回后可直接 ⌘V | 手工 | 待人工验证 | M3-4 已提供非激活面板、来源应用与 AX 窗口检查；AppDelegate 接线由 M3-6 完成后实测 |
@@ -50,7 +50,8 @@
 | M3-4 实际视图浅深色、完成态、原文展开与追问 | AppKit 离屏渲染并目视检查 | 通过（静态检查） | `/tmp/roarkt-result-{light,dark}-{done,expanded}.png`；交互、VoiceOver 与设计验收仍待人工 |
 | M3-4 分支测试与构建 | 命令 | 测试通过；完整构建阻塞 | 66 项测试及 Rime 部署通过；主 App/翻译服务构建签名通过；输入法子模块未初始化，完整 `scripts/build.sh` 未通过；Gallery 208 张通过 |
 | 真实 AI 端到端（用户提供端点） | 手工 | 待人工验证 | |
-| `scripts/test.sh`、`scripts/build.sh`、`scripts/render-gallery.sh` | 命令 | M3-4 分支部分通过；集成待运行 | M3-4 结果见上方专项行；不代表 M3 整体验收 |
+| `scripts/test.sh`、`scripts/build.sh`、`scripts/render-gallery.sh` | 命令 | 测试/渲染通过；完整构建阻塞 | 2026-10-11：test.sh 通过（19 XCTest + 66 Swift Testing，Rime 部署和旧标识扫描通过）；build.sh 主 App/翻译服务 release 编译与签名通过，随后因输入法子模块未初始化退出 1；render-gallery.sh 生成 208 PNG，未作视觉验收。 |
+
 
 ## 进度
 
@@ -90,6 +91,19 @@ swiftc -swift-version 6 -D RESULT_WINDOW_CHECKS -D RESULT_WINDOW_UI_CHECKS \
 /tmp/roarkt-result-window-ui-checks
 ```
 
+
+
+### M3-1 / M3-2 交付记录
+
+- pi-xpc M3-1：`9d41579` 实现 `DefaultOperationRunner`、目标语言/模型选择、模板提示词、仅完成问答的上下文、超长拒绝、代次取消、Secure Input 防护、内存最近 10 条、搜索 URL；`8b02467` 提供 App 组合入口并补齐真实传输取消/隐私开关/空响应检查。
+- pi-xpc M3-2：`1801c8f` 增加主 App 专用 `RoarkTTextTranslationXPCProtocol`（继承候选基础协议）、`translateText` / `cancelText`、独立的文本请求协调器、macOS 26 Apple 后端、App 侧签名校验 XPC 客户端；离线失败由操作引擎在主 App 回落 AI，密钥不进入翻译服务。未更改候选调用方权限。
+- Claude 接线入口：App 创建一个 `OperationsEnvironment`，启动/退出调用 `start()` / `stop()`；每个结果窗用 `makeRunner(connectionID: settings.ai.id)` 获取独立 runner，关闭时 `stop()`；监听 `run(_:)` 事件，追问使用成功结果的 `session`。“清除当前内容”调用 `clearCurrentContent()` 并清除窗口自身内容；隐私设置关闭最近结果时，Claude 需清空现存最近结果。搜索调用 `search(_:settings:)` 并处理返回 false。
+- 文件边界：未修改 AppDelegate、Package.swift、共享 Tests 或其他 worktree。新行为检查位于归属目录的 `.checks/`；脚本创建临时 Swift 测试包并在结束后清理。它们目前需单独执行，未修改 `scripts/test.sh`。
+- 最终验证命令：`Core/Operations/.checks/run.sh`（11/11）、`Services/TranslationService/.checks/run.sh`（9/9）、`scripts/test.sh`（通过）、`scripts/build.sh`（输入法依赖阻塞）、`scripts/render-gallery.sh`（208 PNG，生成不等于视觉验收）、`git diff --check`（通过）。检查夹具均为合成内容，不含真实选区、用户文件或凭据。构建/图库产物只在本 worktree 的忽略目录中。
+
 ## 问题
 
-- M3-4：关闭后非激活提示宿主、未聚焦窗口的纯键盘入口，由 Claude 在 M3-6 决定并接线；完整构建仍需初始化输入法子模块。
+- 待 Claude 决定：各真实模型的输入预算。`OperationRequest.maximumInputBytes` 默认 16,384 UTF-8 字节，对完整提示词及会话一起校验、绝不截断；可由调用方按已验证模型的输入预算覆盖。当前设置没有模型上下文容量元数据，默认值不是对所有模型上限的声明。
+- 待 Claude 确认产品语义：翻译模板自定义提示词用于 AI 路径；`offlineFirst` 成功时仍按规格使用 Apple Translation（该 API 不支持提示词），不会应用自定义提示词。若希望编辑翻译提示词后必走 AI，需要在设置/路由规格中明确。
+- 待 Claude 集成：是否把两个 `.checks/run.sh` 纳入统一测试入口；本分支受文件所有权限制未修改该入口。初始化输入法构建子模块后需重新运行完整 build.sh。
+- 待人工验证：真实端点/模型及错误响应；已安装 Apple 语言包的中英与指定目标翻译；macOS < 26 回落；签名 App 到 LaunchAgent 的真实调用；密码框与终端 Secure Keyboard Entry 的无请求/无缓存；结果浮窗追问、复制并返回、最近结果菜单和设计验收（由 M3-3～M3-6 集成）。

@@ -24,6 +24,8 @@
 
 ## 构建与测试
 
+- 测试一律放在 `Tests/<目标名>/`，并在 `Package.swift` 新增或扩展 testTarget（任何 agent 都可以只为自己的测试新增 testTarget 或给已有 testTarget 加依赖）。不要把测试藏在源码目录或另建独立 Package/脚本，`scripts/test.sh` 必须能跑到全部测试。
+
 - `scripts/build.sh`：构建并签名全部产物到 `dist/`。
 - `scripts/test.sh`：全部自动化测试。提交前必须通过。
 - 签名身份默认 `Developer ID Application: XIAO BIN (DF7J2VBQD8)`，可用 `ROARKT_CODESIGN_IDENTITY` 覆盖。
