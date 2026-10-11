@@ -26,7 +26,7 @@
 | --- | --- | --- | --- | --- |
 | S1 | 设置模型 + 存储 + AI 客户端 + 连接测试 + 诊断日志 | pi-xpc | — | 未开始 |
 | S2 | 菜单栏、菜单栏面板、设置窗口、开机启动 | pi-ui | S1 的 Settings 模型（先提交）；U3 菜单栏面板 | 未开始 |
-| S3 | 权限中心与全局快捷键接线 | pi-platform | S1 的 Settings 模型 | 未开始 |
+| S3 | 权限中心与全局快捷键接线 | pi-platform | S1 的 Settings 模型 | 完成（待验收） |
 | S4 | 首次引导与输入法“设置”入口 | pi-ime | S1 的 Settings 模型 | 未开始 |
 | S5 | 集成验收 | Claude | S1–S4 | 未开始 |
 
@@ -75,8 +75,8 @@
 | AI 客户端四项测试与错误分类 | `URLProtocol` 桩测试；真实端点待用户提供 | 未运行 | |
 | 日志脱敏与导出 | 单元测试 | 未运行 | |
 | 菜单栏、北京时间、开机启动 | 手工 | 待人工验证 | |
-| 权限四态显示与跳转 | 手工 | 待人工验证 | |
-| `⌃1` 注册、冲突提示、重设 | 手工 | 待人工验证 | |
+| 权限四态显示与跳转 | 手工 | 待人工验证 | S3 已提供实时权限中心；自动检查覆盖单项请求、拒绝→授予→撤销、打开设置失败；真实系统弹窗与跳转未验证。 |
+| `⌃1` 注册、冲突提示、重设 | 手工 | 待人工验证 | S3 桩检查覆盖默认注册、系统/内部冲突、重设、外部设置变更、暂停录制、过期回调与安全输入；真实 Carbon 注册和键盘操作待验收。 |
 | 引导：输入源真实按键验证、语言包状态 | 手工 | 待人工验证 | |
 | 输入法菜单“设置…”拉起主 App | 手工 | 待人工验证 | |
 | Gallery 仍可渲染全部状态 | `scripts/render-gallery.sh` | 未运行 | |
@@ -84,8 +84,33 @@
 
 ## 进度
 
-（S1 第一个 commit 后在此登记。）
+### S3（pi-platform）完成（待验收）
+
+- 依赖：Settings 模型 `f87c60a` 已合入当前 `agent/platform`，合并提交 `237edf3`；未修改其他 worktree、未 push、未合并 main。
+- `d5fd9c8`：权限中心及视图；每 2 秒刷新，查询不弹权限请求；按钮仅申请指定权限，支持打开对应系统设置。AX/屏幕录制 API 仅返回布尔值，明确显示“未授权（系统未区分首次与拒绝）”，不伪造首次/拒绝状态。麦克风覆盖尚未请求、授权、拒绝、限制状态。
+- `69fe99e`：快捷键中心与原生录制控件；读取 `ShortcutSettings`，使用 Observation 跟踪注入的 Store 读取闭包；修改、恢复默认和外部变更均重注册。重复组合键与系统注册失败反馈到各行。录制期间停用全局注册，Esc/离开窗口或分区取消；注册代次阻止旧回调执行。
+- Fn 使用现有 `FnKeyMonitor`，一次按住只在 press 记录 `action=voiceHoldProbe status=pressed`，不记录文字、不录音；安全输入/无法确认安全状态时不记录。辅助功能授权变化后重试注册。截图、翻译、总结在界面明确标“即将推出”。
+
+#### S3 验收证据（当前 worktree）
+
+| 检查 | 结果 | 证据与边界 |
+| --- | --- | --- |
+| `bash Tests/AppShellTests/run.sh` | 通过 | PermissionCenterChecks / HotkeyChecks 均通过；注入系统能力桩，无弹窗、无真实按键。独立编译检查以避免修改 S1 所有的 Package.swift。 |
+| `scripts/test.sh` | 通过 | 19 个 XCTest + 40 个 Swift Testing 测试；Rime 部署检查与旧标识扫描通过。 |
+| `swift build` | 通过 | Swift 6 下主 App 与新增 SwiftUI/AppKit 控件编译通过。 |
+| `scripts/build.sh` | 阻塞 | 主 App、翻译服务 release 构建及签名验证通过；输入法阶段因 librime/plum/Sparkle 子模块未初始化退出，完整产物构建未通过。 |
+| `scripts/render-gallery.sh /tmp/roarkt-s3-gallery` | 通过 | 原 Gallery 渲染 134 张 PNG；只证明现有模拟视图回归可用，不代表新增实时面板设计验收通过。 |
+| 权限与快捷键真实交互、浅深色与 VoiceOver | 待人工验证 | 在签名主 App 中走查首次/拒绝/授予/撤销、系统设置跳转、真实 ⌃1 冲突/重设、录制取消、Fn 长按/组合键/安全输入/权限撤销、系统 Fn 行为冲突。 |
+
+#### S2 / S4 接入边界
+
+- S2 持有一个 `PermissionCenter`，App 生命周期调用 `start()` / `stop()`；设置权限分区使用 `PermissionCenterView(center:)`。S4 可复用同一实例，通过 `items`、`request(_:)`、`openSettings(_:)` 接引导。不要在引导出现时自动请求权限。
+- S2 持有一个 `HotkeyCenter(read:write:showSettings:)`：`read` 直接读取 Observable SettingsStore 的 `ShortcutSettings`，`write` 通过 Store 唯一入口保存，`showSettings` 打开现有设置窗口。启动/退出调用 `start()` / `stop()`；快捷键分区使用 `HotkeySettingsView(center:)`。运行状态仅在内存中，不写 settings.json。
+- 上述生命周期与设置窗口装配归 S2；S3 未越权修改 AppDelegate、SettingsView、SettingsStore 或 Info.plist，合并后需 S5 验证真实接线。
+
 
 ## 问题
 
-（需要 Claude 决定的事项写在这里。）
+- S3 → Claude/S2：`App/Info.plist` 尚无 `NSMicrophoneUsageDescription`。请 S2 补充准确用途说明后，在签名主 App 验收请求；S3 在缺失说明时返回错误，避免系统终止进程。
+- S3 → Claude：请确认 S2 按上述接口接入实时权限/快捷键分区并管理生命周期；当前 S3 的完成范围是所拥有目录的可编译模块，真实窗口集成待 S5 验收。
+- S3 → Claude：当前 worktree 未初始化输入法子模块，完整构建阻塞；请在集成 worktree 运行完整构建。Fn 与系统听写/切换输入源的冲突无法由 Carbon 注册结果证明，界面已提示，仍需人工确认系统键盘设置。
