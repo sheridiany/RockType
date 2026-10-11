@@ -30,6 +30,9 @@ struct LiveResultWindowView: View {
                     if state.phase == .connecting {
                         Label("正在连接…", systemImage: "ellipsis.circle").foregroundStyle(p.secondary)
                     }
+                    if state.phase == .thinking {
+                        Label("思考中…", systemImage: "sparkles").foregroundStyle(p.secondary)
+                    }
                     if !state.answer.isEmpty { answerText(state.answer + (state.phase == .streaming ? " ▍" : "")) }
                     if let notice = state.notice { Notice(text: notice, tone: state.phase == .failed ? .danger : .warn) }
                     if state.sourceExpanded, let snapshot = state.session?.snapshot {
@@ -57,7 +60,7 @@ struct LiveResultWindowView: View {
                     .accessibilityValue(state.sourceExpanded ? "已展开" : "已折叠")
                 Text(captureMethod).font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(p.tertiary)
                 Spacer()
-                Button("追问") { controller.beginQuestion(); questionFocused = true }.disabled(state.isBusy || !state.canCopy)
+                Button("追问") { controller.beginQuestion(); questionFocused = true }.disabled(!state.canAsk)
                 Button("重试", action: controller.retry).disabled(state.isBusy)
             }.buttonStyle(DesignButtonStyle(variant: .ghost))
             HStack {
@@ -88,6 +91,7 @@ struct LiveResultWindowView: View {
     private func answerText(_ text: String) -> some View {
         // Verbatim display preserves paragraphs, lists and code indentation while streaming.
         Text(text).font(Tokens.Typography.font(Tokens.Typography.read))
+            .textSelection(.enabled)
             .lineSpacing(Tokens.Typography.readingSpacing)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -111,6 +115,7 @@ struct LiveResultWindowView: View {
         switch controller.state.phase {
         case .idle: "等待操作"
         case .connecting: "连接中"
+        case .thinking: "思考中"
         case .streaming: "生成中"
         case .done: "已完成"
         case .cancelled: "已停止"

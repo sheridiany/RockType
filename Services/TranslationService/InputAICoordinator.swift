@@ -36,7 +36,7 @@ enum InputAIError: Int, Error {
         case .unauthorized: return .authentication
         case .modelNotFound: return .modelUnavailable
         case .rateLimited: return .rateLimited
-        case .decoding, .responseTooLarge: return .invalidResponse
+        case .decoding, .responseTooLarge, .emptyResponse, .outputLimit: return .invalidResponse
         default: return .network
         }
     }

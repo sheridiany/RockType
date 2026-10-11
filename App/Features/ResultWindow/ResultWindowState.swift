@@ -5,7 +5,7 @@ import RoarkTCore
 /// Runtime-only presentation state. The runner is dedicated to this window.
 @MainActor @Observable
 final class ResultWindowState {
-    enum Phase { case idle, connecting, streaming, done, cancelled, failed }
+    enum Phase { case idle, connecting, thinking, streaming, done, cancelled, failed }
     private(set) var phase: Phase = .idle
     private(set) var request: OperationRequest?
     private(set) var session: OperationSession?
@@ -20,8 +20,9 @@ final class ResultWindowState {
     var question = ""
     var pinned = false
     var sourceExpanded = false
-    var isBusy: Bool { phase == .connecting || phase == .streaming }
+    var isBusy: Bool { phase == .connecting || phase == .thinking || phase == .streaming }
     var canCopy: Bool { !answer.isEmpty }
+    var canAsk: Bool { !isBusy && session?.turns.isEmpty == false }
     @ObservationIgnored private let runner: any OperationRunner
     @ObservationIgnored private let readable: @MainActor () -> Bool
     @ObservationIgnored private let completed: @MainActor (OperationResult) -> Void
@@ -62,7 +63,7 @@ final class ResultWindowState {
 
     func ask(settings: AppSettings) {
         let text = question.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !isBusy, !text.isEmpty, let request, let session else { return }
+        guard canAsk, !text.isEmpty, let request, let session else { return }
         let template = settings.templates.first { $0.id == request.template.id } ?? request.template
         execute(OperationRequest(session: session, template: template, settings: settings,
                                  question: text, maximumInputBytes: request.maximumInputBytes))
@@ -105,8 +106,10 @@ final class ResultWindowState {
                 }
                 switch event {
                 case .started: break
+                case .thinking: if self.answer.isEmpty { self.phase = .thinking }
                 case .engine(let engine): self.engine = engine
-                case .delta(let delta): self.answer += delta; self.phase = .streaming
+                case .delta(let delta):
+                    if !delta.isEmpty { self.answer += delta; self.phase = .streaming }
                 case .completed(let result):
                     guard result.session.id == request.session.id,
                           result.session.snapshot == request.session.snapshot,
@@ -145,7 +148,9 @@ final class ResultWindowState {
             case .timeout: "请求超时，请重试。"
             case .cancelled: "请求已取消。"
             case .responseTooLarge: "响应过长，已停止接收。"
-            case .decoding: "响应格式无法识别，请检查服务兼容性。"
+            case .decoding: "连接意外中断或响应格式不兼容，请重试。"
+            case .emptyResponse: "模型没有生成正文，请重试或换一个模型。"
+            case .outputLimit: "模型达到输出上限，结果未完成。请缩小内容范围后重试。"
             case .network, .server, .http: "连接失败，请检查网络和服务后重试。"
             }
         }
