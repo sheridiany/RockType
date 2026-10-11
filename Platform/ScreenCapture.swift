@@ -7,8 +7,10 @@ import ScreenCaptureKit
         public let displayID: CGDirectDisplayID
         public let rect: CGRect
         public let image: CGImage
-        public init(displayID: CGDirectDisplayID, rect: CGRect, image: CGImage) {
-            self.displayID = displayID; self.rect = rect; self.image = image
+        /// Front-to-back window rectangles in this display's top-left canvas coordinates.
+        public let windows: [CGRect]
+        public init(displayID: CGDirectDisplayID, rect: CGRect, image: CGImage, windows: [CGRect] = []) {
+            self.displayID = displayID; self.rect = rect; self.image = image; self.windows = windows
         }
     }
     private static var content: SCShareableContent?
@@ -52,6 +54,11 @@ import ScreenCaptureKit
         let content: SCShareableContent
         if let cached = self.content { content = cached }
         else { content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true); self.content = content }
+        try Task.checkCancellation()
+        try SecureInput.requireReadable()
+        // Snapshot at capture time, not the older warmed SCShareableContent window list.
+        let windowInfo = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+        let desktopTop = NSScreen.screens.first?.frame.maxY ?? 0
         let own = content.applications.filter { $0.processID == ProcessInfo.processInfo.processIdentifier }
         var captures: [Task<Frame, Error>] = []
         defer { captures.forEach { $0.cancel() } }
@@ -68,13 +75,15 @@ import ScreenCaptureKit
             config.height = Int(filter.contentRect.height * CGFloat(filter.pointPixelScale))
             config.showsCursor = false
             let rect = screen.frame
+            let windows = CaptureWindowGeometry.rectangles(windowInfo, display: rect, desktopTop: desktopTop,
+                ownPID: ProcessInfo.processInfo.processIdentifier)
             captures.append(Task { @MainActor in
                 try Task.checkCancellation()
                 try SecureInput.requireReadable()
                 let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
                 try Task.checkCancellation()
                 try SecureInput.requireReadable()
-                return Frame(displayID: display.displayID, rect: rect, image: image)
+                return Frame(displayID: display.displayID, rect: rect, image: image, windows: windows)
             })
         }
         var frames: [Frame] = []
@@ -85,5 +94,26 @@ import ScreenCaptureKit
         }
         guard !frames.isEmpty else { throw Failure.unavailable }
         return frames
+    }
+}
+
+/// Window-server coordinates are top-left based; AppKit screen frames are bottom-left based.
+public enum CaptureWindowGeometry {
+    public static func rectangles(_ windows: [[String: Any]], display: CGRect, desktopTop: CGFloat,
+                                  ownPID: Int32) -> [CGRect] {
+        let displayTop = CGRect(x: display.minX, y: desktopTop - display.maxY,
+                                width: display.width, height: display.height)
+        return windows.compactMap { window in
+            guard let pid = window[kCGWindowOwnerPID as String] as? NSNumber, pid.int32Value != ownPID,
+                  let level = window[kCGWindowLayer as String] as? NSNumber, level.intValue == 0,
+                  let alpha = window[kCGWindowAlpha as String] as? NSNumber, alpha.doubleValue > 0.01,
+                  let values = window[kCGWindowBounds as String] as? [String: Any],
+                  let rect = CGRect(dictionaryRepresentation: values as CFDictionary),
+                  rect.width >= 40, rect.height >= 40,
+                  window[kCGWindowOwnerName as String] as? String != "Dock" else { return nil }
+            let clipped = rect.intersection(displayTop)
+            guard !clipped.isNull, !clipped.isEmpty else { return nil }
+            return clipped.offsetBy(dx: -displayTop.minX, dy: -displayTop.minY)
+        }
     }
 }

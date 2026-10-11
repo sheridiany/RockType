@@ -10,6 +10,12 @@ import os
     var onCancel: () -> Void = {}
     var onPreview: (CGImage) -> Void = { _ in }
     var onComplete: (CGImage) -> Void = { _ in }
+    private let windows: [CGRect]
+    private var hoveredWindow: CGRect? { didSet { updateSelectionLayers() } }
+    private var clickWindow: CGRect?
+    private var freeSelecting = false
+    private var didDrag = false
+    private var tracking: NSTrackingArea?
     private var anchor = CGPoint.zero
     private var original = CGRect.zero
     private var handle: ScreenshotHandle?
@@ -63,8 +69,8 @@ import os
     }
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
-    init(frame: CGRect, image: CGImage) {
-        self.image = image; super.init(frame: frame)
+    init(frame: CGRect, image: CGImage, windows: [CGRect] = []) {
+        self.image = image; self.windows = windows; super.init(frame: frame)
         wantsLayer = true
         frozenLayer.frame = bounds; frozenLayer.contents = image
         frozenLayer.contentsGravity = .resize
@@ -98,10 +104,11 @@ import os
         guard annotationView != nil else { return }
         CATransaction.begin(); CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
+        let visible = selection.isEmpty ? (hoveredWindow ?? .zero) : selection
         let mask = CGMutablePath(); mask.addRect(bounds)
-        if !selection.isEmpty { mask.addRect(selection) }
+        if !visible.isEmpty { mask.addRect(visible) }
         maskLayer.path = mask
-        borderLayer.path = selection.isEmpty ? nil : CGPath(rect: selection, transform: nil)
+        borderLayer.path = visible.isEmpty ? nil : CGPath(rect: visible, transform: nil)
         annotationClip.frame = bounds
         annotationClip.path = CGPath(rect: selection, transform: nil)
         let handles = CGMutablePath()
@@ -112,11 +119,11 @@ import os
             }
         }
         handlesLayer.path = handles
-        labelLayer.isHidden = selection.isEmpty
-        let pixels = CaptureGeometry.pixels(selection, image: image, size: bounds.size)
-        labelLayer.string = "\(Int(pixels.width)) × \(Int(pixels.height)) · ↩ 完成 · Esc 取消"
-        labelLayer.frame = CGRect(x: max(8, min(selection.minX, bounds.width - 310)),
-            y: max(8, selection.minY - 25), width: min(310, bounds.width - 16), height: 20)
+        labelLayer.isHidden = visible.isEmpty
+        let pixels = CaptureGeometry.pixels(visible, image: image, size: bounds.size)
+        labelLayer.string = selection.isEmpty ? "单击选窗口 · 拖动自由框选 · Esc 取消" : "\(Int(pixels.width)) × \(Int(pixels.height)) · ↩ 完成 · Esc 取消"
+        labelLayer.frame = CGRect(x: max(8, min(visible.minX, bounds.width - 310)),
+            y: max(8, visible.minY - 25), width: min(310, bounds.width - 16), height: 20)
         if let toolbar, !toolbar.isHidden {
             var frame = toolbar.frame
             frame.origin = CGPoint(x: min(max(8, selection.maxX - frame.width), bounds.width - frame.width - 8),
@@ -129,6 +136,20 @@ import os
         if let lastFrame { frameTotal += link.timestamp - lastFrame; frameCount += 1 }
         lastFrame = link.timestamp
     }
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let tracking { removeTrackingArea(tracking) }
+        let area = NSTrackingArea(rect: .zero, options: [.activeAlways, .inVisibleRect, .mouseMoved, .mouseEnteredAndExited],
+                                  owner: self, userInfo: nil)
+        addTrackingArea(area); tracking = area
+    }
+    func updateHover(at point: CGPoint) {
+        guard selection.isEmpty, !dragging else { return }
+        hoveredWindow = windows.first { $0.contains(point) }
+    }
+    override func mouseMoved(with event: NSEvent) { updateHover(at: convert(event.locationInWindow, from: nil)) }
+    override func mouseEntered(with event: NSEvent) { mouseMoved(with: event) }
+    override func mouseExited(with event: NSEvent) { if !dragging { hoveredWindow = nil } }
     override func mouseDown(with event: NSEvent) {
         window?.makeKey(); window?.makeFirstResponder(self)
         commitText()
@@ -137,6 +158,7 @@ import os
         displayLink = displayLink(target: self, selector: #selector(recordFrame(_:)))
         displayLink?.add(to: .main, forMode: .common)
         anchor = convert(event.locationInWindow, from: nil); original = selection
+        didDrag = false; freeSelecting = false; clickWindow = windows.first { $0.contains(anchor) }
         if let tool, selection.contains(anchor) {
             if tool == .text {
                 textPoint = anchor
@@ -154,10 +176,16 @@ import os
             return !selection.isEmpty && hypot(p.x - anchor.x, p.y - anchor.y) <= 9
         }
         moving = handle == nil && selection.contains(anchor)
-        if handle == nil && !moving { selection = .zero }
+        if handle == nil && !moving {
+            selection = .zero; freeSelecting = true
+            hoveredWindow = clickWindow; toolbar?.isHidden = true
+        }
     }
     override func mouseDragged(with event: NSEvent) {
         let p = convert(event.locationInWindow, from: nil)
+        if hypot(p.x - anchor.x, p.y - anchor.y) >= 3 { didDrag = true }
+        if freeSelecting && !didDrag { return }
+        if freeSelecting { hoveredWindow = nil }
         if var drawing = draft {
             let point = CGPoint(x: min(max(selection.minX, p.x), selection.maxX), y: min(max(selection.minY, p.y), selection.maxY))
             if drawing.tool == .pen { drawing.points.append(point) }
@@ -172,6 +200,8 @@ import os
     }
     @objc private func finishText() { commitText(); window?.makeFirstResponder(self); updateToolbar() }
     override func mouseUp(with event: NSEvent) {
+        if freeSelecting && !didDrag { selection = clickWindow ?? .zero }
+        freeSelecting = false; clickWindow = nil
         dragging = false; displayLink?.invalidate(); displayLink = nil
         if frameCount > 0 { Self.timing.info("drag_frame_ms \(self.frameTotal * 1000 / Double(self.frameCount), privacy: .public)") }
         if let draft { history.append(draft); self.draft = nil; updateAnnotations() }

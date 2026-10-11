@@ -97,7 +97,7 @@ import os
             let panel = CapturePanel(contentRect: frame.rect, styleMask: [.borderless], backing: .buffered, defer: false)
             panel.level = .screenSaver; panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.isReleasedWhenClosed = false
-            let view = CaptureCanvas(frame: CGRect(origin: .zero, size: frame.rect.size), image: frame.image)
+            let view = CaptureCanvas(frame: CGRect(origin: .zero, size: frame.rect.size), image: frame.image, windows: frame.windows)
             view.onCancel = { [weak self] in self?.cancel() }
             view.onComplete = { [weak self] image in
                 guard let self, self.allowed() else { return }
@@ -109,6 +109,9 @@ import os
                 self.cancel(); self.openImage(image, origin: "截图")
             }
             panel.contentView = view; panels.append(panel)
+            panel.acceptsMouseMovedEvents = true
+            let mouse = NSEvent.mouseLocation
+            view.updateHover(at: CGPoint(x: mouse.x - frame.rect.minX, y: frame.rect.maxY - mouse.y))
             panel.orderFrontRegardless()
             if frame.rect.contains(NSEvent.mouseLocation) { panel.makeKey(); panel.makeFirstResponder(view) }
         }
