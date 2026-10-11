@@ -76,9 +76,9 @@ private final class AppleSelectionTranslator: SelectionTextTranslating {
             throw availability == .supported ? CandidateTranslationFailure.languagePackMissing
                 : CandidateTranslationFailure.unsupportedLanguage
         }
-        let session = TranslationSession(installedSource: sourceLanguage, target: targetLanguage)
+        let session = AppleTranslationSession(source: sourceLanguage, target: targetLanguage)
         return try await StructuredTextTranslation.translate(text) { line in
-            try await session.translate(line).targetText.trimmingCharacters(in: .whitespacesAndNewlines)
+            try await session.translate(line).trimmingCharacters(in: .whitespacesAndNewlines)
         }
     }
 }

@@ -39,6 +39,7 @@ import RoarkTCore
         let request = OperationRequest(session: session, template: template, settings: settings)
         let current = generation
         phase = .running; runner.start()
+        if source.utf8.count > LongTextPlan.segmentBytes { notice = LongTextPlan.guidance }
         let events = runner.run(request)
         task = Task { [weak self] in
             for await event in events {
@@ -75,6 +76,8 @@ import RoarkTCore
         switch error {
         case .protectedInput: "安全输入已启用，翻译已停止。"
         case .inputTooLong(let limit): "文字超过本次翻译上限（\(limit) 字节），请缩短后重试。"
+        case .codeBlockTooLong(let limit): "单个代码块超过 \(limit) 字节，请手动拆开后重试。"
+        case .tooManySegments(let limit): "内容超过 \(limit) 个分段，请分成几次处理。"
         case .ai(.configuration): "请先在设置中配置翻译服务或 AI 连接。"
         case .ai(.unauthorized): "连接认证失败，请检查密钥和模型权限。"
         case .ai(.rateLimited): "服务请求过多，请稍后重试。"

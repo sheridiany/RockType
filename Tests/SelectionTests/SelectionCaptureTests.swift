@@ -2,7 +2,7 @@ import AppKit
 import Testing
 @testable import RoarkTApp
 import RoarkTCore
-import RoarkTPlatform
+@testable import RoarkTPlatform
 
 @MainActor @Test func selectionCaptureProtectsSourcesAndRejectsLateResults() async throws {
     let source = ContentSnapshot.Source(pid: 42, bundleID: "test.editor", applicationName: "Test")
@@ -75,4 +75,25 @@ import RoarkTPlatform
     settings.selection.disabledActions = ["translate"]
     settings.templates.append(.init(id: "image", name: "Image", icon: "photo", prompt: "", input: .image))
     #expect(SelectionPolicy.actions(settings: settings) == ["search", "copy"])
+}
+
+@MainActor @Test(arguments: ["com.microsoft.VSCode", "com.google.Chrome", "com.apple.Terminal"])
+func missingAXSelectionFallsBackWithoutWeakeningProtection(_ bundleID: String) async throws {
+    var allowed = true, copies = 0
+    var length: Int? = 12
+    let capture = SelectionCapture(allowed: { allowed }, context: {
+        .init(source: .init(pid: 42, bundleID: bundleID, applicationName: "Synthetic"), isCurrent: { true })
+    }, read: { .init(status: SelectionReader.classify(text: "", selectionLength: length), text: "", rect: nil) },
+    copy: { copies += 1; return "Synthetic fallback" })
+    let selected = try await capture.capture()
+    #expect(selected.snapshot.method == .copyFallback && copies == 1)
+    length = nil
+    _ = try await capture.capture()
+    #expect(copies == 2)
+    length = 0
+    do { _ = try await capture.capture(); Issue.record("Known empty selection copied") } catch {}
+    #expect(copies == 2)
+    allowed = false; length = 12
+    do { _ = try await capture.capture(); Issue.record("Protected selection copied") } catch {}
+    #expect(copies == 2)
 }

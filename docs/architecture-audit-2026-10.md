@@ -58,3 +58,9 @@ P0 是正式发布前门槛，P1 是后续结构整理优先项，P2 是可独�
 ## R4-UI 后续处理（2026-10-11）
 
 A02/A03/A04/A15 的 UI 部分已处理：正式导航移入 Shell，正式图片预览不再初始化 Mock，Gallery/Mock/原型及入口使用完整 DEBUG 边界，长期组件和通知控制器改为职责名称。未修改 ScreenshotCoordinator；A15 的 Platform 占位项仍归 pi-platform。原审计表保留审计时快照，当前边界与验证见 [架构](architecture.md) 和 [R4-UI 证据](../specs/evidence/014-R4-UI.md)。
+
+## R3-AI 后续处理（2026-10-11）
+
+- A09：仅将相同的 `TranslationSession(installedSource:target:)` 创建与 `translate(...).targetText` 适配提取为 `Services/TranslationService/AppleTranslationSession.swift`。候选方向与缓存、250ms 内部错误重试、错误映射及取消检查保持原位置；选区语言识别、可用性检查、按行保留格式及每次请求的 session 生命周期保持原位置。未把两类请求合并为统一策略。
+- A15 的 Platform 部分：生产、测试及构建脚本中未发现占位 `Platform` 枚举或文件的引用，删除 `Platform/Platform.swift`。UI 部分沿用 R4-UI 的处理。
+- 自动验证和真实 AI 冒烟见 [R3-AI 证据](../specs/evidence/014-R3-AI.md)。原审计表保留历史快照。
