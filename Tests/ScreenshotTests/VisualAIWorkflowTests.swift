@@ -129,6 +129,7 @@ final class VisualAIWorkflowTests: XCTestCase {
             session.openImageFollowup()
             let result = try XCTUnwrap(exported)
             XCTAssertFalse(result.session.snapshot.text.contains(session.text))
+            XCTAssertTrue(result.session.snapshot.text.contains("原图和识别原文不保留在对话中。"))
             XCTAssertEqual(result.session.turns.last?.answer, "Synthetic completed answer")
             XCTAssertEqual(result.templateID, ScreenshotVisualAI.template(action).id)
             exported = nil

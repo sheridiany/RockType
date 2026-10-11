@@ -7,6 +7,11 @@ enum VoiceFailure: Error { case timeout, unavailable, model, empty, permission }
     func prepare(directory: URL) async throws
     func transcribe(_ audio: Data) async throws -> String
     func stop()
+    func preview(_ audio: Data) async throws -> String
+}
+
+extension VoiceRecognizing {
+    func preview(_ audio: Data) async throws -> String { try await transcribe(audio) }
 }
 
 struct VoiceTarget: Sendable {

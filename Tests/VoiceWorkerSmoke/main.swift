@@ -15,7 +15,19 @@ let proxy = connection.remoteObjectProxyWithErrorHandler { @Sendable [expectReje
     print(expectRejection ? "Unauthorized caller rejected" : "FAIL: signed XPC connection failed")
     finish(expectRejection ? 0 : 1)
 } as! VoiceWorkerProtocol
-if let index = CommandLine.arguments.firstIndex(of: "--evaluate-dir"), CommandLine.arguments.indices.contains(index + 2) {
+if let index = CommandLine.arguments.firstIndex(of: "--performance-dir"), CommandLine.arguments.indices.contains(index + 2) {
+    do {
+        let evaluation = try VoicePerformanceEvaluation(proxy: proxy, directory: URL(fileURLWithPath: CommandLine.arguments[index + 1]))
+        let start = ProcessInfo.processInfo.systemUptime
+        proxy.prepare(directory: CommandLine.arguments[index + 2]) { ready in
+            guard ready else { finish(1) }
+            let seconds = ProcessInfo.processInfo.systemUptime - start
+            try? String(seconds).write(toFile: CommandLine.arguments[index + 1] + "/prepare-seconds.txt", atomically: true, encoding: .utf8)
+            evaluation.next()
+        }
+    } catch { finish(1) }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 900) { finish(1) }
+} else if let index = CommandLine.arguments.firstIndex(of: "--evaluate-dir"), CommandLine.arguments.indices.contains(index + 2) {
     let directory = URL(fileURLWithPath: CommandLine.arguments[index + 1])
     let model = CommandLine.arguments[index + 2]
     do {

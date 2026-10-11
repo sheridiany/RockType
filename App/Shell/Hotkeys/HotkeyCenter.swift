@@ -20,7 +20,7 @@ import RoarkTPlatform
 /// so external edits re-register too, without making S3 depend on Store implementation.
 @MainActor @Observable final class HotkeyCenter {
     enum Action: String, CaseIterable, Identifiable {
-        case voiceHoldToTalk, screenshot, translateSelection, summarizeSelection, showSettings
+        case voiceHoldToTalk, screenshot, translateSelection, summarizeSelection, screenshotHistory, togglePins, closePins, nextPin, showSettings
         var id: Self { self }
         var title: String {
             switch self {
@@ -28,6 +28,10 @@ import RoarkTPlatform
             case .screenshot: "截图"
             case .translateSelection: "翻译选区"
             case .summarizeSelection: "总结选区"
+            case .screenshotHistory: "截图历史"
+            case .togglePins: "隐藏／显示全部贴图"
+            case .closePins: "关闭全部贴图"
+            case .nextPin: "切换到下一张贴图"
             case .showSettings: "显示设置"
             }
         }
@@ -132,13 +136,24 @@ import RoarkTPlatform
         registerAll()
     }
 
+    private static let groupActions: [ShortcutAction] = [.screenshotHistory, .togglePins, .closePins, .nextPin]
+    var screenshotGroupAction: (Action) -> Void = { _ in }
     func shortcut(for action: Action) -> Shortcut? {
-        if let core = action.core { return settings.bindings[core] }
+        if let core = action.core {
+            if Self.groupActions.contains(core), settings.screenshotGroupDefaultsApplied != true {
+                return settings.bindings[core] ?? Shortcut.defaults[core]
+            }
+            return settings.bindings[core]
+        }
         return settings.showSettings
     }
 
     func set(_ shortcut: Shortcut?, for action: Action) {
         var updated = readSettings()
+        if let core = action.core, Self.groupActions.contains(core), updated.screenshotGroupDefaultsApplied != true {
+            for action in Self.groupActions where updated.bindings[action] == nil { updated.bindings[action] = Shortcut.defaults[action] }
+            updated.screenshotGroupDefaultsApplied = true
+        }
         if let core = action.core { updated.bindings[core] = shortcut }
         else { updated.showSettings = shortcut }
         writeSettings(updated)
@@ -186,7 +201,9 @@ import RoarkTPlatform
                 guard let self, self.running, self.registrationGeneration == generation, self.recording == nil, self.recordingTemplate == nil else { return }
                 if action == .showSettings { self.showSettings(); return }
                 guard self.allowed() else { return }
-                if action == .screenshot {
+                if let core = action.core, Self.groupActions.contains(core) {
+                    self.screenshotGroupAction(action)
+                } else if action == .screenshot {
                     if let screenshotAction = self.screenshotAction { screenshotAction() }
                     else { self.notice = "截图尚未接入，请重新启动应用。" }
                 } else if action == .translateSelection || action == .summarizeSelection, let core = action.core {

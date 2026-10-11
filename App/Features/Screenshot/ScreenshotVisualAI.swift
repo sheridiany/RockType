@@ -175,7 +175,7 @@ import RoarkTPlatform
         guard phase == .done, allowed() else { return nil }
         var template = Self.template(action)
         if let customTemplate { template.id = "screenshot-custom-" + customTemplate.id; template.name = customTemplate.name; template.output = customTemplate.output }
-        let snapshot = ContentSnapshot(text: title + "：追问仅基于已完成的文字结果；原图和 OCR 原文不保留在对话中。",
+        let snapshot = ContentSnapshot(text: title + "：追问仅基于已完成的文字结果；原图和识别原文不保留在对话中。",
             source: .init(pid: ProcessInfo.processInfo.processIdentifier, applicationName: origin), method: .screenshotOCR)
         let session = OperationSession(snapshot: snapshot, turns: [.init(question: title, answer: output)])
         return (.init(session: session, templateID: template.id, text: output, engine: model), template)

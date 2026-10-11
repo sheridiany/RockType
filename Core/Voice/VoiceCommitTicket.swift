@@ -20,12 +20,15 @@ public struct VoiceCommitTicket: Sendable {
         let context: Context
         let expires: TimeInterval
     }
+    // Three minutes of capture, bounded preview/final inference and optional polish.
+    // Context/connection/single-use checks remain mandatory throughout this fixed lease.
+    public static let dictationLifetime: TimeInterval = 600
     private var pending: Pending?
     public init() {}
 
-    public mutating func capture(_ context: Context, now: TimeInterval) -> String {
+    public mutating func capture(_ context: Context, now: TimeInterval, lifetime: TimeInterval = 120) -> String {
         let token = UUID().uuidString
-        pending = Pending(token: token, context: context, expires: now + 120)
+        pending = Pending(token: token, context: context, expires: now + (lifetime.isFinite ? min(max(lifetime, 0), Self.dictationLifetime) : 0))
         return token
     }
 

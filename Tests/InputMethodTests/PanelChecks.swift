@@ -263,7 +263,7 @@ struct PanelChecks {
     var forgotten = false
     let learning = RoarkTCandidateLearningMenu.make(candidate: "测试", canForget: true) { forgotten = true }
     let item = learning.items[0]
-    precondition(item.title == "忘记「测试」的学习记录")
+    precondition(item.title == "忘记“测试”的学习记录")
     NSApp.sendAction(item.action!, to: item.target, from: item)
     precondition(forgotten)
     let disabled = RoarkTCandidateLearningMenu.make(candidate: "测试", canForget: false) {}

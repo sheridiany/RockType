@@ -17,7 +17,7 @@ import RoarkTCore
         readTemplates: { settings.templates }, registrar: registrar, allowed: { allowed }, trusted: { true })
     center.templateAction = { _ in calls += 1 }
     center.start(); defer { center.stop() }
-    #expect(registrar.entries.count == 3)
+    #expect(registrar.entries.count == 7)
     let shortcut = Shortcut(key: "k", modifiers: [.option, .command])
     settings.templates[2].shortcut = shortcut; center.retry()
     #expect(center.templateStatuses["polish"] == .registered)
@@ -30,8 +30,17 @@ import RoarkTCore
     settings.templates[2].shortcut = Shortcut.defaults[.translateSelection]; center.retry()
     #expect(center.templateStatuses["polish"] == .conflict)
     #expect(center.statuses[.translateSelection] == .conflict)
+    settings.templates[2].shortcut = Shortcut.defaults[.screenshotHistory]; center.retry()
+    #expect(center.templateStatuses["polish"] == .conflict && center.statuses[.screenshotHistory] == .conflict)
+    var groupCalls = 0
+    center.screenshotGroupAction = { _ in groupCalls += 1 }
+    settings.templates[2].shortcut = shortcut; center.retry()
+    let historyKey = try #require(Shortcut.defaults[.screenshotHistory])
+    let historyCallback = try #require(registrar.entries.first { $0.0 == historyKey }?.1)
+    historyCallback()
+    #expect(groupCalls == 1)
     settings.templates[2].shortcut = shortcut; settings.templates[3].shortcut = shortcut; center.retry()
     #expect(center.templateStatuses["polish"] == .conflict && center.templateStatuses["explain"] == .conflict)
     settings.templates[2].shortcut = nil; settings.templates[3].shortcut = nil; center.retry()
-    #expect(registrar.entries.count == 3)
+    #expect(registrar.entries.count == 7)
 }

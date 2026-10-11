@@ -17,7 +17,7 @@ import RoarkTPlatform
     var overlayUsesAI = false
     var displayedImage: CGImage? { showTranslatedImage && !confirmingImage ? (overlay.image ?? image) : image }
     private var textWasEdited = false
-    var text = "" { didSet { if text != oldValue { textWasEdited = true; translation.clear(); visual.clear(); overlay.clear(); showTranslatedImage = false } } }
+    var text = "" { didSet { if text != oldValue { textWasEdited = true; translation.clear(); visual.clear(); overlay.clear(); showTranslatedImage = false; if !closed && allowed() { onTextChanged(text) } } } }
     enum OCRPhase { case idle, running, done, empty, failed, cancelled }
     private(set) var ocrPhase: OCRPhase = .idle
     private(set) var ocrFinished = false
@@ -31,6 +31,7 @@ import RoarkTPlatform
     var notice: String?
     var confirmingImage: Bool { visual.phase == .confirming }
     var onClose: () -> Void = {}
+    var onTextChanged: (String) -> Void = { _ in }
     var performText: (OperationRequest) -> Void = { _ in }
     var imageCompleted: (OperationResult, OperationTemplate) -> Void = { _, _ in }
     var configureVision: () -> Void = {}

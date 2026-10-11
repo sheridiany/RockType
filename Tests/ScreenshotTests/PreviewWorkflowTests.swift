@@ -33,6 +33,7 @@ final class PreviewWorkflowTests: XCTestCase {
         session.translate()
         XCTAssertEqual(runner.requests.first?.session.snapshot.text, "Corrected source")
         XCTAssertEqual(runner.requests.first?.session.snapshot.method, .screenshotOCR)
+        XCTAssertEqual(runner.requests.first?.session.snapshot.source.applicationName, "截图文字识别")
         runner.sinks[0].yield(.engine("Synthetic engine")); runner.sinks[0].yield(.delta("Partial translation"))
         await settle { session.translation.text == "Partial translation" }
         XCTAssertEqual(session.translation.phase, .running)

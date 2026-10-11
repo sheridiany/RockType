@@ -49,7 +49,9 @@
 | [App/Shell/SettingsSection.swift:27](../App/Shell/SettingsSection.swift#L27) | 一个服务商连接，供翻译、总结与润色使用。 | 管理服务商、模型和连接测试。 | pi-ui |
 | [App/Shell/ShellSettingsView.swift:208](../App/Shell/ShellSettingsView.swift#L208) | 开启候选 AI 后，候选文字可能发送到所配置的服务商。 | 主动触发输入法 AI 时，当前文字会发送到所配置的服务商。 | pi-ui |
 
-## 待分发（未修改）
+## 交接清单（落实状态见备注）
+
+R7-UI 已落实下表 InputMethod/ 的 14 项，余下 22 项仍待分发（Voice 本轮未改）。文案列保留 R6 审计原文，已落实条目的链接更新到现资源值；完整 R6 字符串索引保留为当时快照。
 
 按 SPEC-014 分工建议负责窗口，共享代码由主控确认归属。同一模板重复出现的地方分别保留；先统一生产入口，再同步对应 DEBUG 原型。
 
@@ -60,30 +62,30 @@
 | [App/Features/Screenshot/CaptureCanvas.swift:298](../App/Features/Screenshot/CaptureCanvas.swift#L298) | \(Int(pixels.width)) × \(Int(pixels.height)) · 双击/↩ 复制 · ⌘S 另存 · ⇧C OCR · ⌥ 左/上边 · ⌘ 右/下边 | \(Int(pixels.width)) × \(Int(pixels.height)) · 双击/↩ 复制 · ⌘S 另存 · ⇧C 文字识别 · ⌥ 左/上边 · ⌘ 右/下边 | pi-xpc | 术语；若属于提示词，先确认是否在界面展示，再修改，保留协议/标识符 |
 | [App/Features/Screenshot/CaptureToolbar.swift:31](../App/Features/Screenshot/CaptureToolbar.swift#L31) | 预览、OCR、翻译与保存 | 预览、文字识别、翻译与保存 | pi-xpc | 术语；若属于提示词，先确认是否在界面展示，再修改，保留协议/标识符 |
 | [App/Features/Screenshot/CaptureToolbar.swift:33](../App/Features/Screenshot/CaptureToolbar.swift#L33) | 复制 ↩ / ⌘C · 另存为 ⌘S · 保存路径 ⇧↩ · OCR ⇧C · P 贴图 | 复制 ↩ / ⌘C · 另存为 ⌘S · 保存路径 ⇧↩ · 文字识别 ⇧C · P 贴图 | pi-xpc | 术语；若属于提示词，先确认是否在界面展示，再修改，保留协议/标识符 |
-| [App/Features/Screenshot/PinnedImagePanel.swift:293](../App/Features/Screenshot/PinnedImagePanel.swift#L293) | 复制 OCR 文字    ⇧C | 识别并复制文字    ⇧C | pi-surfaces | 术语；若属于提示词，先确认是否在界面展示，再修改，保留协议/标识符 |
-| [App/Features/Screenshot/ScreenshotPreviewContent.swift:63](../App/Features/Screenshot/ScreenshotPreviewContent.swift#L63) | 本机 OCR | 本机文字识别 | pi-surfaces | 术语；若属于提示词，先确认是否在界面展示，再修改，保留协议/标识符 |
-| [App/Features/Screenshot/ScreenshotPreviewContent.swift:215](../App/Features/Screenshot/ScreenshotPreviewContent.swift#L215) | 点击识别文字。OCR 在本机运行，图片不会上传。 | 点击识别文字。文字识别在本机运行，图片不会上传。 | pi-surfaces | 术语；若属于提示词，先确认是否在界面展示，再修改，保留协议/标识符 |
+| [App/Features/Screenshot/PinnedImagePanel.swift:293](../App/Features/Screenshot/PinnedImagePanel.swift#L293) | 复制 OCR 文字    ⇧C | 识别并复制文字    ⇧C | pi-surfaces | 术语；若属于提示词，先确认是否在界面展示，再修改，保留协议/标识符  **收尾已落实（仅显示文案）** |
+| [App/Features/Screenshot/ScreenshotPreviewContent.swift:63](../App/Features/Screenshot/ScreenshotPreviewContent.swift#L63) | 本机 OCR | 本机文字识别 | pi-surfaces | 术语；若属于提示词，先确认是否在界面展示，再修改，保留协议/标识符  **收尾已落实（仅显示文案）** |
+| [App/Features/Screenshot/ScreenshotPreviewContent.swift:215](../App/Features/Screenshot/ScreenshotPreviewContent.swift#L215) | 点击识别文字。OCR 在本机运行，图片不会上传。 | 点击识别文字。文字识别在本机运行，图片不会上传。 | pi-surfaces | 术语；若属于提示词，先确认是否在界面展示，再修改，保留协议/标识符  **收尾已落实（仅显示文案）** |
 | [App/Features/Screenshot/ScreenshotSession.swift:147](../App/Features/Screenshot/ScreenshotSession.swift#L147) | 截图 OCR | 截图文字识别 | pi-xpc | 术语；若属于提示词，先确认是否在界面展示，再修改，保留协议/标识符 |
-| [App/Features/Screenshot/ScreenshotTranslation.swift:37](../App/Features/Screenshot/ScreenshotTranslation.swift#L37) | 截图 OCR | 截图文字识别 | pi-surfaces | 术语；若属于提示词，先确认是否在界面展示，再修改，保留协议/标识符 |
-| [App/Features/Screenshot/ScreenshotVisualAI.swift:166](../App/Features/Screenshot/ScreenshotVisualAI.swift#L166) | 请根据已完成的图片文字结果回答问题。你无法查看原图或原始 OCR；需要细节时请说明并请用户重新打开图片。 | 请根据已完成的图片文字结果回答问题。你无法查看原图或原始识别文字；需要细节时请说明并请用户重新打开图片。 | pi-surfaces | 术语；若属于提示词，先确认是否在界面展示，再修改，保留协议/标识符 |
-| [App/Features/Screenshot/ScreenshotVisualAI.swift:171](../App/Features/Screenshot/ScreenshotVisualAI.swift#L171) | ：追问仅基于已完成的文字结果；原图和 OCR 原文不保留在对话中。 | ：追问仅基于已完成的文字结果；原图和识别原文不保留在对话中。 | pi-surfaces | 术语；若属于提示词，先确认是否在界面展示，再修改，保留协议/标识符 |
-| [InputMethod/resources/Localizable.xcstrings:27](../InputMethod/resources/Localizable.xcstrings#L27) | 检查新版本... | 检查更新… | pi-ime | 中文省略号、与关于页动作同名；只改译文，保留本地化键 |
-| [InputMethod/resources/Localizable.xcstrings:33](../InputMethod/resources/Localizable.xcstrings#L33) | 檢查新版本... | 檢查更新… | pi-ime | 繁体同规则 |
-| [InputMethod/resources/Localizable.xcstrings:149](../InputMethod/resources/Localizable.xcstrings#L149) | 日志... | 打开日志文件夹… | pi-ime | 说明打开的对象；不用三个英文句点 |
-| [InputMethod/resources/Localizable.xcstrings:155](../InputMethod/resources/Localizable.xcstrings#L155) | 日誌... | 開啟日誌資料夾… | pi-ime | 繁体同规则 |
-| [InputMethod/resources/Localizable.xcstrings:183](../InputMethod/resources/Localizable.xcstrings#L183) | 用户设定... | 输入法配置文件夹… | pi-ime | 实际 openRimeFolder，避免与 RockType 设置窗口混淆 |
-| [InputMethod/resources/Localizable.xcstrings:189](../InputMethod/resources/Localizable.xcstrings#L189) | 用戶設定 | 輸入法設定資料夾… | pi-ime | 实际打开目录 |
-| [InputMethod/resources/Localizable.xcstrings:166](../InputMethod/resources/Localizable.xcstrings#L166) | 在线文档... | 在线文档… | pi-ime | 中文省略号 |
-| [InputMethod/resources/Localizable.xcstrings:172](../InputMethod/resources/Localizable.xcstrings#L172) | 在線文檔... | 線上文件… | pi-ime | 繁体术语与省略号 |
-| [InputMethod/resources/Localizable.xcstrings:66](../InputMethod/resources/Localizable.xcstrings#L66) | 有错误！请查看日志 | 输入法部署未完成，请打开日志文件夹查看详情后重试。 | pi-ime | 移除泛化惊叹；说明失败动作与下一步 |
-| [InputMethod/resources/Localizable.xcstrings:72](../InputMethod/resources/Localizable.xcstrings#L72) | 有錯誤！請查看日誌 | 輸入法部署未完成，請開啟日誌資料夾查看詳情後重試。 | pi-ime | 繁体同规则 |
-| [InputMethod/resources/Localizable.xcstrings:104](../InputMethod/resources/Localizable.xcstrings#L104) | Squirrel is ready. | RockType is ready. | pi-ime | 英文通知仍有来源项目品牌；不是修改本地化查找键 |
-| [InputMethod/resources/InfoPlist.xcstrings:80](../InputMethod/resources/InfoPlist.xcstrings#L80) | RockType | RockType Pinyin | pi-ime | 全拼输入源名称应与设置指引一致；保留 identifier |
-| [InputMethod/resources/InfoPlist.xcstrings:86](../InputMethod/resources/InfoPlist.xcstrings#L86) | RockType | RockType Pinyin | pi-ime | 全拼输入源名称应与设置指引一致；保留 identifier |
-| [InputMethod/resources/InfoPlist.xcstrings:92](../InputMethod/resources/InfoPlist.xcstrings#L92) | RockType | RockType Pinyin | pi-ime | 全拼输入源名称应与设置指引一致；保留 identifier |
+| [App/Features/Screenshot/ScreenshotTranslation.swift:37](../App/Features/Screenshot/ScreenshotTranslation.swift#L37) | 截图 OCR | 截图文字识别 | pi-surfaces | 术语；若属于提示词，先确认是否在界面展示，再修改，保留协议/标识符  **收尾已落实（仅显示文案）** |
+| [App/Features/Screenshot/ScreenshotVisualAI.swift:166](../App/Features/Screenshot/ScreenshotVisualAI.swift#L166) | 请根据已完成的图片文字结果回答问题。你无法查看原图或原始 OCR；需要细节时请说明并请用户重新打开图片。 | 请根据已完成的图片文字结果回答问题。你无法查看原图或原始识别文字；需要细节时请说明并请用户重新打开图片。 | pi-surfaces | 术语；若属于提示词，先确认是否在界面展示，再修改，保留协议/标识符  **已核对：此项仅为模型提示词，本轮按显示文案范围保留** |
+| [App/Features/Screenshot/ScreenshotVisualAI.swift:171](../App/Features/Screenshot/ScreenshotVisualAI.swift#L171) | ：追问仅基于已完成的文字结果；原图和 OCR 原文不保留在对话中。 | ：追问仅基于已完成的文字结果；原图和识别原文不保留在对话中。 | pi-surfaces | 术语；若属于提示词，先确认是否在界面展示，再修改，保留协议/标识符  **收尾已落实（仅显示文案）** |
+| [InputMethod/resources/Localizable.xcstrings:33](../InputMethod/resources/Localizable.xcstrings#L33) | 检查新版本... | 检查更新… | pi-ime | 中文省略号、与关于页动作同名；只改译文，保留本地化键；**R7-UI 已落实** |
+| [InputMethod/resources/Localizable.xcstrings:39](../InputMethod/resources/Localizable.xcstrings#L39) | 檢查新版本... | 檢查更新… | pi-ime | 繁体同规则；**R7-UI 已落实** |
+| [InputMethod/resources/Localizable.xcstrings:161](../InputMethod/resources/Localizable.xcstrings#L161) | 日志... | 打开日志文件夹… | pi-ime | 说明打开的对象；不用三个英文句点；**R7-UI 已落实** |
+| [InputMethod/resources/Localizable.xcstrings:167](../InputMethod/resources/Localizable.xcstrings#L167) | 日誌... | 開啟日誌資料夾… | pi-ime | 繁体同规则；**R7-UI 已落实** |
+| [InputMethod/resources/Localizable.xcstrings:207](../InputMethod/resources/Localizable.xcstrings#L207) | 用户设定... | 输入法配置文件夹… | pi-ime | 实际 openRimeFolder，避免与 RockType 设置窗口混淆；**R7-UI 已落实** |
+| [InputMethod/resources/Localizable.xcstrings:213](../InputMethod/resources/Localizable.xcstrings#L213) | 用戶設定 | 輸入法設定資料夾… | pi-ime | 实际打开目录；**R7-UI 已落实** |
+| [InputMethod/resources/Localizable.xcstrings:184](../InputMethod/resources/Localizable.xcstrings#L184) | 在线文档... | 在线文档… | pi-ime | 中文省略号；**R7-UI 已落实** |
+| [InputMethod/resources/Localizable.xcstrings:190](../InputMethod/resources/Localizable.xcstrings#L190) | 在線文檔... | 線上文件… | pi-ime | 繁体术语与省略号；**R7-UI 已落实** |
+| [InputMethod/resources/Localizable.xcstrings:72](../InputMethod/resources/Localizable.xcstrings#L72) | 有错误！请查看日志 | 输入法部署未完成，请打开日志文件夹查看详情后重试。 | pi-ime | 移除泛化惊叹；说明失败动作与下一步；**R7-UI 已落实** |
+| [InputMethod/resources/Localizable.xcstrings:78](../InputMethod/resources/Localizable.xcstrings#L78) | 有錯誤！請查看日誌 | 輸入法部署未完成，請開啟日誌資料夾查看詳情後重試。 | pi-ime | 繁体同规则；**R7-UI 已落实** |
+| [InputMethod/resources/Localizable.xcstrings:110](../InputMethod/resources/Localizable.xcstrings#L110) | Squirrel is ready. | RockType is ready. | pi-ime | 英文通知仍有来源项目品牌；不是修改本地化查找键；**R7-UI 已落实** |
+| [InputMethod/resources/InfoPlist.xcstrings:80](../InputMethod/resources/InfoPlist.xcstrings#L80) | RockType | RockType Pinyin | pi-ime | 全拼输入源名称应与设置指引一致；保留 identifier；**R7-UI 已落实** |
+| [InputMethod/resources/InfoPlist.xcstrings:86](../InputMethod/resources/InfoPlist.xcstrings#L86) | RockType | RockType Pinyin | pi-ime | 全拼输入源名称应与设置指引一致；保留 identifier；**R7-UI 已落实** |
+| [InputMethod/resources/InfoPlist.xcstrings:92](../InputMethod/resources/InfoPlist.xcstrings#L92) | RockType | RockType Pinyin | pi-ime | 全拼输入源名称应与设置指引一致；保留 identifier；**R7-UI 已落实** |
 | [Core/Translation/DynamicTranslationProtocol.swift:48](../Core/Translation/DynamicTranslationProtocol.swift#L48) | 翻译权限校验失败，请完成输入法升级 | 无法验证翻译服务身份，请重新安装与输入法匹配的 RockType 版本 | pi-platform + pi-ime | 身份校验不等于存在可升级版本；保留错误码 |
 | [App/Features/Screenshot/ScreenshotCoordinator.swift:183](../App/Features/Screenshot/ScreenshotCoordinator.swift#L183) | PNG 已保存，但路径复制失败。 | PNG 已保存，但路径未复制。请到截图保存目录查看。 | pi-xpc | 部分成功，给出找到文件的下一步，不建议重复保存 |
-| [App/Features/Screenshot/ScreenshotImportController.swift:36](../App/Features/Screenshot/ScreenshotImportController.swift#L36) | 无法读取拖入的图片。 | 无法读取拖入的图片，请重新拖入或通过“批量识别…”选择文件。 | pi-surfaces | 提供同界面的实际替代入口 |
+| [App/Features/Screenshot/ScreenshotImportController.swift:36](../App/Features/Screenshot/ScreenshotImportController.swift#L36) | 无法读取拖入的图片。 | 无法读取拖入的图片，请重新拖入或通过“批量识别…”选择文件。 | pi-surfaces | 提供同界面的实际替代入口  **收尾已落实（仅显示文案）** |
 | [App/Features/Voice/VoiceModelStore.swift:10](../App/Features/Voice/VoiceModelStore.swift#L10) | 模型仅在点击下载后获取，每个文件均校验 SHA-256。 | 点击下载后才获取模型，并检查文件是否完整。 | pi-ime | 面向用户说明校验目的；算法可留诊断信息 |
 | [App/Features/Voice/VoiceModelStore.swift:88](../App/Features/Voice/VoiceModelStore.swift#L88) | 下载完成，SHA-256 校验通过。 | 下载完成，文件校验通过。 | pi-ime | 完成状态简短 |
 | [App/Features/Voice/VoiceModelStore.swift:95](../App/Features/Voice/VoiceModelStore.swift#L95) | 模型校验失败，禁止加载；请重新下载。 | 模型文件校验未通过，请重新下载后再使用。 | pi-ime | 移除命令式措辞，保留安全限制 |

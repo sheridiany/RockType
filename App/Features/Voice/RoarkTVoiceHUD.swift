@@ -58,6 +58,10 @@ final class RoarkTVoiceHUD: NSObject {
     private let detailButton = NSButton()
     private let copyButton = NSButton()
     private let scroll = NSScrollView()
+    private let previewText = NSTextField(wrappingLabelWithString: "")
+    private let previewHint = NSTextField(labelWithString: "")
+    private var preview = ""
+    private var previewStatus = ""
     private let detailText = NSTextField(wrappingLabelWithString: "")
     private var dismissal: Task<Void, Never>?
     private var anchor: NSRect?
@@ -110,6 +114,17 @@ final class RoarkTVoiceHUD: NSObject {
         scroll.autohidesScrollers = true
         scroll.documentView = detailText
         background.addSubview(scroll)
+        previewText.font = .systemFont(ofSize: Tokens.Typography.body)
+        previewText.textColor = .labelColor
+        previewText.maximumNumberOfLines = 3
+        previewText.lineBreakMode = .byWordWrapping
+        previewText.cell?.wraps = true
+        previewText.cell?.usesSingleLineMode = false
+        previewText.setAccessibilityLabel("语音实时预览，尚未填入")
+        previewHint.font = .systemFont(ofSize: Tokens.Typography.caption)
+        previewHint.textColor = .secondaryLabelColor
+        background.addSubview(previewText)
+        background.addSubview(previewHint)
         layout()
     }
 
@@ -125,7 +140,7 @@ final class RoarkTVoiceHUD: NSObject {
 
     func show(_ state: State, dismissAfter: TimeInterval? = nil) {
         dismissal?.cancel()
-        if !panel.isVisible || state == .recording {
+        if !panel.isVisible || (state == .recording && self.state != .recording) {
             anchor = (NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }
                 ?? NSScreen.main)?.visibleFrame
         }
@@ -142,6 +157,7 @@ final class RoarkTVoiceHUD: NSObject {
     func render(_ state: State) {
         guard self.state != state else { layout(); return }
         self.state = state
+        preview = ""; previewStatus = ""
         expanded = false
         waveform.reset()
         clock.stringValue = "0:00"
@@ -155,12 +171,20 @@ final class RoarkTVoiceHUD: NSObject {
         waveform.append(decibels: decibels)
     }
 
+    func updatePreview(_ text: String, status: String) {
+        guard state == .recording else { return }
+        preview = String(text.suffix(600)); previewStatus = status
+        layout()
+    }
+
     private func layout() {
         let hasDetail = state.detail != nil
         let isSuccess: Bool = { if case .success = state { true } else { false } }()
         background.updateColors()
-        let width: CGFloat = expanded ? 288 : (hasDetail ? 240 : 188)
-        let height: CGFloat = expanded ? 180 : 36
+        let showsPreview = state == .recording && !previewStatus.isEmpty
+        let width: CGFloat = showsPreview ? 320 : (expanded ? 288 : (hasDetail ? 240 : 188))
+        let height: CGFloat = showsPreview ? 136 : (expanded ? 180 : 36)
+        let headerOffset: CGFloat = showsPreview ? height - 36 : 0
         panel.setContentSize(NSSize(width: width, height: height))
         background.frame = NSRect(x: 0, y: 0, width: width, height: height)
         if let anchor {
@@ -172,8 +196,8 @@ final class RoarkTVoiceHUD: NSObject {
         clock.isHidden = !recording
         label.stringValue = state.title
         label.toolTip = state.title
-        label.frame = NSRect(x: 29, y: 10, width: width - (hasDetail ? 109 : 64), height: 17)
-        icon.frame = NSRect(x: 9, y: 10, width: 14, height: 17)
+        label.frame = NSRect(x: 29, y: 10 + headerOffset, width: width - (hasDetail ? 109 : 64), height: 17)
+        icon.frame = NSRect(x: 9, y: 10 + headerOffset, width: 14, height: 17)
         icon.stringValue = recording ? "•" : (hasDetail ? "!" : "·")
         if state.isResult { icon.stringValue = "↗" }
         if case .success = state { icon.stringValue = "✓" }
@@ -182,12 +206,12 @@ final class RoarkTVoiceHUD: NSObject {
         if case .notice = state { icon.textColor = .systemOrange }
         close.setAccessibilityLabel(hasDetail || isSuccess ? "关闭语音提示" : "取消语音输入")
         close.toolTip = hasDetail || isSuccess ? "关闭 · Esc" : "取消 · Esc"
-        waveform.frame = NSRect(x: 29, y: 9, width: 72, height: 18)
+        waveform.frame = NSRect(x: 29, y: 9 + headerOffset, width: 72, height: 18)
         waveform.setAccessibilityLabel("录音音量；松开 Fn 结束，Esc 取消")
         // NSTextField's 11 pt digit ink sits above its frame center. Align the visible
         // digits (not the line box) with the waveform; covered by a rendered-pixel test.
-        clock.frame = NSRect(x: 107, y: 8, width: 42, height: 17)
-        close.frame = NSRect(x: width - 31, y: 6, width: 24, height: 24)
+        clock.frame = NSRect(x: 107, y: 8 + headerOffset, width: 42, height: 17)
+        close.frame = NSRect(x: width - 31, y: 6 + headerOffset, width: 24, height: 24)
         detailButton.isHidden = !hasDetail
         detailButton.title = expanded ? "收起" : (state.isResult ? "展开" : "详情")
         detailButton.frame = NSRect(x: width - 77, y: 6, width: 40, height: 24)
@@ -202,6 +226,12 @@ final class RoarkTVoiceHUD: NSObject {
         let top = detailText.isFlipped ? 0 : max(0, textHeight - scroll.frame.height)
         scroll.contentView.scroll(to: NSPoint(x: 0, y: top))
         copyButton.frame = NSRect(x: 14, y: 41, width: 68, height: 24)
+        previewText.isHidden = !showsPreview; previewHint.isHidden = !showsPreview
+        previewText.stringValue = showsPreview ? (preview.isEmpty ? "正在听…松键后填入最终结果。" : (preview.count > 48 ? "…" : "") + String(preview.suffix(48))) : ""
+        previewText.preferredMaxLayoutWidth = width - 28
+        previewText.frame = NSRect(x: 14, y: 40, width: width - 28, height: 54)
+        previewHint.stringValue = showsPreview ? previewStatus + " · 最长 3 分钟" : ""
+        previewHint.frame = NSRect(x: 14, y: 14, width: width - 28, height: 17)
     }
 
     @objc func toggleDetails() {

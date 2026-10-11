@@ -77,19 +77,19 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "RockType"
+            "value": "RockType Pinyin"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "RockType"
+            "value": "RockType Pinyin"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "RockType"
+            "value": "RockType Pinyin"
           }
         }
       }

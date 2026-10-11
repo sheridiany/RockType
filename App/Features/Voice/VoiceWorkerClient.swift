@@ -45,6 +45,12 @@ import RoarkTPlatform
         } catch { if self.connection === connection { stop() }; throw error }
     }
     func transcribe(_ audio: Data) async throws -> String {
+        try await recognize(audio, seconds: 240, allowsEmpty: false)
+    }
+    func preview(_ audio: Data) async throws -> String {
+        try await recognize(audio, seconds: Double(VoiceAudioSegmentation.previewSeconds), allowsEmpty: true)
+    }
+    private func recognize(_ audio: Data, seconds: Double, allowsEmpty: Bool) async throws -> String {
         guard let connection, loaded != nil else { throw VoiceFailure.unavailable }
         guard SecureInput.status() == .allowed else { throw VoiceFailure.permission }
         let vocabulary = Task.detached(priority: .utility) { VoiceContextVocabulary.load() }
@@ -53,7 +59,7 @@ import RoarkTPlatform
         guard self.connection === connection, SecureInput.status() == .allowed else { throw VoiceFailure.permission }
         do {
             let gate = VoiceReply<String?>()
-            let result = try await gate.wait(seconds: 90) { gate in
+            let result = try await gate.wait(seconds: seconds) { gate in
                 let proxy = connection.remoteObjectProxyWithErrorHandler { @Sendable _ in
                     Task { @MainActor in gate.finish(.failure(VoiceFailure.unavailable)) }
                 } as? VoiceWorkerProtocol
@@ -61,7 +67,7 @@ import RoarkTPlatform
                 proxy.transcribe(audio: audio, context: context) { @Sendable text in Task { @MainActor in gate.finish(.success(text)) } }
             }
             try Task.checkCancellation()
-            guard self.connection === connection, let result, !result.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            guard self.connection === connection, let result, allowsEmpty || !result.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 throw VoiceFailure.empty
             }
             return result

@@ -31,3 +31,20 @@ ROARKT_VOICE_EVALUATION=1 swift test --filter syntheticMixedLanguageVoiceAccurac
 不读取个人词表。样例与数字指标保存在 `.build/r1c-ime/voice-accuracy/`。
 常规 `scripts/test.sh` 会执行上下文规则与文件边界测试；上述模型评测默认跳过，需单独记录结果。
 这些小规模合成样例不代表真实口音、噪声、长录音或1.7B模型的质量。
+
+## 长录音与预览（SPEC-014 R5）
+
+App 最长录音 180 秒，到限自动识别。worker 接受最多 11.52 MB 的 16 kHz 单声道 Float32，拒绝非整帧、非有限值和越界幅值。Core 的 `VoiceAudioSegmentation.swift` 经源链接供 worker 编译：单段不超过 28 秒，先找静音点，无静音则硬切，所有样本仅覆盖一次。每段独立 1024 token 上限，触顶则失败而不把截断结果当成功；拼接保留模型标点与重复语句。原 wire selectors 不变。
+
+App 使用相同的 transcribe wire 做 3 秒固定窗口 HUD 预览，一次仅一个在途请求；预览结果不能提交或复制。XPC 回复限时 3 秒，RTF > 0.8、超时或失败会按模型关闭本次运行的预览，松键后仍用完整音频识别（XPC 限时 240 秒）。worker 准备时用一秒合成静音、一个生成 token 预热，数据不来自麦克风或个人词表。
+
+合成性能评测（要求两档模型已下载并通过固定 SHA-256 校验，无隐式下载）：
+
+```sh
+ROARKT_VOICE_PERFORMANCE=1 swift test --filter 'syntheticVoicePerformanceBothModels|syntheticVoiceCaptureAndCleanupCosts'
+ROARKT_VOICE_PERFORMANCE=1 ROARKT_VOICE_PERFORMANCE_CONTEXT=1 swift test --filter syntheticVoicePerformanceBothModels
+```
+
+第一条测空上下文与采集/清理微基准，第二条加入与产品同预算的工厂词表（不读个人词表）。固定 Tingting 合成音频覆盖 3/6/28/55/75/180 秒，长样本末尾有独立校验句，另检查越长、非整帧及 NaN 拒绝。指标保存在 `.build/r5-ime/performance-{after,context}/`，只有耗时、RTF、字符/标点数和尾句是否命中，不写转写原文。
+
+R5 的变更前对照从基线 worker 运行 `ROARKT_VOICE_PERFORMANCE_BASELINE=1` 得到；此变量仅选择旧长度范围，不会自动换回旧实现。数据和真实硬件限制见 [R5 证据](../../specs/evidence/014-R5-IME.md)。麦克风 stop 和真实 IMK insertText 不由该合成基准覆盖；主 App 的 voice 日志仅记录各阶段数字，供安装版人工验收。

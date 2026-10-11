@@ -108,6 +108,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if template.input == .image { self.panel.close(); self.screenshot.capture(templateID: id) }
             else { self.selectionController.triggerTemplate(id) }
         }
+        hotkeys.screenshotGroupAction = { [weak self] action in
+            guard let self else { return }; self.panel.close(); self.screenshot.cancel()
+            switch action {
+            case .screenshotHistory: self.screenshot.showHistory()
+            case .togglePins: PinnedImageController.shared.toggleAll()
+            case .closePins: PinnedImageController.shared.closeGroup()
+            case .nextPin: PinnedImageController.shared.focusNext()
+            default: break
+            }
+        }
         hotkeys.start()
         if SettingsLaunchPolicy.action(arguments: CommandLine.arguments) == .settings { showSettings() }
     }
@@ -118,6 +128,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     #endif
         showSettings()
         return false
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        Task { await screenshot.history.flush(cancelRecognition: true); sender.reply(toApplicationShouldTerminate: true) }
+        return .terminateLater
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -143,6 +158,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func settingsChanged(_ notification: Notification) {
         PinnedImageController.shared.setHistoryLimit(store.settings.screenshot.pinHistoryLimit ?? 10)
+        screenshot.history.configure(store.settings.screenshot)
         connection.refresh(store.settings.ai)
         operations.settingsChanged()
         refreshStatus()
@@ -207,6 +223,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func clearCurrentContent() {
         screenshot.cancel()
         screenshot.closePreview()
+        screenshot.clearTransientHistory()
         PinnedImageController.shared.closeAll()
         selectionController.dismiss()
         operations.clearCurrentContent()
@@ -215,6 +232,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func captureScreenshot() { panel.close(); screenshot.capture() }
 
+    @objc private func showScreenshotHistory() { panel.close(); screenshot.showHistory() }
+    @objc private func togglePinnedImages() { panel.close(); screenshot.cancel(); PinnedImageController.shared.toggleAll() }
+    @objc private func closePinnedImages() { panel.close(); screenshot.cancel(); PinnedImageController.shared.closeGroup() }
+    @objc private func focusNextPinnedImage() { panel.close(); screenshot.cancel(); PinnedImageController.shared.focusNext() }
     @objc private func restorePinnedImage() {
         panel.close()
         if !PinnedImageController.shared.restoreLast() { noticeController.show(message: "暂无可恢复的贴图，或安全输入保护已开启。") }
@@ -235,6 +256,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         menu.addItem(withTitle: "截图", action: #selector(captureScreenshot), keyEquivalent: "").target = self
         for (title, action) in [
+            ("截图历史", #selector(showScreenshotHistory)),
+            ("隐藏／显示全部贴图", #selector(togglePinnedImages)),
+            ("关闭全部贴图", #selector(closePinnedImages)),
+            ("下一张贴图", #selector(focusNextPinnedImage)),
             ("找回最近关闭的贴图", #selector(restorePinnedImage)),
             ("退出贴图鼠标穿透", #selector(exitPinnedPassthrough)),
             ("识别剪贴板图片", #selector(recognizeClipboardImage)),
@@ -268,7 +293,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Vector template R glyph stays crisp in both menu-bar appearances.
-    private static func statusImage() -> NSImage {
+    static func statusImage() -> NSImage {
         let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { rect in
             let font = NSFont.systemFont(ofSize: 17, weight: .semibold)
             let text = NSAttributedString(string: "R", attributes: [.font: font, .foregroundColor: NSColor.black])
