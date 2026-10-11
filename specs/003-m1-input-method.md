@@ -159,3 +159,14 @@
 
 - 合并 `main@9b197ce`，提交 `0c133bd`；两个冲突仅为构建脚本产物路径与第三方声明，均保留双方意图。用户可见名称 RockType，内部 Bundle ID、类型、模块、设置路径与资源名维持现有标识。
 - 本任务相对 main 不修改 Rime 方案/词库/学习数据或 `squirrel.yaml`。main 自身的方案 name 更名随合并保留。
+
+### 最终验证（2026-10-11）
+
+- 再合并 `main@6b0081f`（合并提交 `d65f552`），无冲突；主 App 默认隐藏菜单栏图标与构建末尾 LaunchServices 注销均保留。
+- **通过**：合并后 `scripts/test.sh` 真实退出码 0；40 XCTest、157 Swift Testing，加 Rime 部署/能力与 AppShell 检查。日志 `.build/delivery-tests.log`，退出码 `.build/delivery-tests.exit`。
+- **通过**：合并后最终 `scripts/build.sh` 真实退出码 0；`RockType.app` / `RockType Input.app` 与 helpers 签名、worker MLX 自检、合法 XPC/无效模型与错误调用方拒绝通过；末尾执行中间产物/worktree App 注销。日志 `.build/delivery-build.log`，退出码 `.build/delivery-build.exit`。
+- **通过**：单独 `scripts/test-ime.sh` 真实退出码 0；直接导出当前生产面板、菜单与 HUD 图片，`.build/final-ime-test.log`。清理旧 D0 预览残图后目录根共 26 张当前 PNG；reference 子目录仅用于对照。
+- **通过**：最终签名包 Info.plist 的可执行文件名、RockType 显示名、两个输入源英文名称、六个图标资源键与 PDF 文件存在性逐项检查；主 App 与输入法 strict/deep 签名复核通过。最终本分支与 main 的 `Rime/`、`InputMethod/data/squirrel.yaml` 零差异。
+- **通过**：最终源码与旧源码差异复核仅为改名、Swift 6 隔离、保留行为/可访问性与 HUD 进度文案适配；未新增视觉设计。无新增语言运行时。
+- **未运行 / 待人工**：安装、注册、worktree App/输入法启动、真实 Fn/麦克风/键盘/权限/VoiceOver 与跨应用视觉验收。本次从未执行安装/卸载、输入法启动或 LaunchAgent 加载；旧安装仅只读资源。由 Claude 从 main 执行 I-3。
+- 所有实现与文档在 `agent/ime` 提交；未 push、未合并到 main。worktree 与证据保留供 Claude 验收；无运行中的协作 Worker。构建/测试临时源码与旧命名产物已清理。
