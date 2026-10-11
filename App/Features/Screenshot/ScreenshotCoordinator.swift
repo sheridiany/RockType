@@ -164,6 +164,11 @@ import os
                 target.restore(previous.rect)
                 target.window?.makeKey(); target.window?.makeFirstResponder(target)
             }
+            view.onOCRCopy = { [weak self] image in
+                guard let self, self.allowed() else { return }
+                self.cancel(); self.openImage(image, origin: "截图")
+                self.session?.runOCR(copyAfter: true)
+            }
             view.onPreview = { [weak self, weak view] image in
                 guard let self, let view, self.allowed() else { return }
                 self.lastSelection = (displayID, view.selection)

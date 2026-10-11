@@ -9,6 +9,9 @@ import RoarkTPlatform
     let origin: String
     var text = ""
     private(set) var ocrFinished = false
+    private(set) var ocrLines: [OCR.Line] = []
+    var ocrLanguages: [String]
+    var mergeParagraphs = false
     private(set) var busy = false
     private(set) var result = ""
     private(set) var engine = ""
@@ -21,7 +24,7 @@ import RoarkTPlatform
     @ObservationIgnored private let settings: () -> AppSettings
     @ObservationIgnored private let verified: (AIConnectionSettings, String) -> Bool
     @ObservationIgnored private let allowed: () -> Bool
-    @ObservationIgnored private let recognize: (Data) async throws -> String
+    @ObservationIgnored private let recognize: ((Data) async throws -> String)?
     @ObservationIgnored private let sendImage: (AIConnectionSettings, String, Data) async throws -> String
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var protection: Task<Void, Never>?
@@ -34,13 +37,14 @@ import RoarkTPlatform
     init(image: CGImage, origin: String, settings: @escaping () -> AppSettings,
          verified: @escaping (AIConnectionSettings, String) -> Bool,
          allowed: @escaping () -> Bool = { SecureInput.status() == .allowed },
-         recognize: @escaping (Data) async throws -> String = { try await OCR().recognize($0).text },
+         recognize: ((Data) async throws -> String)? = nil,
          sendImage: @escaping (AIConnectionSettings, String, Data) async throws -> String = { connection, model, data in
              let key = try Keychain().get(account: connection.id) ?? ""
              return try await AIClient(connection: connection).complete(text: "请用中文解释这张图片。", apiKey: key,
                  model: model, imageDataURL: "data:image/png;base64," + data.base64EncodedString())
          }) {
         self.image = image; self.origin = origin; self.settings = settings; self.verified = verified
+        self.ocrLanguages = settings().screenshot.ocrLanguages
         self.allowed = allowed; self.recognize = recognize; self.sendImage = sendImage
     }
     func start() {
@@ -61,7 +65,7 @@ import RoarkTPlatform
         guard !closed else { return }
         closed = true; cancel(); protection?.cancel(); protection = nil
         savePanel?.cancel(nil); savePanel = nil
-        image = nil; text = ""; result = ""; notice = nil; onClose()
+        image = nil; ocrLines = []; text = ""; result = ""; notice = nil; onClose()
     }
     private func check(_ current: Int? = nil) -> Bool {
         !closed && allowed() && (current == nil || current == generation)
@@ -94,16 +98,22 @@ import RoarkTPlatform
             } catch { self.notice = "无法保存图片，请选择其他位置后重试。" }
         }
     }
-    func runOCR() {
+    func runOCR(copyAfter: Bool = false) {
         guard check(), let data = png() else { return }
         cancel(); let current = generation; busy = true; notice = "本机识别中…"; ocrFinished = false
+        let languages = ocrLanguages, paragraphs = mergeParagraphs
         task = Task { [weak self] in
             guard let self else { return }
             do {
-                let output = try await self.recognize(data)
+                let recognized: OCR.Result
+                if let recognize = self.recognize { recognized = .init(lines: [.init(text: try await recognize(data), rect: .zero)]) }
+                else { recognized = try await OCR().recognize(data, languages: languages) }
+                let output = recognized.formatted(paragraphs: paragraphs)
                 guard !Task.isCancelled, self.check(current) else { return }
+                self.ocrLines = recognized.lines
                 self.text = output; self.ocrFinished = true; self.busy = false
                 self.notice = output.isEmpty ? "没有识别到文字，可输入文字或换用更清晰的图片。" : nil
+                if copyAfter && !output.isEmpty { self.copyText(output) }
             } catch {
                 guard self.check(current), !Task.isCancelled else { return }
                 self.busy = false; self.notice = "本机识别失败，请重试。"

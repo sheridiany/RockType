@@ -85,3 +85,38 @@ final class SessionTests: XCTestCase {
         session.close()
     }
 }
+
+extension SessionTests {
+    @MainActor func testOCRUsesConfiguredLanguagesAndDropsBoxesOnClose() async throws {
+        var settings = AppSettings.defaults
+        settings.screenshot.ocrLanguages = ["ja-JP", "ko-KR"]
+        let session = ScreenshotSession(image: try image(), origin: "synthetic", settings: { settings },
+            verified: { _, _ in false }, allowed: { true }, recognize: { _ in "Synthetic" })
+        XCTAssertEqual(session.ocrLanguages, ["ja-JP", "ko-KR"])
+        session.runOCR()
+        for _ in 0..<100 where !session.ocrFinished { await Task.yield() }
+        XCTAssertEqual(session.ocrLines.first?.text, "Synthetic")
+        session.close()
+        XCTAssertTrue(session.ocrLines.isEmpty)
+    }
+}
+
+extension SessionTests {
+    @MainActor func testShiftCCanvasRoutesOnlyOCRSelection() throws {
+        let canvas = CaptureCanvas(frame: CGRect(x: 0, y: 0, width: 20, height: 10), image: try image())
+        canvas.allowed = { true }
+        canvas.selection = CGRect(x: 1, y: 1, width: 10, height: 5)
+        var received: CGImage?
+        canvas.onOCRCopy = { received = $0 }
+        canvas.onComplete = { _ in XCTFail("OCR must not copy an image") }
+        let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .shift,
+            timestamp: 0, windowNumber: 0, context: nil, characters: "C", charactersIgnoringModifiers: "c",
+            isARepeat: false, keyCode: 8))
+        canvas.keyDown(with: event)
+        XCTAssertEqual(received?.width, 10)
+        XCTAssertEqual(received?.height, 5)
+        received = nil; canvas.allowed = { false }
+        canvas.keyDown(with: event)
+        XCTAssertNil(received)
+    }
+}
