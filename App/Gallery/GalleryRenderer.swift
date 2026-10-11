@@ -1,3 +1,4 @@
+#if DEBUG
 import AppKit
 import SwiftUI
 
@@ -39,3 +40,5 @@ enum GalleryRenderer {
         return count
     }
 }
+
+#endif

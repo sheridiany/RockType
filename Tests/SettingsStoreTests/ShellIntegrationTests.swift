@@ -18,7 +18,7 @@ import RoarkTCore
     let registrar = ShellRegistrar()
     var received: [HotkeyCenter.Action] = []
     let center = HotkeyCenter(read: { store.settings.shortcuts }, write: { store.settings.shortcuts = $0 },
-                              showSettings: {}, comingSoon: { received.append($0) },
+                              showSettings: {}, unavailableAction: { received.append($0) },
                               registrar: registrar, allowed: { true }, trusted: { true })
     center.screenshotAction = { received.append(.screenshot) }
     center.start()
@@ -61,7 +61,7 @@ import RoarkTCore
     var received: [ShortcutAction] = []
     var placeholders: [HotkeyCenter.Action] = []
     let center = HotkeyCenter(read: { settings }, write: { settings = $0 }, showSettings: {},
-        comingSoon: { placeholders.append($0) }, selection: { received.append($0) },
+        unavailableAction: { placeholders.append($0) }, selection: { received.append($0) },
         registrar: registrar, allowed: { allowed }, trusted: { true })
     center.start()
     defer { center.stop() }

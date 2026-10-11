@@ -1,6 +1,7 @@
 import AppKit
 
 let app = NSApplication.shared
+#if DEBUG
 let arguments = Array(CommandLine.arguments.dropFirst())
 
 // Render before creating a status item/window or entering the application event loop.
@@ -21,6 +22,8 @@ if arguments.contains("--render-gallery") {
         exit(EXIT_FAILURE)
     }
 }
+
+#endif
 
 let delegate = AppDelegate()
 app.delegate = delegate

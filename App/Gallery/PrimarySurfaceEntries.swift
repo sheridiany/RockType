@@ -1,3 +1,4 @@
+#if DEBUG
 import SwiftUI
 
 @MainActor
@@ -31,7 +32,9 @@ enum PrimarySurfaceEntries {
             }
         } + ImagePreviewModel.samples.map { sample in
             GalleryEntry(surface: "image", state: sample.id.lowercased(), title: "图片预览 · " + sample.title) {
-                AnyView(ImagePreviewView(model: sample.value, rendering: rendering).id(sample.id))
+                AnyView(ImagePreviewPrototype(model: sample.value, rendering: rendering).id(sample.id))
             }
         }
 }
+
+#endif

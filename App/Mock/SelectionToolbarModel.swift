@@ -1,3 +1,4 @@
+#if DEBUG
 struct SelectionToolbarModel: Sendable {
     enum State: String, CaseIterable, Sendable {
         case normal, compact, copied, unconfigured, secureInput
@@ -24,3 +25,5 @@ struct SelectionToolbarModel: Sendable {
             actions: $0 == .secureInput ? [] : [.translate, .explain, .summarize, .search, .copy]))
     }
 }
+
+#endif

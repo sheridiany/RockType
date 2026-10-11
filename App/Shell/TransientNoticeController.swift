@@ -4,13 +4,13 @@ import RoarkTCore
 
 /// A short, nonactivating acknowledgement; never reads the screen or selection.
 @MainActor
-final class ComingSoonController {
+final class TransientNoticeController {
     private var panel: NSPanel?
     private var dismissal: Task<Void, Never>?
 
     func show(_ action: HotkeyCenter.Action) {
         guard [.screenshot, .translateSelection, .summarizeSelection].contains(action) else { return }
-        // M2's closed diagnostic vocabulary groups unavailable shortcut actions here.
+        // The closed diagnostic vocabulary groups unavailable shortcut actions here.
         Task { try? await DiagnosticLog.shared.record(.init(action: .hotkeyRegistration, status: .unavailable)) }
         show(message: "\(action.title) · 即将推出")
     }

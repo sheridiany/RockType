@@ -23,6 +23,12 @@ swift build -c release --product RoarkTApp
 swift build -c release --product RoarkTTranslationService
 bin_dir=$(swift build -c release --show-bin-path)
 
+# Debug previews and fixtures must not survive the production compilation boundary.
+xcrun nm "$bin_dir/RoarkTApp" | xcrun swift-demangle > "$repo_dir/.build/app-release-symbols.txt"
+if grep -E 'RoarkTApp\.(Gallery[A-Za-z]*|[A-Za-z]*Fixtures|SurfaceSample[A-Za-z]*|SurfaceAction|SettingsPresentation|CandidatePresentation|InputModePresentation|VoicePresentation|ImagePreview(Model|Prototype)|ScreenshotEditorModel|SelectionToolbarModel|MenuBarPanelModel|ResultWindowModel|SyntheticCapturePreview)' "$repo_dir/.build/app-release-symbols.txt"; then
+  print -u2 "Production app contains development previews or fixtures."; exit 1
+fi
+
 app="$repo_dir/dist/RockType.app"
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Helpers" "$app/Contents/Resources"

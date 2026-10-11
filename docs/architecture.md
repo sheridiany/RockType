@@ -29,14 +29,16 @@ macOS 26 专属的无界面 `TranslationSession` 通过 availability 隔离；�
 | `Core` | `RoarkTCore` | MIT | 标识符、设置/快捷键、翻译校验、操作会话与路由、AI 客户端、语音模型下载/校验等 Foundation 层能力 |
 | `Platform` | `RoarkTPlatform` | MIT | AX 取词、剪贴板、Vision OCR、截图、钥匙串、权限、全局快捷键、Fn、屏幕坐标、Secure Input |
 | `App` | `RoarkTApp` → `RockType.app` | MIT | `AppDelegate` 组装；`Shell` 外壳；`Features` 真实功能；`DesignSystem` 组件 |
-| `App/Surfaces`、`App/Mock`、`App/Gallery` | 目前仍属于 `RoarkTApp` | MIT | 原型、样本、Gallery；Surfaces 中仍有正式预览包装依赖，Mock 中仍有正式设置导航类型，不能直接排除目录 |
+| `App/Surfaces`、`App/Mock`、`App/Gallery` | `RoarkTApp`，开发代码以 `DEBUG` 隔离 | MIT | Mock/Gallery 与原型视图只在 debug 编译；Surfaces 的正式操作设置和 `ImagePreviewView(session:)` 仍在 release |
 | `Services/TranslationService` | 根包的 `RoarkTTranslationService` | MIT | 签名鉴权、方法角色限制、翻译/AI 协调、端点登记 |
 | `Services/VoiceWorker` | 独立 SPM 包 → `RoarkTVoiceWorker.xpc` | MIT（第三方依各自许可） | MLX 推理；隔离模型依赖、内存与取消退出 |
 | `InputMethod` | `Squirrel.xcodeproj` → `RockType Input.app` | GPL v3（子模块依各自许可） | Squirrel 修改及 librime/plum；不被 MIT 产品 target import 或链接 |
 | `Rime` | 资源 | 按来源 | 方案、词典、Lua；个人词表与学习库在独立用户目录 |
 | `Installer`、`scripts` | 构建、测试、pkg 与安装脚本 | MIT | 组装、签名、注册工具、LaunchAgent 配置；构建不等于安装 |
 
-根 App target 目前只排除 `Info.plist`，release 仍编入 Mock/Gallery，命令行 Gallery 入口也未受 DEBUG 限制。这是 R2-ARCH 后续阶段的明确待办，见审计 A02–A04。Features 已包含功能视图与控制器；后续按真实功能收拢，跨功能无业务组件归 DesignSystem，Gallery 原型跟随其目标。
+R4-UI 为 Mock/Gallery、依赖样本的原型视图和全部 Gallery 启动入口建立完整 `#if DEBUG` 边界。SPM 仍发现这些源文件，但 release 不编译其中的声明；`scripts/build.sh` 用 `nm` 检查正式 App 没有 Gallery/fixtures 符号。`scripts/render-gallery.sh` 显式构建 debug，开发测试可直接调用同一个 GalleryRenderer。
+
+正式 `SettingsSection` 在 `App/Shell/SettingsSection.swift`；正式 `ImagePreviewView(session:)` 只包装 `ScreenshotPreviewContent`，不初始化样本；`ImagePreviewPrototype` 仅在 debug 使用。设计组件按职责命名于 `DesignPrimitives.swift`，短暂浮窗通知由 `TransientNoticeController` 管理。Features 已包含功能视图与控制器；跨功能无业务组件归 DesignSystem。
 
 主 App/服务没有 InputMethod 源码或 librime 链接依赖。输入法 Xcode target 当前直接编译部分 MIT 源文件：Identifiers、Settings/Shortcuts、翻译值协议、VoiceCommitTicket/VoiceInsertionPolicy。此事实与 AGENTS“共享只能通过协议声明”的字面范围尚需主控对齐，见审计 A06；不授权把任何 GPL 实现搬到 MIT 目录。进程间请求仍只能用 XPC。
 

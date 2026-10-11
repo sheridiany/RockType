@@ -3,8 +3,8 @@ import SwiftUI
 /// Audited against CaptureCanvas and PinnedImageView, not the roadmap.
 struct ShortcutReference: View {
     var body: some View {
-        U4SectionTitle(title: "截图遮罩内")
-        U4Card {
+        DesignSectionTitle(title: "截图遮罩内")
+        DesignCard {
             row("↩ / ⌘C", "复制选区图片")
             row("⌘S", "另存为（可选格式与位置）")
             row("C", "复制放大镜处的 HEX 颜色值")
@@ -29,8 +29,8 @@ struct ShortcutReference: View {
                 .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        U4SectionTitle(title: "贴图内")
-        U4Card {
+        DesignSectionTitle(title: "贴图内")
+        DesignCard {
             row("⌘C", "复制图片")
             row("⇧C", "识别并复制 OCR 文字")
             row("⌘⇧Z", "恢复最近关闭的贴图（贴图获焦时）")

@@ -90,7 +90,7 @@ struct OperationTemplateSettings: View {
             if let notice { Notice(text: notice) }
             if settings.templates.isEmpty { Notice(text: "还没有操作模板，点击“新增模板”开始。") }
             ForEach(settings.templates) { template in
-                U4Card {
+                DesignCard {
                     HStack {
                         Label(template.name.isEmpty ? "未命名模板" : template.name,
                               systemImage: NSImage(systemSymbolName: template.icon, accessibilityDescription: nil) == nil ? "sparkles" : template.icon)

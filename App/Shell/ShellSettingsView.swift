@@ -69,7 +69,7 @@ struct ShellSettingsView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }.id(section)
-                U4Rule()
+                DesignRule()
                 Label(persistenceMessage, systemImage: persistenceFailed ? "exclamationmark.triangle" : "checkmark.circle")
                     .font(Tokens.Typography.font(Tokens.Typography.caption))
                     .foregroundStyle(persistenceFailed ? p.danger : p.secondary).lineLimit(3)
@@ -98,7 +98,7 @@ struct ShellSettingsView: View {
     }
 
     private func toggle(_ title: String, _ value: Binding<Bool>) -> some View {
-        SettingsControlRow(title) { U4Toggle(title: title, isOn: value) }
+        SettingsControlRow(title) { SettingsToggle(title: title, isOn: value) }
     }
     private func field(_ title: String, _ value: Binding<String>) -> some View {
         SettingsControlRow(title) {
@@ -124,8 +124,8 @@ struct ShellSettingsView: View {
 
     private var general: some View {
         Group {
-            U4SectionTitle(title: "启动与菜单栏")
-            U4Card {
+            DesignSectionTitle(title: "启动与菜单栏")
+            DesignCard {
                 toggle("开机启动", Binding(get: { login.enabled }, set: {
                     settings.general.launchAtLogin = login.setEnabled($0)
                 }))
@@ -138,8 +138,8 @@ struct ShellSettingsView: View {
                 Text("不显示时，可从输入法菜单的“设置…”或启动台打开 RockType。")
                     .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(p.secondary)
             }
-            U4SectionTitle(title: "外观与搜索")
-            U4Card {
+            DesignSectionTitle(title: "外观与搜索")
+            DesignCard {
                 settingsPicker("外观", selection: $settings.general.appearance) {
                     Text("跟随系统").tag(GeneralSettings.Appearance.system)
                     Text("浅色").tag(GeneralSettings.Appearance.light)
@@ -147,7 +147,7 @@ struct ShellSettingsView: View {
                 }
                 Text("界面语言：简体中文")
                     .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(p.secondary)
-                U4Rule()
+                DesignRule()
                 settingsPicker("搜索引擎", selection: $settings.selection.searchEngine) {
                     Text("Google").tag("https://www.google.com/search?q={query}")
                     Text("Bing").tag("https://www.bing.com/search?q={query}")
@@ -163,8 +163,8 @@ struct ShellSettingsView: View {
                 Notice(text: message, tone: .warn)
                 Button("重试同步", action: retryInputMethodSync)
             }
-            U4SectionTitle(title: "输入方案与纠错")
-            U4Card {
+            DesignSectionTitle(title: "输入方案与纠错")
+            DesignCard {
                 settingsPicker("默认方案", selection: $settings.input.scheme) {
                     Text("全拼").tag(InputSettings.Scheme.pinyin)
                     Text("小鹤双拼").tag(InputSettings.Scheme.flypy)
@@ -173,8 +173,8 @@ struct ShellSettingsView: View {
                 toggle("简拼", $settings.input.abbreviatedPinyin)
                 toggle("拼写与按键纠错", $settings.input.spellingCorrection)
             }
-            U4SectionTitle(title: "候选与输入习惯")
-            U4Card {
+            DesignSectionTitle(title: "候选与输入习惯")
+            DesignCard {
                 toggle("轻按 Shift 切换中英", $settings.input.shiftTogglesLanguage)
                 toggle("显示输入模式提示", $settings.input.showModeIndicator)
                 toggle("显示候选译文", $settings.input.candidateTranslation)
@@ -190,8 +190,8 @@ struct ShellSettingsView: View {
     }
     private var translation: some View {
         Group {
-            U4SectionTitle(title: "引擎与目标语言")
-            U4Card {
+            DesignSectionTitle(title: "引擎与目标语言")
+            DesignCard {
                 settingsPicker("翻译引擎", selection: $settings.translation.engine) {
                     Text("Apple 离线优先").tag(TranslationSettings.Engine.offlineFirst)
                     Text("AI 模型").tag(TranslationSettings.Engine.ai)
@@ -203,14 +203,14 @@ struct ShellSettingsView: View {
                 field("翻译模型（空为默认）", optional($settings.translation.model))
                 toggle("候选翻译允许使用 AI", $settings.translation.allowCandidateAI)
             }
-            U4SectionTitle(title: "离线语言包")
-            U4Card { LanguagePackStepView(model: language) }
+            DesignSectionTitle(title: "离线语言包")
+            DesignCard { LanguagePackStepView(model: language) }
             Notice(text: "动态离线翻译需要 macOS 26 和语言包。候选静态词条按原文精确匹配；开启候选 AI 后，候选文字可能发送到所配置的服务商。")
         }
     }
     private var voice: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
-            U4SectionTitle(title: "本地识别与文字处理")
+            DesignSectionTitle(title: "本地识别与文字处理")
             VoiceSettingsPane(settings: $settings.voice, aiConfigured: connection.configured)
             HStack {
                 Button("检查麦克风与辅助功能权限") { section = .permissions }
@@ -220,8 +220,8 @@ struct ShellSettingsView: View {
     }
     private var selection: some View {
         Group {
-            U4SectionTitle(title: "工具栏与结果窗口")
-            U4Card {
+            DesignSectionTitle(title: "工具栏与结果窗口")
+            DesignCard {
                 settingsPicker("出现方式", selection: $settings.selection.trigger) {
                     Text("划词即出").tag(SelectionSettings.Trigger.selection)
                     Text("仅快捷键").tag(SelectionSettings.Trigger.shortcutOnly)
@@ -233,8 +233,8 @@ struct ShellSettingsView: View {
                     Text(settings.selection.windowOpacity, format: .percent.precision(.fractionLength(0))).monospacedDigit().frame(width: 40, alignment: .trailing) }
                 field("助手模型（空为默认）", optional($settings.selection.assistantModel))
             }
-            U4SectionTitle(title: "生效应用")
-            U4Card {
+            DesignSectionTitle(title: "生效应用")
+            DesignCard {
                 settingsPicker("应用筛选", selection: $settings.selection.applicationFilter) {
                     Text("黑名单").tag(SelectionSettings.ApplicationFilter.blacklist)
                     Text("白名单").tag(SelectionSettings.ApplicationFilter.whitelist)
@@ -250,8 +250,8 @@ struct ShellSettingsView: View {
                 Text("多个应用 Bundle ID 用英文逗号分隔；Finder 默认排除。")
                     .font(Tokens.Typography.font(Tokens.Typography.caption))
             }
-            U4SectionTitle(title: "工具栏操作 · 按显示顺序")
-            U4Card {
+            DesignSectionTitle(title: "工具栏操作 · 按显示顺序")
+            DesignCard {
                 if settings.selection.toolbarActions.isEmpty {
                     Text("还没有工具栏操作。可在“操作模板”中添加。")
                     Button("管理操作模板") { section = .templates }
@@ -262,7 +262,7 @@ struct ShellSettingsView: View {
                         Spacer()
                         Button { settings.selection.toolbarActions.swapAt(index, index - 1) } label: { Image(systemName: "arrow.up") }
                             .disabled(index == 0).accessibilityLabel("上移" + (settings.templates.first(where: { $0.id == id })?.name ?? id))
-                        U4Toggle(title: "启用" + (settings.templates.first(where: { $0.id == id })?.name ?? (id == "search" ? "搜索" : id)), isOn: Binding(get: { !settings.selection.disabledActions.contains(id) }, set: {
+                        SettingsToggle(title: "启用" + (settings.templates.first(where: { $0.id == id })?.name ?? (id == "search" ? "搜索" : id)), isOn: Binding(get: { !settings.selection.disabledActions.contains(id) }, set: {
                             settings.selection.disabledActions.removeAll { $0 == id }
                             if !$0 { settings.selection.disabledActions.append(id) }
                         }))
@@ -274,16 +274,16 @@ struct ShellSettingsView: View {
     private var screenshot: some View {
         Group {
             Notice(text: "快捷键默认为 ⌃1；仅主动保存时写入文件。")
-            U4SectionTitle(title: "复制与导出")
+            DesignSectionTitle(title: "复制与导出")
             ScreenshotOutputSettings(settings: $settings.screenshot)
-            U4Card {
+            DesignCard {
                 settingsPicker("另存格式", selection: $settings.screenshot.format) {
                     Text("PNG").tag(ScreenshotSettings.Format.png); Text("JPEG").tag(ScreenshotSettings.Format.jpeg)
                 }
             }
             ScreenshotStyleSettings(settings: $settings.screenshot)
-            U4SectionTitle(title: "贴图历史")
-            U4Card {
+            DesignSectionTitle(title: "贴图历史")
+            DesignCard {
                 Stepper(value: Binding(get: { min(50, max(0, settings.screenshot.pinHistoryLimit ?? 10)) },
                                        set: { settings.screenshot.pinHistoryLimit = $0 }), in: 0...50) {
                     Text("最近关闭最多保留 \(min(50, max(0, settings.screenshot.pinHistoryLimit ?? 10))) 张")
@@ -291,13 +291,13 @@ struct ShellSettingsView: View {
                 Text("设为 0 不保留；调小数量会立即移除最早的历史。总计最多 64 MB，仅在本次运行内保留，退出或清除当前内容后清空。")
                     .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(p.secondary)
             }
-            U4SectionTitle(title: "本地文字识别")
-            U4Card {
+            DesignSectionTitle(title: "本地文字识别")
+            DesignCard {
                 OCRLanguageSettings(languages: $settings.screenshot.ocrLanguages)
             }
             Button("检查屏幕录制权限") { section = .permissions }
                 .buttonStyle(DesignButtonStyle(variant: .ghost))
-            U4Card {
+            DesignCard {
                 Text("图片理解会发送你确认的图片，需要支持图片的 AI 模型。")
                     .font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(p.secondary)
             }
@@ -305,22 +305,22 @@ struct ShellSettingsView: View {
     }
     private var privacy: some View {
         Group {
-            U4SectionTitle(title: "本次会话")
-            U4Card {
+            DesignSectionTitle(title: "本次会话")
+            DesignCard {
                 toggle("保留最近结果", $settings.privacy.keepRecentResultsInMemory)
                 Text("最多 10 条，只保存在内存中。退出或关闭开关后清空最近结果。")
                     .font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(p.secondary)
-                U4Rule()
+                DesignRule()
                 SettingsControlRow("清除当前内容", detail: "清空结果和追问上下文，不删除另存的图片。") {
                     Button("清除", action: clearCurrentContent).buttonStyle(DesignButtonStyle(variant: .danger))
                 }
             }
-            U4SectionTitle(title: "隐私保护")
-            U4Card {
+            DesignSectionTitle(title: "隐私保护")
+            DesignCard {
                 Label("密码框与安全输入", systemImage: "lock.shield").fontWeight(.medium)
                 Text("不取词、不翻译、不调用 AI、不填入语音、不写缓存。")
                     .font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(p.secondary)
-                U4Rule()
+                DesignRule()
                 Text("密钥仅存系统钥匙串。诊断只含动作类型、状态、耗时与脱敏错误，不包含原文、截图或密钥。")
                     .font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(p.secondary)
                 Button("导出诊断…", action: exportDiagnostics).buttonStyle(DesignButtonStyle())
@@ -329,22 +329,22 @@ struct ShellSettingsView: View {
     }
     private var about: some View {
         Group {
-            U4Card {
+            DesignCard {
                 Text("RockType").font(Tokens.Typography.font(Tokens.Typography.display, weight: .semibold))
                 Text("版本 " + AboutDocuments.version(Bundle.main.infoDictionary ?? [:]))
                 Text("macOS 14 及以上 · Apple Silicon")
-                U4Rule()
+                DesignRule()
                 Text("主 App：MIT · 输入法：GPL v3")
                     .font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(p.secondary)
                 UpdateSettingsView()
             }
             AboutLegalLinks()
-            U4SectionTitle(title: "维护")
-            U4Card {
+            DesignSectionTitle(title: "维护")
+            DesignCard {
                 SettingsControlRow("诊断", detail: "导出不含正文与密钥的本地诊断。") {
                     Button("导出…", action: exportDiagnostics)
                 }
-                U4Rule()
+                DesignRule()
                 SettingsControlRow("卸载 RockType", detail: "下一步可选择是否保留用户数据。") {
                     Button("卸载…") { UninstallController.confirm() }
                         .buttonStyle(DesignButtonStyle(variant: .danger))
