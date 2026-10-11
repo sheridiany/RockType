@@ -24,7 +24,7 @@
 
 | # | 任务 | 执行 | 依赖 | 状态 |
 | --- | --- | --- | --- | --- |
-| S1 | 设置模型 + 存储 + AI 客户端 + 连接测试 + 诊断日志 | pi-xpc | — | 未开始 |
+| S1 | 设置模型 + 存储 + AI 客户端 + 连接测试 + 诊断日志 | pi-xpc | — | 完成（待验收） |
 | S2 | 菜单栏、菜单栏面板、设置窗口、开机启动 | pi-ui | S1 的 Settings 模型（先提交）；U3 菜单栏面板 | 未开始 |
 | S3 | 权限中心与全局快捷键接线 | pi-platform | S1 的 Settings 模型 | 未开始 |
 | S4 | 首次引导与输入法“设置”入口 | pi-ime | S1 的 Settings 模型 | 未开始 |
@@ -71,21 +71,36 @@
 
 | 项 | 方法 | 结果 | 证据 |
 | --- | --- | --- | --- |
-| 设置读写、损坏回落、即时生效 | 单元测试 + 手工 | 未运行 | |
-| AI 客户端四项测试与错误分类 | `URLProtocol` 桩测试；真实端点待用户提供 | 未运行 | |
-| 日志脱敏与导出 | 单元测试 | 未运行 | |
+| 设置读写、损坏回落、即时生效 | 单元测试 + 手工 | 自动化通过；UI 待人工验证 | `SettingsTests`、`SettingsPersistenceTests`、`SettingsStoreTests`：默认值/编辑往返、损坏副本、原子保存、0600 权限、立即通知、250ms 节流、重启读回、读取失败不覆盖；真实设置界面由 S2 接线验收 |
+| AI 客户端四项测试与错误分类 | `URLProtocol` 桩测试；真实端点待用户提供 | 本地桩通过；真实端点未运行 | `AIClientTests`：文字/流式/图片/取消四格成功与错误状态、UTF-8 字节分片、SSE 多行/CRLF/截断/限长、401/403/404/429/5xx、超时、模型图片能力约束；取消确认底层 `stopLoading` |
+| 日志脱敏与导出 | 单元测试 | 通过 | `DiagnosticsTests`：固定字段拒绝原始错误内容；URL query/Authorization/正文合成标记不落盘；滚动文件上限 2MB、最多 5 个；ZIP 解包检查、丢弃额外字段、拒绝无效记录 |
 | 菜单栏、北京时间、开机启动 | 手工 | 待人工验证 | |
 | 权限四态显示与跳转 | 手工 | 待人工验证 | |
 | `⌃1` 注册、冲突提示、重设 | 手工 | 待人工验证 | |
 | 引导：输入源真实按键验证、语言包状态 | 手工 | 待人工验证 | |
 | 输入法菜单“设置…”拉起主 App | 手工 | 待人工验证 | |
-| Gallery 仍可渲染全部状态 | `scripts/render-gallery.sh` | 未运行 | |
-| `scripts/test.sh`、`scripts/build.sh` | 命令 | 未运行 | |
+| Gallery 仍可渲染全部状态 | `scripts/render-gallery.sh` | 渲染通过；视觉待人工验收 | 当前分支产出 `dist/gallery/` 共 134 张 PNG；未宣称 UI 设计验收通过 |
+| `scripts/test.sh`、`scripts/build.sh` | 命令 | 测试通过；全量构建阻塞 | 60 个 Swift tests + Rime 部署/标识检查通过；主 App、翻译服务 release 构建与签名通过；输入法因未初始化子模块停止（exit 1），未修改 S1 之外目录 |
 
 ## 进度
 
-Settings 模型已提交：f87c60a。`Core/Settings/AppSettings.swift` 为公共接口，`scripts/test.sh` 通过（40 tests + Rime 部署与标识检查）。S1 后续存储、AI 与诊断进行中。
+Settings 模型已提交：f87c60a。`Core/Settings/AppSettings.swift` 为公共接口，`scripts/test.sh` 通过（40 tests + Rime 部署与标识检查）。S1 其余任务已完成（待验收）。
+
+### S1 后续提交与接线说明（2026-10-11）
+
+- `31ba621`：单独登记模型提交，供其他 agent 合并。
+- `84f3818`：`SettingsPersistence` 与 `@MainActor @Observable SettingsStore`，损坏回落、即时通知、持久化测试；仅为 Store 新增测试 target。
+- `b942c74`：`AIClient`、`AIConnectionTester`、SSE 与本地 `URLProtocol` 测试；默认 ephemeral 会话，无磁盘缓存/Cookie，不跟随重定向。
+- `912f033`：`DiagnosticLog` actor、固定词汇 `DiagnosticEvent`、滚动与安全 ZIP 导出测试。
+- `bcf28a7`：读取失败保护、四项连接探针成功路径、按所选模型检查图片能力。
+- S2/S3/S4 使用 `SettingsStore.shared.settings`；变更立即通过 Observation 与 `SettingsStore.didChange` 通知；保存每 250ms 节流，退出时调用 `flush()`；读取失败不覆盖原文件，错误显示于 `persistenceError`。`general.onboardingCompleted` 控制引导完成状态，`shortcuts.bindings` 沿用 `ShortcutAction` / `Shortcut`。
+- AI 密钥由调用者从钥匙串实时读取，传入 `AIClient.complete` / `stream` 或 `AIConnectionTester.run`，不进入 Settings。`stream` 在调用者 Task 中执行，取消 Task 即取消传输。连接测试为 `text` / `streaming` / `image` / `cancellation` 四格；未声明图片模型时图片为未验证，请求在取消前已完成时取消为未验证。
+- 诊断入口：`try await DiagnosticLog.shared.record(DiagnosticEvent(...))`；保存面板选择路径后 `try await DiagnosticLog.shared.exportZIP(to:)`。日志只接受枚举字段，不传选中文字、URL、密钥或原始错误描述。
+- 验证日志在本工作树任务的 `/tmp/roarkt-s1-test.log`、`/tmp/roarkt-s1-build.log`、`/tmp/roarkt-s1-gallery.log`；构建产物和截图未纳入提交。
+- 未验证：真实 AI 服务/凭据、设置窗口接线与退出保存、钥匙串接线、真实权限/快捷键/输入法、完整输入法构建、UI 人工验收。无 push、无合并、未修改其他 worktree。
 
 ## 问题
 
-（需要 Claude 决定的事项写在这里。）
+- Claude 集成时需在负责输入法的工作树补齐子模块后重跑完整 `scripts/build.sh`；本工作树主 App/翻译服务已签名，不能代替输入法构建验收。
+- 当前 AI Base URL 仅允许 HTTPS（且不允许 userinfo/query/fragment），阻止密钥经明文发送；若产品要支持本机 HTTP 兼容端点，请决定是否只放行 loopback 并另行补充测试。
+- 同一 schemaVersion 当前严格完整解码；不支持的 schema 或缺字段按损坏配置保留副本并回落默认值。后续新增设置字段时需明确默认解码策略；不涉及旧产品迁移。

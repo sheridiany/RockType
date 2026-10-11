@@ -9,7 +9,7 @@ import RoarkTCore
     let persistence = SettingsPersistence(fileURL: directory.appendingPathComponent("settings.json"))
     let store = SettingsStore(persistence: persistence)
     let observed = NotificationCount()
-    let token = NotificationCenter.default.addObserver(forName: SettingsStore.didChange, object: nil, queue: nil) { _ in
+    let token = NotificationCenter.default.addObserver(forName: SettingsStore.didChange, object: store, queue: nil) { _ in
         observed.increment()
     }
     defer { NotificationCenter.default.removeObserver(token) }
