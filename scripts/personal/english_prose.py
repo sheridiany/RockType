@@ -1,9 +1,10 @@
 """Conservative English prose extraction; never split identifiers into words."""
 import re
+from collections import Counter, defaultdict
 
 # Mixed-case brands are indistinguishable from identifiers by spelling alone.
 # Keep this explicit list small; ordinary title-case names and acronyms need none.
-BRANDS = frozenset('RockType OpenAI GitHub GitLab SwiftUI TypeScript JavaScript '
+BRANDS = frozenset('Herdr Magpie RockType OpenAI GitHub GitLab SwiftUI TypeScript JavaScript '
                    'macOS iOS PyTorch YouTube HuggingFace DeepSeek ChatGPT'.split())
 CODE_WORDS = frozenset('''
     as associatedtype async await break case catch class const continue convenience
@@ -66,14 +67,39 @@ def markdown_prose(text):
     return text
 
 
-def english_words(text):
-    for token in re.findall(r"[A-Za-z0-9_./\\@:+#%?=&~'-]+", markdown_prose(text)):
-        # A sentence-ending period is punctuation; an internal dot is code/path.
+def english_occurrences(text):
+    prose = markdown_prose(text)
+    boundary = 0
+    for match in re.finditer(r"[A-Za-z0-9_./\\@:+#%?=&~'-]+", prose):
+        token = match.group()
         word = token.rstrip('.')
         if not re.fullmatch(r'[A-Za-z]{2,48}', word):
             continue
-        if word in BRANDS:
-            yield word
-        elif re.fullmatch(r'[A-Z]{2,}|[A-Z][a-z]+|[a-z]+', word):
-            if word not in CODE_WORDS:
-                yield word
+        if word in BRANDS or (re.fullmatch(r'[A-Z]{2,}|[A-Z][a-z]+|[a-z]+', word)
+                              and word not in CODE_WORDS):
+            gap = prose[boundary:match.start()]
+            sentence_start = boundary == 0 or bool(re.search(r'[.!?。！？\n]', gap))
+            boundary = match.end() - (len(token) - len(word))
+            yield word, sentence_start
+
+
+class EnglishCounts:
+    def __init__(self):
+        self.totals = Counter()
+        self.spellings = defaultdict(Counter)
+
+    def add(self, word, sentence_start):
+        key = word.casefold()
+        self.totals[key] += 1
+        # Sentence-initial title case contributes frequency, but not evidence
+        # that a word is a proper name. Explicit brands/acronyms retain votes.
+        if not sentence_start or not word.istitle() or word in BRANDS:
+            self.spellings[key][word] += 1
+
+    def merged(self):
+        result = {}
+        for key, count in self.totals.items():
+            votes = self.spellings[key]
+            spelling = min(votes, key=lambda word: (-votes[word], word != key, word)) if votes else key
+            result[spelling] = count
+        return result

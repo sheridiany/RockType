@@ -12,7 +12,8 @@ import tempfile
 sys.dont_write_bytecode = True
 from personal_common import build_simplifier, simplify_words, add_rime_directory_argument, Refusal, require, plain, run, locked, publish, restore_files
 
-from english_prose import english_words
+from english_prose import EnglishCounts, english_occurrences
+from candidate_quality import chinese_candidates
 
 HEADER = '# 个人词表，由 RockType 生成\n'
 NAMES = ['roarkt_personal.dict.yaml', 'roarkt_personal_en.dict.yaml',
@@ -209,7 +210,7 @@ def main():
     roots = args.source or [str(Path.home() / 'Repos')]
     dictionary = plain(args.dictionary_dir)
     known = vocabulary(dictionary, 'roarkt_zh') | vocabulary(dictionary, 'roarkt_en')
-    counts, files = Counter(), 0
+    counts, contexts, english, files = Counter(), Counter(), EnglishCounts(), 0
     with tempfile.TemporaryDirectory(prefix='roarkt-tokenizer-') as temporary:
         known = set(simplify_words(build_simplifier(temporary), sorted(known)))
         known_english = {word.casefold() for word in known if word.isascii()}
@@ -217,15 +218,23 @@ def main():
         run(['xcrun', 'swiftc', Path(__file__).with_name('tokenize.swift'), '-o', binary])
         for text, prose in sources(roots):
             files += 1
-            counts.update(json.loads(run([binary], data=text.encode())))
-            counts.update(word for word in english_words(prose) if word.casefold() not in known_english)
-    selected = [(word, count) for word, count in counts.items()
-                if count >= args.min_count and word not in known and 2 <= len(word) <= 48]
+            for token in json.loads(run([binary], data=text.encode())):
+                word = token['word']
+                counts[word] += 1
+                if word not in known:
+                    contexts[(word, token['left'], token['right'])] += 1
+            for word, sentence_start in english_occurrences(prose):
+                if word.casefold() not in known_english:
+                    english.add(word, sentence_start)
+    distinct = len(counts) + len(english.totals)
+    filtered = chinese_candidates(counts, contexts, known, args.min_count)
+    filtered.update({word: count for word, count in english.merged().items() if count >= args.min_count})
+    selected = list(filtered.items())
     selected.sort(key=lambda pair: (-pair[1], pair[0]))
     selected = selected[:args.limit]
     zh = [(w, c) for w, c in selected if re.fullmatch('[\u3400-\u9fff]+', w)]
     en = [(w, c) for w, c in selected if w.isascii()]
-    print(f'files={files} distinct={len(counts)} missing_chinese={len(zh)} missing_english={len(en)}')
+    print(f'files={files} distinct={distinct} missing_chinese={len(zh)} missing_english={len(en)}')
     if not args.apply:
         return
     changes = {}
