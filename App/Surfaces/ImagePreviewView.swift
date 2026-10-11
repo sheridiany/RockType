@@ -5,13 +5,22 @@ struct ImagePreviewView: View {
     @State private var text: String
     @State private var feedback: String?
     let rendering: Bool
+    private var session: ScreenshotSession? = nil
     @Environment(\.colorScheme) private var scheme
     init(model: ImagePreviewModel, rendering: Bool = false) {
         self.rendering = rendering
         _model = State(initialValue: model)
         _text = State(initialValue: model.recognizedText)
     }
+    init(session: ScreenshotSession) {
+        self.init(model: .samples[0].value)
+        self.session = session
+    }
     var body: some View {
+        if let session { ScreenshotPreviewContent(session: session) }
+        else { prototype }
+    }
+    @ViewBuilder private var prototype: some View {
         let p = Tokens.palette(scheme)
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
             HStack(spacing: Tokens.Space.sm) {

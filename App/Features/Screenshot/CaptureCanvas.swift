@@ -5,6 +5,7 @@ import SwiftUI
     let image: CGImage
     var selection = CGRect.zero
     var onCancel: () -> Void = {}
+    var onPreview: (CGImage) -> Void = { _ in }
     var onComplete: (CGImage) -> Void = { _ in }
     private var anchor = CGPoint.zero
     private var original = CGRect.zero
@@ -16,10 +17,10 @@ import SwiftUI
     private var toolbar: NSHostingView<CaptureToolbar>?
     private var textField: NSTextField?
     private var textPoint = CGPoint.zero
-    private func complete() {
+    private func complete(preview: Bool = false) {
         commitText()
         guard let result = ScreenshotCompositor.render(image: image, size: bounds.size, selection: selection, annotations: history.items) else { return }
-        onComplete(result)
+        if preview { onPreview(result) } else { onComplete(result) }
     }
     private func updateToolbar() {
         toolbar?.removeFromSuperview(); toolbar = nil
@@ -28,7 +29,7 @@ import SwiftUI
             select: { [weak self] in self?.commitText(); self?.tool = $0; self?.updateToolbar() },
             undo: { [weak self] in self?.history.undo(); self?.needsDisplay = true; self?.updateToolbar() },
             redo: { [weak self] in self?.history.redo(); self?.needsDisplay = true; self?.updateToolbar() },
-            cancel: { [weak self] in self?.onCancel() }, complete: { [weak self] in self?.complete() }))
+            cancel: { [weak self] in self?.onCancel() }, complete: { [weak self] in self?.complete() }, preview: { [weak self] in self?.complete(preview: true) }))
         let width = min(bounds.width - 16, Tokens.Screenshot.toolbarWidth)
         view.frame = CGRect(x: min(max(8, selection.maxX - width), bounds.width - width - 8),
                             y: min(max(8, selection.maxY + 12), bounds.height - 56), width: width, height: 48)

@@ -9,6 +9,7 @@ struct CaptureToolbar: View {
     let redo: () -> Void
     let cancel: () -> Void
     let complete: () -> Void
+    let preview: () -> Void
     @Environment(\.colorScheme) private var scheme
     var body: some View {
         let p = Tokens.palette(scheme)
@@ -22,6 +23,7 @@ struct CaptureToolbar: View {
             Divider().frame(height: Tokens.Size.compact)
             Button(action: undo) { Image(systemName: "arrow.uturn.backward") }.disabled(!canUndo).help("撤销 ⌘Z")
             Button(action: redo) { Image(systemName: "arrow.uturn.forward") }.disabled(!canRedo).help("重做 ⇧⌘Z")
+            Button(action: preview) { Image(systemName: "text.viewfinder") }.help("预览、OCR、翻译、图片理解与保存")
             Button(action: cancel) { Image(systemName: "xmark") }.help("取消")
             Button(action: complete) { Image(systemName: "checkmark") }.help("完成框选与标注")
         }
