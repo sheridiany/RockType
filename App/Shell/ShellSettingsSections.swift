@@ -9,7 +9,7 @@ struct ShellSettingsSections {
     let showOnboarding: () -> Void
 
     func permissionsPane() -> AnyView { AnyView(PermissionCenterView(center: permissions)) }
-    func shortcutsPane() -> AnyView { AnyView(HotkeySettingsView(center: hotkeys)) }
+    func shortcutsPane(settings: Binding<AppSettings>) -> AnyView { AnyView(HotkeySettingsView(center: hotkeys, appSettings: settings)) }
 }
 
 // M3-5: standalone sections bound to the single SettingsStore. The settings host owns navigation.

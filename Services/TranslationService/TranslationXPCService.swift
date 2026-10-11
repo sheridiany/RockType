@@ -16,9 +16,12 @@ final class TranslationCoordinator {
     private var controllerInputGeneration: Int64 = 0
     let dictationEndpoints = DictationEndpointRegistry()
     let textTranslations: TextTranslationCoordinator
+    let inputAI: InputAICoordinator
 
     init(backend: any DynamicTextTranslating = DynamicTranslatorFactory.make(),
-         textBackend: any SelectionTextTranslating = SelectionTranslatorFactory.make()) {
+         textBackend: any SelectionTextTranslating = SelectionTranslatorFactory.make(),
+         inputAI: InputAICoordinator = InputAICoordinator()) {
+        self.inputAI = inputAI
         self.textTranslations = TextTranslationCoordinator(backend: textBackend)
         self.backend = backend
     }
@@ -41,6 +44,7 @@ final class TranslationCoordinator {
             return
         }
         latestGenerations[key] = generation
+        inputAI.cancel(connectionID: connectionID, sessionID: sessionID, throughGeneration: generation - 1)
         tasks.removeValue(forKey: key)?.cancel()
 
         tasks[key] = Task { [weak self, backend] in
@@ -65,9 +69,30 @@ final class TranslationCoordinator {
         }
     }
 
+    func rewrite(connectionID: UUID, sessionID: String, generation: Int64, text: String,
+                 action: String, reply: @escaping InputAICoordinator.Reply) {
+        guard UUID(uuidString: sessionID) != nil, generation > 0,
+              ["rewrite", "polish", "translate"].contains(action),
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.utf8.count <= 131_072 else {
+            reply(generation, nil, nil, InputAIError.invalidRequest.nsError); return
+        }
+        let key = SessionKey(connectionID: connectionID, sessionID: sessionID)
+        guard generation > (latestGenerations[key] ?? 0) else {
+            reply(generation, nil, nil, InputAIError.stale.nsError); return
+        }
+        guard latestGenerations[key] != nil || latestGenerations.keys.filter({ $0.connectionID == connectionID }).count < 1_024 else {
+            reply(generation, nil, nil, InputAIError.capacity.nsError); return
+        }
+        latestGenerations[key] = generation
+        tasks.removeValue(forKey: key)?.cancel()
+        inputAI.rewrite(connectionID: connectionID, sessionID: sessionID, generation: generation,
+                        text: text, action: action, reply: reply)
+    }
+
     func cancel(connectionID: UUID, sessionID: String, throughGeneration: Int64) {
         let key = SessionKey(connectionID: connectionID, sessionID: sessionID)
         guard UUID(uuidString: sessionID) != nil, throughGeneration > 0 else { return }
+        inputAI.cancel(connectionID: connectionID, sessionID: sessionID, throughGeneration: throughGeneration)
         let latest = latestGenerations[key] ?? 0
         guard latest <= throughGeneration else { return }
         // Keep a watermark even when cancellation arrives before the request.
@@ -76,6 +101,7 @@ final class TranslationCoordinator {
     }
 
     func removeConnection(_ connectionID: UUID) {
+        inputAI.removeConnection(connectionID)
         dictationEndpoints.remove(owner: connectionID)
         textTranslations.removeConnection(connectionID)
         let keys = latestGenerations.keys.filter { $0.connectionID == connectionID }
@@ -116,7 +142,7 @@ enum TranslationClientRole {
     }
 }
 
-final class TranslationXPCService: NSObject, RoarkTTextTranslationXPCProtocol {
+final class TranslationXPCService: NSObject, RoarkTInputAIXPCProtocol {
     private final class Reply: @unchecked Sendable {
         private let block: (Int64, String?, String?, String?, Error?) -> Void
 
@@ -272,7 +298,7 @@ final class TranslationXPCListenerDelegate: NSObject, NSXPCListenerDelegate, @un
         connection.setCodeSigningRequirement(Identifiers.codeRequirement(for: role.identifier))
         let service = TranslationXPCService(coordinator: coordinator, role: role,
             rejectConnection: { [weak connection] in connection?.invalidate() })
-        connection.exportedInterface = NSXPCInterface(with: RoarkTTextTranslationXPCProtocol.self)
+        connection.exportedInterface = NSXPCInterface(with: RoarkTInputAIXPCProtocol.self)
         connection.exportedObject = service
         connection.invalidationHandler = { [weak self, service] in
             service.invalidate()

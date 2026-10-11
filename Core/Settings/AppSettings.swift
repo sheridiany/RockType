@@ -38,6 +38,8 @@ public struct InputSettings: Codable, Equatable, Sendable {
     public var candidateTranslation = true
     public var englishCompletion = true
     public var simplifiedChinese = true
+    /// Optional so existing schema-1 preferences decode without resetting input settings.
+    public var inputAI: InputAISettings? = nil
     public init() {}
 }
 
@@ -130,5 +132,13 @@ public struct ShortcutSettings: Codable, Equatable, Sendable {
 public struct PrivacySettings: Codable, Equatable, Sendable {
     public var keepRecentResultsInMemory = true
     // Disk history, continuous clipboard monitoring and bypassing Secure Input are not supported.
+    public init() {}
+}
+
+/// Explicit IME actions only; this does not opt into automatic candidate AI translation.
+public struct InputAISettings: Codable, Equatable, Sendable {
+    public var enabled = false
+    public var shortcut: Shortcut? = Shortcut(key: "tab", modifiers: .option)
+    public var timeout: TimeInterval = 30
     public init() {}
 }
