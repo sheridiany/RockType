@@ -30,5 +30,10 @@ let package = Package(
             path: "Services/TranslationService"
         ),
         .testTarget(name: "RoarkTCoreTests", dependencies: ["RoarkTCore"], path: "Tests/CoreTests"),
+        .testTarget(
+            name: "RoarkTTranslationServiceTests",
+            dependencies: ["RoarkTTranslationService", "RoarkTCore", "RoarkTXPCProtocol"],
+            path: "Tests/TranslationServiceTests"
+        ),
     ]
 )

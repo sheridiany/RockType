@@ -27,7 +27,7 @@
 | # | 任务 | 执行 | 状态 |
 | --- | --- | --- | --- |
 | T1 | Rime 方案迁移 | pi | 完成（Claude 已验收 2026-10-11） |
-| T2 | 翻译 XPC 协议与服务迁移 | pi | 未开始 |
+| T2 | 翻译 XPC 协议与服务迁移 | pi | 完成（Claude 已验收 2026-10-11；服务测试已并入根 Package.swift） |
 | T3 | 输入法迁移与开发安装 | pi | 未开始 |
 | T4 | 端到端验收 | Claude | 未开始 |
 
@@ -47,6 +47,16 @@
 - 迁入并改名相应测试（`RoTypeCoreTests` 中翻译协议、`RoTypeTranslationServiceTests`），全部通过。
 - `scripts/build.sh` 已签名服务的 identifier 为 `com.roarkist.roarkt.translation`，保持。
 - 验收：`swift test` 全部通过；`scripts/build.sh` 成功；`codesign -dv` 显示正确 identifier。
+
+#### T2 验收证据（2026-10-11，agent/xpc）
+
+- 完成（待验收）：迁入 v2 候选请求与语音 rendezvous 协议、Core 校验/错误/静态兜底类型、Apple 翻译服务、LaunchAgent 模板及对应测试。删除 v1 接口与兼容路径。服务仅接收架构规定的输入法和主 App 签名，Team ID 取自 `Identifiers`，并用 `setCodeSigningRequirement` 约束连接后续消息。`ping` 仅主 App 可调用；输入法越权调用时断开连接。
+- 通过：`scripts/test.sh`（包含 `swift test`），8 项核心测试，含参数化 v2 请求、UTF-8 长度边界、方向/原文匹配、静态兜底及旧标识守卫。
+- 通过：`swift test`（RoarkTTranslationServiceTests，合并后由 Claude 并入根 Package.swift），30 项服务测试，含参数化用例；覆盖角色权限、SecCode 拒绝非产品测试进程、generation 乱序/取消水位、连接隔离、不响应取消的后端迟到结果、端点归属清理，以及语言包错误和有限重试。后端测试使用合成文本和可控 session，不调用真实翻译语言包。
+- 通过：`swift build`、`scripts/build.sh`；`codesign -dv --verbose=4 dist/RoarkT.app/Contents/Helpers/RoarkTTranslationService` 确认 `Identifier=com.roarkist.roarkt.translation`、`TeamIdentifier=DF7J2VBQD8`；构建脚本的严格签名验证通过。
+- 通过：`plutil -lint Installer/com.roarkist.roarkt.translation.plist`。模板路径为 `/Applications/RoarkT.app/Contents/Helpers/RoarkTTranslationService`，开发路径替换仍由 T3 完成。
+- 待 Claude 合并决定：根 `Package.swift` 没有服务测试 target，且不属于 T2 文件修改范围，因此未修改它或 `scripts/test.sh`。当前服务测试入口在临时 SPM 包中链接本 worktree 的真实源码，执行后自动清理。合并时可增加 `RoarkTTranslationServiceTests` target（路径 `Tests/TranslationServiceTests`，依赖 `RoarkTTranslationService`、`RoarkTCore`、`RoarkTXPCProtocol`）并移除临时测试入口，或由总测试脚本调用该入口。根 `swift test` 当前只运行核心测试。
+- 未运行 / 待 T4：真实签名输入法与主 App 经 LaunchAgent 的 XPC 往返、伪造客户端经真实监听器被拒、实际语言包翻译、真实键盘候选翻译、macOS 14 运行验证。本次未安装/加载 LaunchAgent，未更改其他 worktree，未执行 T1/T3。
 
 ### T3 输入法迁移与开发安装
 
