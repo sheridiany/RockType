@@ -107,6 +107,8 @@ public struct ScreenshotSettings: Codable, Equatable, Sendable {
     public var annotationStyles: [String: ScreenshotAnnotationStyle]? = nil
     /// nil keeps the default rounded output when loading settings written before this option.
     public var roundedCorners: Bool? = nil
+    /// nil retains 10 recent closed pins; zero disables retention. Images never persist to disk.
+    public var pinHistoryLimit: Int? = nil
     public init() {}
 }
 

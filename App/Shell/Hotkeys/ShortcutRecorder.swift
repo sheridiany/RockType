@@ -115,6 +115,7 @@ struct HotkeySettingsView: View {
             U4Card { InputAISettingsSection(settings: $appSettings) }
             Notice(text: "Fn 也可能触发系统听写或切换输入源。若有冲突，请前往系统键盘设置调整 Fn 行为。")
             if let notice = center.notice { Notice(text: notice, tone: .warn) }
+            ShortcutReference()
         }
         .onDisappear { if center.recording != nil { center.cancelRecording() } }
     }

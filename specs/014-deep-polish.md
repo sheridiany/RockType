@@ -52,6 +52,7 @@
 | R2-OCR | OCR/预览第二轮：预览面板整体视觉、OCR 结果与翻译并排、批量/剪贴板图片 OCR | pi-surfaces | 已实现，评测/测试/构建通过；待人工验收 |
 | R2-UI | 菜单栏面板、结果窗口、划词工具栏等剩余界面视觉统一；设计系统 token 清理 | pi-ui | 实现与测试/构建通过；键盘/VoiceOver 待人工验收，见 [证据](evidence/014-R2-UI.md) |
 | R2-ARCH | 架构整理：`App/Mock`、`App/Gallery` 移出正式 App 目标（或仅 DEBUG）；`App/Surfaces` 与 `App/Features` 职责划分（视图 vs 控制器）；死代码清理；`docs/architecture.md` 同步；不改行为 | pi-ime | 第一阶段完成：全仓审计、IME/语音等价整理与架构同步；测试/构建通过；Gallery/Mock 隔离留后续，见 [证据](evidence/014-R2-ARCH.md) |
+| R3-UI | 截图设置覆盖、完整快捷键速查、关于页版本/更新/许可证、菜单栏新功能入口 | pi-ui | 实现、测试/构建与离屏检查通过；待人工验收，见 [证据](evidence/014-R3-UI.md) |
 
 ## 规则
 

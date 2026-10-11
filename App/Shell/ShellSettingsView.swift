@@ -281,6 +281,16 @@ struct ShellSettingsView: View {
                     Text("PNG").tag(ScreenshotSettings.Format.png); Text("JPEG").tag(ScreenshotSettings.Format.jpeg)
                 }
             }
+            ScreenshotStyleSettings(settings: $settings.screenshot)
+            U4SectionTitle(title: "贴图历史")
+            U4Card {
+                Stepper(value: Binding(get: { min(50, max(0, settings.screenshot.pinHistoryLimit ?? 10)) },
+                                       set: { settings.screenshot.pinHistoryLimit = $0 }), in: 0...50) {
+                    Text("最近关闭最多保留 \(min(50, max(0, settings.screenshot.pinHistoryLimit ?? 10))) 张")
+                }.accessibilityLabel("贴图历史数量")
+                Text("设为 0 不保留；调小数量会立即移除最早的历史。总计最多 64 MB，仅在本次运行内保留，退出或清除当前内容后清空。")
+                    .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(p.secondary)
+            }
             U4SectionTitle(title: "本地文字识别")
             U4Card {
                 OCRLanguageSettings(languages: $settings.screenshot.ocrLanguages)
@@ -321,13 +331,14 @@ struct ShellSettingsView: View {
         Group {
             U4Card {
                 Text("RockType").font(Tokens.Typography.font(Tokens.Typography.display, weight: .semibold))
-                Text("版本 " + (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "开发版本"))
+                Text("版本 " + AboutDocuments.version(Bundle.main.infoDictionary ?? [:]))
                 Text("macOS 14 及以上 · Apple Silicon")
                 U4Rule()
                 Text("主 App：MIT · 输入法：GPL v3")
                     .font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(p.secondary)
                 UpdateSettingsView()
             }
+            AboutLegalLinks()
             U4SectionTitle(title: "维护")
             U4Card {
                 SettingsControlRow("诊断", detail: "导出不含正文与密钥的本地诊断。") {
