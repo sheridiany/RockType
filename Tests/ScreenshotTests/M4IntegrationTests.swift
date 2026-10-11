@@ -76,6 +76,42 @@ final class M4IntegrationTests: XCTestCase {
         XCTAssertFalse(model.imageCapabilityVerified(connection: settings, model: settings.defaultModel))
     }
 
+    @MainActor func testCapabilityChangeAfterConfirmationPreventsSending() async throws {
+        var settings = AppSettings.defaults
+        settings.ai.defaultModel = "synthetic-image"; settings.ai.defaultModelSupportsImages = true
+        var verified = true
+        var sent = 0
+        let context = try XCTUnwrap(CGContext(data: nil, width: 2, height: 2, bitsPerComponent: 8, bytesPerRow: 8,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        let preview = ScreenshotSession(image: try XCTUnwrap(context.makeImage()), origin: "synthetic",
+            settings: { settings }, verified: { _, _ in verified }, allowed: { true },
+            sendImage: { _, _, _ in sent += 1; return "Synthetic explanation" })
+        preview.prepareImage(); preview.confirmImage()
+        verified = false
+        await settle { !preview.busy }
+        XCTAssertEqual(sent, 0)
+        XCTAssertNotNil(preview.notice)
+        preview.close()
+    }
+
+    @MainActor func testClosingImagePreviewRejectsLateImageCompletion() async throws {
+        var settings = AppSettings.defaults
+        settings.ai.defaultModel = "synthetic-image"; settings.ai.defaultModelSupportsImages = true
+        var finish: CheckedContinuation<String, any Error>?
+        var completed = 0
+        let context = try XCTUnwrap(CGContext(data: nil, width: 2, height: 2, bitsPerComponent: 8, bytesPerRow: 8,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        let preview = ScreenshotSession(image: try XCTUnwrap(context.makeImage()), origin: "synthetic",
+            settings: { settings }, verified: { _, _ in true }, allowed: { true },
+            sendImage: { _, _, _ in try await withCheckedThrowingContinuation { finish = $0 } })
+        preview.imageCompleted = { _, _ in completed += 1 }
+        preview.prepareImage(); preview.confirmImage()
+        await settle { finish != nil }
+        preview.close(); finish?.resume(returning: "Late synthetic explanation")
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(completed, 0); XCTAssertNil(preview.image); XCTAssertEqual(preview.result, "")
+    }
+
     @MainActor func testScreenshotResultsShareWindowFollowupsHistoryAndPrivacy() async throws {
         _ = NSApplication.shared
         var settings = AppSettings.defaults
@@ -107,6 +143,10 @@ final class M4IntegrationTests: XCTestCase {
         preview.close()
         XCTAssertEqual(environment.recent.results.count, 3, "Closing the preview must not erase shared history")
         operations.reopen(result)
+        let countBeforeRetry = runner.requests.count
+        operations.window?.retry()
+        XCTAssertEqual(runner.requests.count, countBeforeRetry, "An image explanation cannot be retried without the image")
+        XCTAssertNotNil(operations.window?.state.notice)
         operations.window?.state.question = "Explain that answer"
         operations.window?.ask()
         await settle { operations.window?.state.phase == .done }

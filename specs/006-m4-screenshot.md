@@ -64,7 +64,7 @@
 
 - D-4：显式剪贴板读取复用 `Clipboard.readPNG()`；提供菜单栏可嵌入的 `ScreenshotImportControls`（按钮与拖入区域），图片/文件拖放共用预览流程。后台解码、EXIF 方向校正、40 MB / 6400 万像素限制、迟到导入丢弃。最终检查补充捕获等待期全局 Esc、关闭时清空本功能最近内容、翻转画布正确显示与小屏滚动预览。最终三条验收命令均通过。
 
-### Claude 集成清单（未修改 AppDelegate 或菜单栏所有权文件）
+### Claude 集成清单（已由 pi-platform 接线，见下方 M4 集成证据）
 
 1. AppDelegate 持有一个 `ScreenshotCoordinator`，启动/退出调用 `start()` / `stop()`；清除当前内容时调用 `cancel()` 和 `closePreview()`。
 2. `hotkeys.screenshotAction = { [weak screenshot] in screenshot?.capture() }`；菜单栏截图也调用 `capture()`。快捷键设置中的“截图即将推出”文案仍在范围外的 `ShortcutRecorder.swift`，请集成时移除截图占位。
@@ -83,8 +83,8 @@
 ## 问题
 
 - 请 Claude 确认外部图片导入的 40 MB / 6400 万像素上限；当前超限明确提示，不缩小或静默截断。
-- 已按 Claude 决定新增 `ContentSnapshot.CaptureMethod.screenshotOCR`，截图编辑后文字的翻译/总结使用此类型；通用结果浮窗显示“截图 OCR”。本次仅补充枚举显示分支，截图结果并入通用浮窗的接线等待后续通知。
-- 图片理解走现有 AIClient 的非流式图片接口；OCR 文字操作走既有 OperationRunner 流式接口。运行态结果浮窗使用相同 Tokens，尚未与并行开发的通用结果窗口控制器合并；如需共用控制器，由 Claude 集成。
+- 已按 Claude 决定新增 `ContentSnapshot.CaptureMethod.screenshotOCR`，截图编辑后文字的翻译/总结使用此类型；通用结果浮窗显示“截图 OCR”。原 D-3a 仅补充枚举显示分支；本轮 M4 集成已接入通用浮窗。
+- 图片理解走现有 AIClient 的非流式图片接口；OCR 文字操作走既有 OperationRunner 流式接口。本轮 M4 集成已删除截图独立结果窗，改用通用结果窗口与共享最近结果。图片请求仍为非流式，执行状态与取消留在图片预览，完成后显示通用结果窗。
 
 ### M4 集成步骤一（pi-platform，2026-10-11）
 
@@ -93,3 +93,10 @@
 - 图片不进入最近结果，追问只使用已完成的文字解释，界面原文说明此限制；最近结果重开保持相同模板与保守的“仅复制”来源行为。
 - `scripts/test.sh` 退出 0：35 XCTest + 124 Swift Testing，以及 Rime、快捷键、权限与标识扫描通过。新增测试覆盖配置/模型/密钥变化、测试期间换密钥、钥匙串读取失败、OCR 修正文本、统一浮窗、图片解释追问、重开、动态隐私与清除。日志 `/tmp/roarkt-m4-tests.log`。
 - 完整构建、Gallery、主 App 启动冒烟尚未运行；真实屏幕录制权限、快捷键、多屏、拖放、剪贴板、真实端点、焦点/键盘与设计验收待人工验证。
+
+### M4 集成步骤二（2026-10-11）
+
+- 按 Claude 新通知，在提交步骤一后将 main 合入当前 agent/platform（`849396c`）；仅带入本机环境规则及 Sparkle 打包修复，没有操作主仓库、安装脚本、输入法注册或 LaunchAgent。
+- 复查补充图片原始解释的重试门禁：原图未保留在会话时明确要求从预览重新确认发送，文字追问的重试仍走通用逻辑。浮窗显示“图片理解”，并提示追问只基于文字解释。
+- 在异步任务真正发送前再次检查连接、模型和密钥测试状态，防止“确认后、任务开始前”的配置变化；补充关闭预览后迟到图片结果不进入通用浮窗或历史的回归。
+- `scripts/test.sh` 退出 0：37 XCTest + 124 Swift Testing，Rime、快捷键、权限和标识检查通过。日志 `/tmp/roarkt-m4-tests-final.log`。完整构建与启动证据另见最终表。

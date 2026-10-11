@@ -39,7 +39,9 @@ import RoarkTPlatform
     func presentCompleted(_ result: OperationResult, template: OperationTemplate) {
         guard readable() else { return }
         if settings().privacy.keepRecentResultsInMemory { environment.recent.add(result) }
-        replaceWindow().show(result, template: template)
+        replaceWindow().show(result, template: template, initialRetryUnavailable:
+            result.templateID == ScreenshotSession.imageTemplate.id
+                ? "追问仅基于文字解释。原图未保留在对话中；重新解释图片请从图片预览确认发送。" : nil)
     }
 
     func reopen(_ result: OperationResult) {
@@ -49,7 +51,9 @@ import RoarkTPlatform
         let template = settings().templates.first { $0.id == result.templateID }
             ?? (result.templateID == ScreenshotSession.imageTemplate.id ? ScreenshotSession.imageTemplate
                 : OperationTemplate(id: result.templateID, name: "最近结果", icon: "text.bubble", prompt: ""))
-        replaceWindow().show(result, template: template)
+        replaceWindow().show(result, template: template, initialRetryUnavailable:
+            result.templateID == ScreenshotSession.imageTemplate.id
+                ? "追问仅基于文字解释。原图未保留在对话中；重新解释图片请从图片预览确认发送。" : nil)
     }
 
     func search(_ snapshot: ContentSnapshot, settings: AppSettings) {

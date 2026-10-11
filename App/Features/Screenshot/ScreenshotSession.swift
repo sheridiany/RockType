@@ -141,6 +141,12 @@ import RoarkTPlatform
         task = Task { [weak self] in
             guard let self else { return }
             do {
+                // Confirmation and task execution can be separated by a settings/key change.
+                guard self.check(current), connection == self.settings().ai, model == self.visionModel else {
+                    self.busy = false
+                    self.notice = "连接、模型或密钥测试状态已变化，请重新预览并确认。"
+                    return
+                }
                 let answer = try await self.sendImage(connection, model, data)
                 guard !Task.isCancelled, self.check(current) else { return }
                 self.result = answer; self.busy = false
