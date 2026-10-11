@@ -55,6 +55,7 @@
 | R2-ARCH | 架构整理：`App/Mock`、`App/Gallery` 移出正式 App 目标（或仅 DEBUG）；`App/Surfaces` 与 `App/Features` 职责划分（视图 vs 控制器）；死代码清理；`docs/architecture.md` 同步；不改行为 | pi-ime | 第一阶段完成：全仓审计、IME/语音等价整理与架构同步；测试/构建通过；Gallery/Mock 隔离留后续，见 [证据](evidence/014-R2-ARCH.md) |
 | R3-UI | 截图设置覆盖、完整快捷键速查、关于页版本/更新/许可证、菜单栏新功能入口 | pi-ui | 实现、测试/构建与离屏检查通过；待人工验收，见 [证据](evidence/014-R3-UI.md) |
 | R4-UI | 架构 A02/A03/A15：正式导航脱离 Mock、组件按用途命名、Gallery/Mock 的 DEBUG 边界与 A04 预览解耦 | pi-ui | 测试/构建、release 符号与开发渲染通过；待人工验收，见 [证据](evidence/014-R4-UI.md) |
+| R5-UI | A16 现状文档同步、用户功能/快捷键手册、正式界面离屏检查及 UI 区域修正 | pi-ui | 文档、测试/构建与离屏复查通过；人工项已标注，见 [证据](evidence/014-R5-UI.md) |
 
 ## 规则
 
