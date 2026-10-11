@@ -16,7 +16,12 @@ import RoarkTCore
     store.settings.general.showBeijingTime = true
     #expect(observed.value == 1)
     #expect(store.settings.general.showBeijingTime)
-    try await Task.sleep(for: .milliseconds(290))
+    // Rendering tests also occupy MainActor. Wait for persistence with a bounded deadline,
+    // rather than assuming both tasks begin their sleep in the same scheduling slice.
+    let deadline = ContinuousClock.now + .seconds(3)
+    while try !persistence.load().settings.general.showBeijingTime, ContinuousClock.now < deadline {
+        try await Task.sleep(for: .milliseconds(20))
+    }
     #expect(try persistence.load().settings.general.showBeijingTime)
     store.settings.general.launchAtLogin = true
     store.flush()

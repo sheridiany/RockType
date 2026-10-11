@@ -9,9 +9,9 @@ struct ShellSettingsView: View {
     let sections: ShellSettingsSections
     let persistenceMessage: String
     let exportDiagnostics: () -> Void
+    var clearCurrentContent: () -> Void = {}
     @State var section: SettingsSection = .general
     @State private var language = LanguagePackModel()
-    @State private var templateID = "translate"
     @Environment(\.colorScheme) private var scheme
     private var p: Tokens.Palette { Tokens.palette(scheme) }
 
@@ -60,7 +60,7 @@ struct ShellSettingsView: View {
         case .selection: selection
         case .screenshot: screenshot
         case .ai: ShellConnectionView(model: connection, settings: $settings.ai)
-        case .templates: templates
+        case .templates: sections.templatesPane(settings: $settings, showAIConnection: { section = .ai })
         case .shortcuts: sections.shortcutsPane()
         case .permissions: sections.permissionsPane()
         case .privacy: privacy
@@ -218,54 +218,11 @@ struct ShellSettingsView: View {
             }
         }
     }
-    private var templates: some View {
-        Group {
-            Notice(text: "模板执行即将推出；编辑内容已保存。")
-            HStack {
-                Picker("操作模板", selection: $templateID) {
-                    ForEach(settings.templates) { Text($0.name).tag($0.id) }
-                }
-                Button("新增") {
-                    let item = OperationTemplate(name: "自定义", icon: "sparkles", prompt: "")
-                    settings.templates.append(item)
-                    settings.selection.toolbarActions.append(item.id)
-                    templateID = item.id
-                }
-            }
-            if let index = settings.templates.firstIndex(where: { $0.id == templateID }) {
-                U4Card {
-                    field("名称", $settings.templates[index].name)
-                    field("图标（SF Symbols）", $settings.templates[index].icon)
-                    field("模型（空为默认）", optional($settings.templates[index].model))
-                    Picker("适用输入", selection: $settings.templates[index].input) {
-                        Text("文字").tag(OperationTemplate.Input.text); Text("图片").tag(OperationTemplate.Input.image)
-                    }
-                    Picker("输出形式", selection: $settings.templates[index].output) {
-                        Text("原文对照").tag(OperationTemplate.Output.comparison)
-                        Text("纯文本").tag(OperationTemplate.Output.text)
-                        Text("Markdown").tag(OperationTemplate.Output.markdown)
-                    }
-                    Text("提示词").font(Tokens.Typography.font(weight: .medium))
-                    TextEditor(text: $settings.templates[index].prompt)
-                        .frame(minHeight: Tokens.Space.xxl * 4).accessibilityLabel("提示词")
-                    if let original = OperationTemplate.defaults.first(where: { $0.id == templateID }) {
-                        Button("恢复默认提示词") { settings.templates[index].prompt = original.prompt }
-                    } else {
-                        Button("删除模板") {
-                            settings.templates.remove(at: index)
-                            settings.selection.toolbarActions.removeAll { $0 == templateID }
-                            settings.selection.disabledActions.removeAll { $0 == templateID }
-                            templateID = settings.templates.first?.id ?? ""
-                        }
-                    }
-                }
-            }
-        }
-    }
     private var privacy: some View {
         U4Card {
             toggle("会话内保留最近结果", $settings.privacy.keepRecentResultsInMemory)
-            Text("最多 10 条，不落盘；退出后清空。结果功能即将推出，当前没有内容历史。")
+            Text("最多 10 条，不落盘；退出或关闭此开关后清空最近结果。")
+            Button("清除当前内容", action: clearCurrentContent)
             U4Rule()
             Text("密码框 / Secure Input：不取词、不翻译、不调用 AI、不填入语音、不写缓存。")
             Text("密钥仅存系统钥匙串。诊断仅含动作类型、状态、耗时与脱敏错误。")

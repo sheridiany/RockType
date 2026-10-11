@@ -31,7 +31,7 @@ import Testing
         let request = OperationRequest(session: session, template: .defaults[1], settings: .defaults)
         state.start(); state.show(request)
         runner.streams[0].yield(.delta("partial"))
-        await settle()
+        await settle(until: { state.answer == "partial" })
         #expect(state.answer == "partial" && state.isBusy)
         state.cancel()
         runner.streams[0].yield(.delta("late"))
@@ -46,7 +46,7 @@ import Testing
         runner.streams[1].yield(.completed(result(session)))
         runner.streams[2].yield(.engine("synthetic"))
         runner.streams[2].yield(.completed(result(fresh)))
-        await settle()
+        await settle(until: { state.phase == .done })
         #expect(state.answer == "answer" && state.phase == .done && context.saved.count == 1)
         #expect(state.session?.id == fresh.id)
 
@@ -55,11 +55,11 @@ import Testing
         #expect(runner.requests.last?.session.turns == [OperationTurn(question: "", answer: "answer")])
         #expect(runner.requests.last?.question == "follow up")
         runner.streams[3].yield(.delta("unfinished"))
-        await settle(); state.cancel()
+        await settle(until: { state.answer == "unfinished" }); state.cancel()
         state.question = "another question"; state.ask(settings: .defaults)
         #expect(runner.requests.last?.session.turns.count == 1) // cancelled answer is not context
         runner.streams[4].yield(.failed(.inputTooLong(limit: 10)))
-        await settle()
+        await settle(until: { state.phase == .failed })
         #expect(state.phase == .failed && state.notice?.contains("10") == true)
 
         let count = runner.requests.count
@@ -68,16 +68,16 @@ import Testing
         context.readable = true; state.retry(settings: .defaults)
         context.readable = false
         runner.streams[5].yield(.completed(result(fresh)))
-        await settle()
+        await settle(until: { state.phase == .failed })
         #expect(context.saved.count == 1 && state.answer.isEmpty && state.phase == .failed)
 
         context.readable = true; state.show(request)
         runner.streams[6].finish()
-        await settle()
+        await settle(until: { state.phase == .failed })
         #expect(state.phase == .failed) // EOF without terminal event is incomplete
         state.show(request)
         runner.streams[7].yield(.completed(result(fresh)))
-        await settle()
+        await settle(until: { state.phase == .failed })
         #expect(state.phase == .failed && context.saved.count == 1) // wrong session
         state.show(request)
         #expect(state.session?.turns.isEmpty == true && state.history.isEmpty)
@@ -133,5 +133,11 @@ import Testing
                                                   turns: session.turns + [.init(question: "", answer: "answer")]),
                         templateID: "summarize", text: "answer", engine: "synthetic")
     }
-    private func settle() async { try? await Task.sleep(for: .milliseconds(30)) }
+    private func settle(until ready: (() -> Bool)? = nil) async {
+        let deadline = ContinuousClock.now + .seconds(2)
+        repeat {
+            try? await Task.sleep(for: .milliseconds(10))
+            if ready?() ?? true { return }
+        } while ContinuousClock.now < deadline
+    }
 }

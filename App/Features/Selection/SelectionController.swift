@@ -7,9 +7,11 @@ import RoarkTPlatform
 /// Call start/stop with App lifecycle; forward translate/summarize hotkeys to trigger(_:).
 @MainActor final class SelectionController: NSObject {
     private let settings: @MainActor () -> AppSettings
-    private let perform: @MainActor (OperationRequest) -> Void
+    private let perform: @MainActor (OperationRequest, OperationSource?, CGRect?) -> Void
     private let search: @MainActor (ContentSnapshot, AppSettings) -> Void
     private let notice: @MainActor (String) -> Void
+    private let aiConfigured: @MainActor () -> Bool
+    private let allowed: @MainActor () -> Bool
     private let capture: SelectionCapture
     private let toolbar = SelectionToolbarWindow()
     private var running = false
@@ -25,12 +27,14 @@ import RoarkTPlatform
     private var dragged = false
 
     init(settings: @escaping @MainActor () -> AppSettings,
-         perform: @escaping @MainActor (OperationRequest) -> Void,
+         perform: @escaping @MainActor (OperationRequest, OperationSource?, CGRect?) -> Void,
          search: @escaping @MainActor (ContentSnapshot, AppSettings) -> Void,
          notice: @escaping @MainActor (String) -> Void,
+         aiConfigured: @escaping @MainActor () -> Bool = { true },
+         allowed: @escaping @MainActor () -> Bool = { SecureInput.status() == .allowed },
          capture: SelectionCapture = SelectionCapture()) {
         self.settings = settings; self.perform = perform; self.search = search
-        self.notice = notice; self.capture = capture
+        self.notice = notice; self.capture = capture; self.aiConfigured = aiConfigured; self.allowed = allowed
         super.init()
     }
 
@@ -148,7 +152,7 @@ import RoarkTPlatform
     private func beginCapture(action: String?) {
         dismiss()
         let currentSettings = settings()
-        guard SecureInput.status() == .allowed else {
+        guard allowed() else {
             if action != nil { notice("无法读取选区，请检查辅助功能权限和安全输入状态。") }
             return
         }
@@ -173,7 +177,7 @@ import RoarkTPlatform
                 if let action { self.invoke(action, fromToolbar: false) }
                 else {
                     guard self.settings().selection.trigger == .selection else { self.dismiss(); return }
-                    self.toolbar.show(snapshot: captured.snapshot, settings: self.settings()) { [weak self] in
+                    self.toolbar.show(snapshot: captured.snapshot, settings: self.settings(), aiConfigured: self.aiConfigured()) { [weak self] in
                         self?.invoke($0, fromToolbar: true)
                     }
                 }
@@ -189,11 +193,17 @@ import RoarkTPlatform
     }
 
     private func invoke(_ action: String, fromToolbar: Bool) {
-        guard let captured = selection, captured.isCurrent(), SecureInput.status() == .allowed else { dismiss(); return }
-        let currentSettings = settings()
+        guard let captured = selection else { return }
+        performAction(action, captured: captured, fromToolbar: fromToolbar)
+    }
+
+    func performAction(_ action: String, captured: CapturedSelection, fromToolbar: Bool) {
+        guard captured.isCurrent(), allowed() else { dismiss(); return }
+        var currentSettings = settings()
         guard SelectionPolicy.permits(captured.snapshot.source.bundleID, settings: currentSettings.selection),
               !fromToolbar || SelectionPolicy.actions(settings: currentSettings).contains(action) else { dismiss(); return }
         let snapshot = captured.snapshot
+        let toolbarRect = fromToolbar ? toolbar.frame : nil
         dismiss()
         if action == "copy" {
             do { try Clipboard.shared.writeString(snapshot.text) }
@@ -201,7 +211,13 @@ import RoarkTPlatform
         } else if action == "search" {
             search(snapshot, currentSettings)
         } else if let template = currentSettings.templates.first(where: { $0.id == action && $0.input == .text }) {
-            perform(.init(session: .init(snapshot: snapshot), template: template, settings: currentSettings))
+            guard aiConfigured() || template.id == "translate" else {
+                notice("请先前往设置配置 AI 连接，再使用解释、总结、润色或自定义操作。")
+                return
+            }
+            if !aiConfigured() { currentSettings.translation.engine = .offlineFirst }
+            perform(.init(session: .init(snapshot: snapshot), template: template, settings: currentSettings),
+                    captured.returnSource, toolbarRect)
         } else {
             notice("此操作模板不可用，请检查操作模板设置。")
         }

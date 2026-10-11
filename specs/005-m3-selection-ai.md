@@ -30,7 +30,7 @@
 | M3-3 | 划词监听、取词管线、黑白名单、工具栏窗口、快捷键 ⌃⌥T/⌃⌥S 接入（C1–C5） | pi-platform | 完成（待验收） |
 | M3-4 | 结果浮窗窗口与交互、复制并返回、追问、置顶（C12、C13） | pi-surfaces | 完成（待验收） |
 | M3-5 | 设置：操作模板编辑与自定义模板、按功能指定模型（C9、C10、C15 的界面） | pi-surfaces | 完成（待验收） |
-| M3-6 | 集成与验收 | Claude | 未开始 |
+| M3-6 | 集成与验收 | pi-platform / Claude 验收 | 代码集成完成（待验收） |
 
 **接口先行**：pi-xpc 第一个 commit 只提交 `Core/Operations/` 的公开类型（`ContentSnapshot`、`OperationRequest`、`OperationEvent` 流事件、`OperationRunner` 协议、`RecentResults` 接口）与测试桩，在“进度”节登记 hash；pi-platform 与 pi-surfaces 合并该 commit 后开发，用桩实现自测。
 
@@ -133,3 +133,12 @@ M3-4 检查已按新 AGENTS 规则迁入 `Tests/SurfaceTests/ResultWindowTests.s
 - **来源标识约定**：Platform.SelectionSource 的 windowIdentifier 是 AX 窗口 CFHash 得到的运行期不透明标识，不是 CGWindowID；在取词/工具栏期间另持有 AX 窗口与焦点元素并用 CFEqual 校验。M3-4 若需要实际定位来源窗口，应由 Claude 协调接口，不能把此字符串强转 CGWindowID。
 - 复制回退沿用 SPEC-010 已接受的 changeCount 竞争限制：NSPasteboard 不提供写入者身份/原子 compare-and-swap；外部首次写入、超时后迟到复制无法完全识别。未增加后台剪贴板监听。
 - M3-4：关闭后非激活提示宿主、未聚焦窗口的纯键盘入口，由 Claude 在 M3-6 决定并接线；完整构建仍需初始化输入法子模块。
+
+
+### M3-6 代码集成证据（2026-10-11）
+
+- 代码集成完成（待验收）。AppDelegate 持有 SelectionController / OperationsEnvironment，生命周期已接入；翻译、总结快捷键转发，截图保持“即将推出”。工具栏操作通过 SelectionOperationsController 创建独占 runner，流式结果、追问、最近结果列表及重开已接入；搜索使用 OperationsEnvironment，复制使用 Clipboard，错误走 ComingSoonController 通用非激活提示。
+- 来源窗口在捕获时保留进程内 AXUIElement，不进入快照或最近结果；复制返回先激活来源应用再 AXRaise，窗口失效退化为应用，应用失效仅复制提示；切换过其他应用不拉回；最近结果重开不猜测窗口。
+- 设置即时读取：触发方式、黑白名单、窗口配置、模型及模板；生产模板页已使用 M3-5 分区。未配置 AI 时禁用工具栏 AI 操作并提示设置，翻译强制离线优先，追问拒绝并提示。最近结果改由完成回调按当前隐私设置写入，避免进行中请求用旧设置回写；菜单及隐私页均有清除当前内容入口。
+- 自动化：scripts/test.sh 通过（19 XCTest + 102 Swift Testing，Rime 与旧标识检查通过）。新增桩 runner 经生产工具栏分发→真实结果窗→最近结果测试，覆盖流式、追问、模型变更、隐私关闭、重开、清除、AI 未配置与保护状态；快捷键覆盖两项转发、录制暂停、改键、迟到回调、保护状态及截图占位。已有持久化/结果窗测试的固定时序等待改为有截止时间的条件等待，解决并行渲染占用 MainActor 导致的误报。
+- 完整 build、gallery 与实际启动将在追加 M5 集成并合并 main 后统一重跑，当前未据此声明通过。真实应用取词兼容矩阵、权限撤销、Secure Input、离线语言包和真实 AI、AXRaise 返回、中文追问、键盘与 VoiceOver、全屏/多屏与设计验收仍待人工验证。
