@@ -10,20 +10,6 @@ The capitalization/spelling reference is the macOS `/usr/share/dict/words` symli
 
 `Rime/roarkt_flypy.schema.yaml` adapts the Xiaohe algebra and preedit rules from the official [rime-double-pinyin](https://github.com/rime/rime-double-pinyin) project. That schema is GPL-3.0-or-later; upstream authors are retained in its header. The complete license is in `LICENSES/GPL-3.0.txt`.
 
-`Rime/cn_dicts/{8105,base,ext,others}.dict.yaml` is adapted from
-[gaboolic/rime-frost](https://github.com/gaboolic/rime-frost/tree/64d24e89341aee133c0ad0f09b5f47a695e3d508),
-revision `64d24e89341aee133c0ad0f09b5f47a695e3d508` (retrieved 2026-10-11).
-The actual upstream `LICENSE` was checked before import: GNU GPL version 3;
-its verbatim text is retained in `LICENSES/rime-frost-GPL-3.0.txt` and packaged with the input method.
-These data remain GPL-3.0, separate from the MIT application. Upstream headers
-retain attribution to rime-ice, the character/frequency sources, and constituent
-word lists. Modifications on 2026-10-11: exclude 12 base and 28 ext entries containing
-`洛克` to meet this repository's literal legacy-identifier guard (including unrelated
-proper names such as 巴洛克); all other data and weights are unchanged. `8105` and
-`others` are verbatim. The optional zero-weight Tencent list, larger character tables,
-correction list, cell dictionaries, upstream Lua and upstream schemas are not imported.
-RockType retains its own keyboard behavior and the existing octagram model.
-
 ## Distributed components
 
 This inventory covers the main app, the separate GPL input method, the translation helper and the voice worker. License texts are shipped in each app's `Contents/Resources/Licenses/`. The MIT programs do not link to the input method. Original copyright notices are retained; copied MIT portions in the input method retain `Squirrel/LICENSE.translation.txt`, and the shared voice implementation retains `Voice/LICENSE.md`.
@@ -65,7 +51,10 @@ software development, product, design and collaboration, licensed under MIT.
 It is not extracted from user files or copied from upstream domain dictionaries.
 The source asset remains MIT; it is imported into the GPL input method's combined
 Rime dictionary. Rime auto-encodes ordinary entries, with 104 explicit polyphonic
-readings. The weight 800 is an authored ranking priority, not a corpus count.
+readings. Terms use traditional text for the existing Luna Pinyin/octagram pipeline,
+with simplified output supplied by its original OpenCC filter. The weight `100%`
+preserves existing preset frequencies for 245 entries; the other 822 use authored
+priority 800. No upstream frequency table is copied into this MIT asset.
 
 The English dictionary adds 65 entries and updates 19 existing entries for canonical
 case or technical priority, bringing the total to 30,261. The curation follows the

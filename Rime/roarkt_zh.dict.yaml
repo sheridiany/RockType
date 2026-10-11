@@ -3,14 +3,11 @@
 
 ---
 name: roarkt_zh
-version: "0.5.0"
+version: "0.6.0"
 sort: by_weight
-use_preset_vocabulary: false
+use_preset_vocabulary: true
 import_tables:
-  - cn_dicts/8105
-  - cn_dicts/base
-  - cn_dicts/ext
-  - cn_dicts/others
+  - luna_pinyin
   - roarkt_ai
 ...
 

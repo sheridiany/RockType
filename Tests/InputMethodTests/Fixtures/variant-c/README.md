@@ -30,3 +30,9 @@ Expected result: daily 78/80, AI 53/60, development 24/40, sentence 17/20, total
 The adjacent `candidate-variant-c.tsv` preserves exact outputs. The diagnostic
 `candidate-variant-c-simplified.tsv` records the initial direct simplified import
 (173/200, AI 52/60), which also fails acceptance.
+
+Historical note: the later calibration keeps this failed fixture unchanged for
+reproduction. The adopted C lives in `Rime/roarkt_ai.dict.yaml`: 245 entries use
+`100%` to retain their higher original preset frequency; 822 retain priority 800.
+Its accepted results are in `../candidate-final.tsv` (181/200; daily 78, sentence
+17, development 29, AI 57). See SPEC-011 for the controlled diagnosis and adoption.

@@ -135,10 +135,11 @@ struct RimeChecks {
       }
       print("Shift confirmed-prefix/raw-suffix commit passed: \(args[4])")
     case "homophones":
-      // Technical priorities must leave the most common everyday homophones first.
+      // Protect A's factory homophones (candidate-baseline.tsv); Luna selects 一部, Frost selected 一步.
+      // The fixed 200-row evaluation still expects 异步 and remains unchanged.
       for (pinyin, flypy, expected) in [
         ("duiqi", "dvqi", "对其"), ("xiancun", "xmcy", "现存"),
-        ("yibu", "yibu", "一步"), ("zujian", "zujm", "逐渐"),
+        ("yibu", "yibu", "一部"), ("zujian", "zujm", "逐渐"),
         ("huidiao", "hvdn", "毁掉"), ("tongshi", "tsui", "同时"),
         ("duandian", "drdm", "断电"), ("liantiao", "lmtn", "链条"),
         ("xiecheng", "xpig", "写成"), ("xiancheng", "xmig", "县城"),

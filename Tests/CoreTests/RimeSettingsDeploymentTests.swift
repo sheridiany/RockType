@@ -21,7 +21,6 @@ import Testing
     try fm.copyItem(at: runtime.appendingPathComponent("data/opencc"), to: shared.appendingPathComponent("opencc"))
     let rime = repo.appendingPathComponent("Rime")
     try fm.copyItem(at: rime.appendingPathComponent("lua"), to: shared.appendingPathComponent("lua"))
-    try fm.copyItem(at: rime.appendingPathComponent("cn_dicts"), to: shared.appendingPathComponent("cn_dicts"))
     for file in try fm.contentsOfDirectory(at: rime, includingPropertiesForKeys: nil) where file.pathExtension == "yaml" {
         try fm.copyItem(at: file, to: shared.appendingPathComponent(file.lastPathComponent))
     }

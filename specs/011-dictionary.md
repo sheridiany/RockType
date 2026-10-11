@@ -2,17 +2,17 @@
 
 - 阶段：打磨 P1（输入法）
 - 覆盖需求：FR-A1、FR-A3、FR-A5、NFR-2
-- 状态：Blocked（Claude 新门槛下 A/B/C 均未满足全部条件；等待 Claude 决策）
+- 状态：InProgress（已采用校准后的 C；四类自动验收通过，个人层对齐及真实试打待完成）
 
 ## 目标
 
-候选更准、更全，同时日常与整句首选不得低于旧词库基线。补齐 AI / 开发领域词，按用户本人的习惯定制。**当前未选定可验收的词库方案**，下文 W-1/W-2/W-3 为历史实施证据，最新结论以“A/B/C 复评”节为准。**产品打包**与**用户个人数据**严格分开：个人词表只写入用户本机 `~/Library/Rime`，不进安装包、不进 git。
+候选更准、更全，同时日常与整句首选不得低于旧词库基线。补齐 AI / 开发领域词，按用户本人的习惯定制。**已采用校准后的 C：原词库 + 繁体 AI 术语 + 英文扩充**。日常、整句、开发均保持 A，AI 达到 95%；此前 B 与未校准 C 的结论保留为历史证据，最新结论以“C 校准与采用”节为准。**产品打包**与**用户个人数据**严格分开：个人词表只写入用户本机 `~/Library/Rime`，不进安装包、不进 git。
 
 ## 调研结论（2026-10-11）
 
 | 词库 | 许可 | 结论 |
 | --- | --- | --- |
-| 白霜拼音 rime-frost（基于雾凇，约 7.45 亿字语料重统计字频词频） | GPL-3.0（实施时须以上游 LICENSE 文件核实） | **B 试验，验收退回**：日常与整句退步；当前仍保留在工作分支，是否撤回待 Claude 决定 |
+| 白霜拼音 rime-frost（基于雾凇，约 7.45 亿字语料重统计字频词频） | GPL-3.0（实施时须以上游 LICENSE 文件核实） | **不采用、不打包**：B 的日常与整句退步，词表、专用许可与声明均已撤回 |
 | 雾凇拼音 rime-ice | GPL-3.0 | 不并用（白霜已是其改进版，避免重复词条与词频冲突） |
 | 万象 rime-wanxiang 语言模型 `.gram` | 未明确（第三方显示 CC-BY-4.0，未核实） | **不打包**；记入后续“可选下载语言模型”候选 |
 | 现用 八股文 `zh-hant-t-essay-bgw.gram`（rime-octagram-data） | 随 Squirrel/plum | 先保留；评估其与简体词库的配合，若明显变差则在规格问题节报告 |
@@ -29,17 +29,17 @@
 
 ## 个人层（只在用户本机，脚本化、可重复执行、可回滚）
 
-5. **学习词迁移为简体**：用户已导入的 RoType 学习词（`roarkt_zh.userdb`，繁体键）在主词库换为简体后需转换：导出 → OpenCC 繁转简（t2s）→ 导入新 userdb。脚本 `scripts/personal/migrate-userdb-simplified.sh`，执行前完整备份到 `~/Library/Rime/roarkt-backups/<时间>/`。由 Claude 在合并后执行，agent 只实现与用临时目录测试。
-6. **个人习惯词表**：脚本 `scripts/personal/build-personal-dict.py`：从用户本机文本中统计高频中文词与英文术语，**来源仅限**用户明确允许的目录（默认 `~/Repos/**/*.md` 与 `~/Repos/**/*.swift` 注释/字符串，排除 `node_modules`、`.build`、`.git`），与主词库比对，产出主词库缺失或排序靠后的词，写 `~/Library/Rime/roarkt_personal.dict.yaml`（文件头注明“个人词表，由 RoarkT 生成”），并通过 `roarkt.custom.yaml` / `roarkt_flypy.custom.yaml` 的 patch 挂载（与 SPEC-004 设置同步生成的 custom 文件合并，不覆盖用户手写内容）。脚本只输出统计摘要，不打印原文；不读取聊天记录、浏览器、邮件等其他数据。产物不进 git（`.gitignore`）。
+5. **学习词保持原格式（C 方案）**：继续使用原 `luna_pinyin` / `roarkt_zh.userdb` 的繁体学习键。本次没有用户数据库格式迁移，**不应执行**先前为白霜简体主词库设计的 `scripts/personal/migrate-userdb-simplified.sh`。W-4 负责人需将个人层方案与 C 对齐，由 Claude 在合并后安排本机操作；本任务不改个人脚本、不访问真实用户数据。
+6. **个人习惯词表**：脚本 `scripts/personal/build-personal-dict.py`：从用户本机文本中统计高频中文词与英文术语，**来源仅限**用户明确允许的目录（默认 `~/Repos/**/*.md` 与 `~/Repos/**/*.swift` 注释/字符串，排除 `node_modules`、`.build`、`.git`），与主词库比对，产出主词库缺失或排序靠后的词，写 `~/Library/Rime/roarkt_personal.dict.yaml`（文件头注明“个人词表，由 RockType 生成”），并通过 `roarkt.custom.yaml` / `roarkt_flypy.custom.yaml` 的 patch 挂载（与 SPEC-004 设置同步生成的 custom 文件合并，不覆盖用户手写内容）。脚本只输出统计摘要，不打印原文；不读取聊天记录、浏览器、邮件等其他数据。产物不进 git（`.gitignore`）。
 
 ## 任务
 
 | # | 任务 | 执行 | 状态 |
 | --- | --- | --- | --- |
 | W-1 | 评测集与评测脚本，先跑出现状基线 | pi-ui | 已完成，基线 162/200（81%） |
-| W-2 | 引入白霜词库并调整两套方案，回归 RimeChecks | pi-ui | 已实现，验收退回：日常/整句退步 |
-| W-3 | AI / 开发中文词库与英文扩充，评测校准权重 | pi-ui | 已实现；A/B/C 复评无可采用方案，等待决策 |
-| W-4 | 个人层脚本：学习词简体迁移、个人习惯词表（含临时目录测试） | pi-platform | 未开始 |
+| W-2 | 引入白霜词库并调整两套方案，回归 RimeChecks | pi-ui | 白霜已撤回；采用 C 原主词库/原设置，回归通过 |
+| W-3 | AI / 开发中文词库与英文扩充，评测校准权重 | pi-ui | 已完成 C 校准：日常 78、整句 17、开发 29、AI 57，总计 181/200 |
+| W-4 | 个人层脚本：按 C 对齐原学习格式、个人习惯词表（含临时目录测试） | pi-platform | 待负责人与 Claude 对齐 C |
 | W-5 | Claude 在本机执行个人层脚本、安装、用户试打 | Claude + 用户 | 未开始 |
 
 **文件所有权**：pi-ui：`Rime/`、`THIRD_PARTY_NOTICES.md`、`LICENSES/`、`scripts/eval-candidates.sh`、`Tests/InputMethodTests/Fixtures/`、评测相关测试；pi-platform：`scripts/personal/`、其测试、`.gitignore` 一行。两人都不改 `InputMethod/sources`（pi-ime 正在恢复 RoType 视觉）。
@@ -48,16 +48,59 @@
 
 | 项 | 方法 | 结果 | 证据 |
 | --- | --- | --- | --- |
-| 上游许可证核实并随包附带 | 检查 LICENSE 文件与 NOTICES | 通过 | 固定上游版本、逐字复制 GPL-3.0；打包脚本包含许可与声明 |
-| 日常 ≥78/80、整句 ≥17/20、AI ≥57/60；满足后取总命中最高者 | 同一冻结集 A/B/C 对照 | **失败，阻塞验收** | A 的 AI 不达标；B 日常/整句退步；C AI 53/60 不达标 |
+| 许可证与实际打包内容一致 | 检查 LICENSE 文件与 NOTICES | 通过 | 白霜文件/专用许可/声明撤回；保留原词库许可及 MIT 自研词表声明 |
+| 日常 ≥78/80、整句 ≥17/20、开发 ≥29/40、AI ≥57/60 | 同一冻结集 A/C 对照 | **通过** | 校准 C：78、17、29、57；总计 181/200，A 的所有命中项均保留 |
 | RimeChecks 全部通过（模糊音、简拼、纠错、Shift、英文、学习） | `scripts/test.sh` | 通过 | 原断言保留；新增双方案领域读音、英文原样上屏、日常同音词保护 |
 | 部署时间与打字延迟无明显退化 | 计时 + 人工 | 部分验证，真实 IMK 待人工 | 已测临时部署与同步按键 P95，见下；不能代替真实输入延迟验收 |
-| 学习词迁移后常用词仍优先 | 本机试打 | 待人工验证 | |
+| 既有学习词仍优先（C 不迁移数据库） | 本机试打 | 待人工验证 | 两方案临时 profile 的学习/重启/忘记回归通过，真实旧学习数据未访问 |
 | 个人词表不进 git、不打印原文 | 检查 | 未运行 | |
 
-## A/B/C 复评（Claude 验收反馈，2026-10-11）
+## C 校准与采用（Claude 二次授权，2026-10-11）
 
-**结论：没有满足全部条件的方案，停止选型调整，等待 Claude 决定。** 本次没有采用 C，没有改动产品 `Rime/`、打包逻辑或白霜许可/NOTICES。工作分支仍是 B 的实现，这不代表 B 获准发布。
+**结论：采用校准后的 C，四类门槛同时通过。** 原词库、繁转简、八股文模型、`contextual_suggestions: true` 和其他原行为设置保持 A；新增繁体 AI 词表与已有英文扩充。白霜四张词表、专用许可证、NOTICES/PROVENANCE 声明、资源复制依赖均已移除。
+
+### 根因与权重策略
+
+- 单变量对照：A 只换英文扩充，仍为 **162/200，开发 29/40**；A 只加未校准的繁体 AI（800），变为 **172/200，开发 24/40**，与未校准 C 一致。因此英文扩充不是这次开发类退步的原因。
+- librime `EntryCollector::CreateEntry` 对绝对权重直接赋值；新增 AI 词条会阻止同文本的预置词再自动加入。统一 800 把已有高频词降权，并非单纯新增词挤占。五项退步及恢复：接口→借口→接口、部署→不熟→部署、前端→前段→前端、进程→京城→进程、构建→构件→构建。它们的原预置频率分别为 **10,415 / 5,289 / 9,490 / 6,446 / 12,722**。
+- 对 1,067 条繁体术语应用原量纲：预置词频高于 800 的 **245 条写 `100%`**，由 Rime 继承原频率；其余 **822 条保持领域优先级 800**。数值 `max(800, 原预置频率)` 试验与最终 `100%` 版本逐项结果一致。未复制原频率表到 MIT 自研词表；未提高有歧义的短词来压过日常词。
+- 原 104 条显式拼音保持，其余自动编码。词库完整性测试改用原 `luna_pinyin` 字表，并新增“不得降低已有预置词频”的回归断言。两套 schema 与 A 对照，仅显示名称、作者、版本元数据不同；原行为设置一致。
+
+| 类别 | A 原词库 | 校准 C | 门槛 | 结果 |
+| --- | --- | --- | --- | --- |
+| 日常 | 78/80 (97.50%) | 78/80 (97.50%) | ≥78/80 | 通过 |
+| 整句 | 17/20 (85%) | 17/20 (85%) | ≥17/20 | 通过 |
+| 开发 | 29/40 (72.50%) | 29/40 (72.50%) | ≥29/40 | 通过 |
+| AI | 38/60 (63.33%) | 57/60 (95%) | ≥57/60 | 通过 |
+| **总计** | **162/200 (81%)** | **181/200 (90.5%)** | 四类同时达标 | **+9.5pp** |
+
+- A 的 **162 条原命中全部保留**；增加 19 条 AI 命中。AI 剩余三条未首选：词元→次元、对齐→对其、显存→现存。它们可从候选选择并学习，不继续提高权重以挤掉日常同音词。
+- 冻结 200 条评测输入与期望未改，SHA-256 仍为 `7b8d9651974895879a2d11a28325eb2ca86e6e046a2b6c1c345b41ab39d15f96`。`candidate-final.tsv` 更新为本次 C；旧 B 结果保存为 `candidate-frost-ai.tsv`，未校准 C 夹具与结果保留作历史证据。
+- 继续运行 10 条日常同音词保护。补充检查中的 `yibu` 原期望“一步”来自 B；按冻结 A 的实际首选改为“一部”，C 与 A 一致。正式评测仍期望“异步”并计为未命中；其他九条保护不变。两套方案的 13 条领域词读音/实际提交、24 条英文原样提交与所有原 RimeChecks 均通过。
+- SPM 门槛更新为日常 ≥78、整句 ≥17、开发 ≥29、AI ≥57、总计 ≥181。旧标识守卫维持上次已授权的“洛克输入法”精确短语规则。
+
+### 本次真实验证
+
+| 命令 | 退出码 | 证据/范围 |
+| --- | --- | --- |
+| `scripts/eval-candidates.sh .build/dictionary/calibrate/english-only/Rime .build/dictionary/calibrate/results-english-only` | 0 | 英文单变量：162/200，开发 29 |
+| `scripts/eval-candidates.sh .build/dictionary/calibrate/ai-only/Rime .build/dictionary/calibrate/results-ai-only` | 0 | AI 单变量：172/200，开发 24 |
+| `scripts/eval-candidates.sh .build/dictionary/calibrate/preset-floor/Rime .build/dictionary/calibrate/results-preset-floor` | 0 | 原频率数值下限：181/200 |
+| `scripts/eval-candidates.sh .build/dictionary/calibrate/preset-relative/Rime .build/dictionary/calibrate/results-relative` | 0 | `100%` 继承原频率：181/200 |
+| `scripts/eval-candidates.sh .build/dictionary/abc/A/Rime .build/dictionary/calibrate/final-A` | 0 | 本次串行重跑 A：162/200 |
+| `scripts/eval-candidates.sh Rime .build/dictionary/calibrate/final-C` | 0 | 本次串行最终 C：181/200 |
+| `zsh scripts/test.sh` | 0 | 155 个 Swift Testing 测试、两方案 RimeChecks、面板/session、AppShell；`.build/dictionary/calibrate/tests.log` |
+| `xcodebuild -project InputMethod/Squirrel.xcodeproj -scheme Squirrel -configuration Release -derivedDataPath .build/ime clean` | 0 | 清理本 worktree 输入法构建缓存，避免旧白霜资源残留 |
+| `zsh scripts/build.sh` | 0 | 全部产物签名、语音 worker XPC 冒烟；已执行构建脚本的 LaunchServices 注销；`.build/dictionary/calibrate/build.log` |
+| `zsh scripts/test-rime.sh --bundle 'dist/RockType Input.app'` | 0 | 新产品包内资源临时部署通过 |
+
+- 所有打包 YAML 与 `Rime/` 的 `cmp` 均退出 **0**；包内不存在 `cn_dicts` 与专用白霜许可的断言退出 **0**；最终评测与已保存 C 逐项结果的 `cmp` 退出 **0**。
+- 同机串行单次测量：A/C 干净临时部署 **2.62s / 1.87s**，1878 次按键刷新 P95 **1.738ms / 1.807ms**。仅同步 librime 路径，不代表真实 IMK/用户数据库/停服打字验收。
+- 未安装、注册或启动输入法，未写真实 `~/Library/Rime`，未改 `InputMethod/sources`。真实试打与既有学习数据体验待 Claude/用户验证；W-4 必须对齐 C 的繁体学习格式，不能执行旧简体迁移计划。
+
+## A/B/C 初次复评（历史，Claude 首轮验收反馈，2026-10-11）
+
+**当时结论：没有满足全部条件的方案，停止选型调整，等待 Claude 决定。** 本次没有采用 C，没有改动产品 `Rime/`、打包逻辑或白霜许可/NOTICES。工作分支仍是 B 的实现，这不代表 B 获准发布。
 
 新的选择规则：日常至少 **78/80**、整句至少 **17/20**、AI 至少 **57/60（95%）**；全部满足后才比较总命中数。不能用 AI 的收益抵消日常或整句的退步。
 
@@ -136,12 +179,12 @@ A/B 与先前保存结果、重建 C 与新保存结果的三个 `cmp` 均退出
 | 整句 | 17/20 (85%) | 16/20 (80%) | 16/20 (80%) | -5pp |
 | **总计** | **162/200 (81%)** | **164/200 (82%)** | **181/200 (90.5%)** | **+9.5pp** |
 
-- `candidate-baseline.tsv` / `candidate-frost.tsv` / `candidate-final.tsv` 保存逐项结果，评测输入与期望在 W-1 提交后未改动。脚本现在直接输出基线对比（输入/期望必须与基线一致）；总命中数低于基线退出 **2**。SPM 回归门槛为总计 ≥181、AI ≥58、日常 ≥75。
+- `candidate-baseline.tsv` / `candidate-frost.tsv` / `candidate-frost-ai.tsv` 保存旧三阶段逐项结果（原 B 的 `candidate-final.tsv` 已更名，现 `candidate-final.tsv` 为校准 C），评测输入与期望在 W-1 提交后未改动。脚本现在直接输出基线对比（输入/期望必须与基线一致）；总命中数低于基线退出 **2**。SPM 回归门槛为总计 ≥181、AI ≥58、日常 ≥75。
 - 扩展既有 `RimeChecks.swift`：两套方案各 13 条领域词读音与实际提交、24 个英文词大小写/标点实际提交、10 条日常同音词首选。`bash scripts/test-rime-capabilities.sh` **退出码 0**；词库完整性测试检查 800–1500 条、无重复、单字均可编码、显式拼音与字表一致，`swift test --filter domainDictionaryReadingsAreEncodableAndUnique` **退出码 0**。
 - 已按用户后续通知将 main 的 RockType 更名、默认隐藏菜单栏图标及构建后 LaunchServices 注销逻辑合入当前 worktree（`8e6019c`、`d6e6628`）；没有向 main 合并、push 或新建分支。名称冲突保留 RockType Pinyin / RockType Shuangpin 和词库版本；未自行编辑输入法 sources。合并 `9b197ce` 后统一测试退出码 0。
 - 未验证：全部 1,067 词的逐条人工读音验收、真实键盘/IMK 延迟、用户学习词简体迁移和个人词表；本任务范围不覆盖 W-4/W-5。
 
-### 最终验证与性能复测
+### 历史 B 验证与性能复测
 
 - `zsh scripts/test.sh`：**退出码 0**，155 个 Swift Testing 测试以及 Rime 部署/能力、session/修饰键/面板和 AppShell 检查通过。日志 `.build/dictionary/final-tests.log`。
 - `zsh scripts/build.sh`（已含 main `6b0081f`）：**退出码 0**，主 App、输入法、翻译服务、语音 worker 签名构建与语音 XPC 冒烟检查通过；没有启动 App 或输入法，没有安装/注册输入源。构建脚本已执行中间产物/worktree App 的 LaunchServices 注销。日志 `.build/dictionary/final-build.log`。
@@ -158,6 +201,6 @@ A/B 与先前保存结果、重建 C 与新保存结果的三个 `cmp` 均退出
 
 ## 问题
 
-1. 历史 B 关闭了旧繁体模型的已提交上下文重排以通过连续输入回归；本次 C 恢复全部原设置，日常/整句恢复，但 AI 未过门槛。是否继续调整领域词权重或模型组合等待 Claude 决定。
-2. Claude 已明确不接受日常/整句退步，B 不合格；不能以总命中率提升抵消该失败。
-3. 已按 Claude 后续授权收窄 `scripts/test.sh` 两处旧标识守卫：中文只匹配“洛克输入法”，不再误伤“巴洛克”；其他旧标识不变。本次未修改现有 B 数据，早期排除的 40 条词是否恢复随主词库决策处理。
+1. W-4 需对齐 C：继续使用原繁体学习键，不执行为白霜设计的简体 userdb 迁移；个人词表的字表/编码/挂载由负责人和 Claude 确认。本任务未修改个人脚本或真实数据。
+2. Claude 从 main 合并后安排真实试打：全拼/双拼、原学习词优先级、整句、英文与候选翻译。自动化均通过，但真实 IMK 延迟和用户数据库规模未验收。
+3. 早期白霜与上下文模型取舍已关闭：采用保留原设置的校准 C。旧标识守卫已按授权收窄，不再误伤普通词；白霜的 40 条专名排除随整个词库撤回而不再涉及产品。

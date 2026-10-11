@@ -12,7 +12,6 @@ for resource in default.yaml key_bindings.yaml punctuation.yaml symbols.yaml pin
 done
 cp -R "$runtime/data/opencc" "$root/Rime/lua" "$temporary/shared/"
 cp "$root/Rime/"*.yaml "$temporary/shared/"
-cp -R "$root/Rime/cn_dicts" "$temporary/shared/"
 cp "$root/Rime/default.custom.yaml" "$temporary/bootstrap/"
 deploy() {
   if ! "$temporary/bin/rime_deployer" --build "$temporary/bootstrap" "$temporary/shared" "$temporary/build" > "$temporary/deploy.log" 2>&1; then

@@ -8,7 +8,7 @@
 schema:
   schema_id: roarkt_flypy
   name: RockType Shuangpin
-  version: "0.5.0"
+  version: "0.6.0"
   author:
     - double pinyin layout by 鹤
     - Rime schema by 佛振
@@ -21,6 +21,9 @@ switches:
   - name: ascii_mode
     reset: 0
     states: [中文, 西文]
+  - name: simplification
+    reset: 1
+    # 强制启用繁转简，不提供菜单开关。
   - name: full_shape
     reset: 0
     states: [半角, 全角]
@@ -62,9 +65,10 @@ engine:
     - table_translator@english
     - lua_translator@*roarkt_english_echo
   filters:
+    - simplifier@simplification
     - lua_filter@*roarkt_simplified_only_filter
     - uniquifier
-    # Factory dictionary is simplified; order visible candidates after deduplication.
+    # Order visible candidates after simplification and deduplication.
     - lua_filter@*roarkt_candidate_filter
 
 speller:
@@ -112,8 +116,7 @@ speller:
 translator:
   dictionary: roarkt_zh
   prism: roarkt_flypy
-  # The retained traditional gram model must not rerank simplified committed context.
-  contextual_suggestions: false
+  contextual_suggestions: true
   enable_completion: true
   enable_sentence: true
   enable_user_dict: true
@@ -167,6 +170,11 @@ english:
   initial_quality: 1.2
   comment_format:
     - xform/.+/〔EN〕/
+
+simplification:
+  option_name: simplification
+  opencc_config: tw2s.json
+  tips: none
 
 punctuator:
   import_preset: default

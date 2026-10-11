@@ -42,7 +42,6 @@ else
   cp -R "$runtime/data/opencc" "$temporary/shared/"
   cp -R "$repo_dir/Rime/lua" "$temporary/shared/"
   cp "$repo_dir/Rime/"*.yaml "$temporary/shared/"
-  cp -R "$repo_dir/Rime/cn_dicts" "$temporary/shared/"
 fi
 cp "$temporary/shared/default.custom.yaml" "$temporary/user/"
 
