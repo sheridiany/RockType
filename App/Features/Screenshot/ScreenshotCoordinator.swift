@@ -3,6 +3,8 @@ import RoarkTPlatform
 import RoarkTCore
 import SwiftUI
 import UniformTypeIdentifiers
+import QuartzCore
+import os
 
 /// Retain in AppDelegate, call start/stop, and bind HotkeyCenter.screenshotAction to capture().
 @MainActor final class ScreenshotCoordinator {
@@ -13,6 +15,8 @@ import UniformTypeIdentifiers
     private var captureTask: Task<Void, Never>?
     private var protectionTask: Task<Void, Never>?
     private var panels: [NSPanel] = []
+    private var canvases: [CGDirectDisplayID: CaptureCanvas] = [:]
+    private var lastSelection: (displayID: CGDirectDisplayID, rect: CGRect)?
     private var hidden: [NSWindow] = []
     private var keyMonitor: Any?
     private var globalKeyMonitor: Any?
@@ -34,8 +38,15 @@ import UniformTypeIdentifiers
          allowed: @escaping () -> Bool = { SecureInput.status() == .allowed }) {
         self.captureFrames = captureFrames; self.allowed = allowed
     }
-    func start() { running = true }
-    func stop() { running = false; cancel(); closePreview() }
+    private var warmupTask: Task<Void, Never>?
+    private static let timing = Logger(subsystem: Identifiers.appBundleID, category: "ScreenshotTiming")
+    func start() {
+        guard !running else { return }
+        running = true
+        ScreenCapture.startWarming()
+        warmupTask = Task { await OCR.prewarm() }
+    }
+    func stop() { running = false; warmupTask?.cancel(); warmupTask = nil; ScreenCapture.stopWarming(); cancel(); closePreview(); PinnedImageController.shared.closeAll() }
     func cancel() {
         generation += 1
         importTask?.cancel(); importTask = nil; importProgress?.cancel(); importProgress = nil
@@ -43,11 +54,12 @@ import UniformTypeIdentifiers
         protectionTask?.cancel(); protectionTask = nil
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor); self.keyMonitor = nil }
         if let globalKeyMonitor { NSEvent.removeMonitor(globalKeyMonitor); self.globalKeyMonitor = nil }
-        panels.forEach { $0.orderOut(nil); $0.contentView = nil }; panels.removeAll()
+        panels.forEach { $0.orderOut(nil); $0.contentView = nil }; panels.removeAll(); canvases.removeAll()
         hidden.forEach { $0.orderFrontRegardless() }; hidden.removeAll()
     }
     func capture() {
         guard running, allowed() else { return }
+        let started = CACurrentMediaTime()
         cancel(); closePreview()
         let current = generation
         hidden = (NSApp?.windows ?? []).filter { $0.isVisible && $0.level != .normal }
@@ -72,6 +84,8 @@ import UniformTypeIdentifiers
                 let frames = try await self.captureFrames()
                 guard !Task.isCancelled, current == self.generation, self.allowed() else { return }
                 self.show(frames)
+                CATransaction.flush()
+                Self.timing.info("overlay_ms \((CACurrentMediaTime() - started) * 1000, privacy: .public)")
             } catch {
                 guard current == self.generation else { return }
                 self.cancel()
@@ -85,18 +99,59 @@ import UniformTypeIdentifiers
             let panel = CapturePanel(contentRect: frame.rect, styleMask: [.borderless], backing: .buffered, defer: false)
             panel.level = .screenSaver; panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.isReleasedWhenClosed = false
-            let view = CaptureCanvas(frame: CGRect(origin: .zero, size: frame.rect.size), image: frame.image)
+            let view = CaptureCanvas(frame: CGRect(origin: .zero, size: frame.rect.size), image: frame.image, windows: frame.windows)
+            let displayID = frame.displayID
+            canvases[displayID] = view
+            view.allowed = allowed
             view.onCancel = { [weak self] in self?.cancel() }
-            view.onComplete = { [weak self] image in
-                guard let self, self.allowed() else { return }
-                self.cancel(); self.onSelection(image)
-                self.openImage(image, origin: "截图", complete: true)
+            view.onComplete = { [weak self, weak view] image in
+                guard let self, let view, self.allowed() else { return }
+                do {
+                    try ScreenshotOutput.shared.copyImage(image)
+                    self.lastSelection = (displayID, view.selection)
+                    self.cancel(); self.onSelection(image)
+                } catch { view.showNotice("无法复制图片，请重试。") }
             }
-            view.onPreview = { [weak self] image in
-                guard let self, self.allowed() else { return }
+            view.onSave = { [weak self, weak view] image in
+                guard let self, let view, self.allowed() else { return }
+                let url: URL
+                do { url = try ScreenshotOutput.shared.save(image) }
+                catch { view.showNotice("保存失败，请检查截图保存目录及写入权限。") ; return }
+                self.lastSelection = (displayID, view.selection)
+                do { try ScreenshotOutput.shared.copyPath(url); self.cancel() }
+                catch { view.showNotice("PNG 已保存，但路径复制失败。") }
+            }
+            let screenRect = frame.rect
+            view.onPin = { [weak self, weak view] image in
+                guard let self, let view, self.allowed() else { return }
+                let selection = view.selection
+                let rect = CaptureGeometry.globalScreenRect(selection, screen: screenRect)
+                // Restore hidden windows before giving the new pin keyboard focus.
+                self.cancel()
+                if PinnedImageController.shared.pin(image, at: rect) {
+                    self.lastSelection = (displayID, selection)
+                } else { self.onNotice("无法贴图，请检查安全输入状态和显示器。") }
+            }
+            view.onRestore = { [weak self, weak view] in
+                guard let self, self.allowed(), let previous = self.lastSelection,
+                      let target = self.canvases[previous.displayID],
+                      !CaptureGeometry.restored(previous.rect, bounds: target.bounds).isEmpty else {
+                    view?.showNotice("没有可恢复的选区，或原显示器已断开。")
+                    return
+                }
+                for canvas in self.canvases.values { canvas.restore(.zero) }
+                target.restore(previous.rect)
+                target.window?.makeKey(); target.window?.makeFirstResponder(target)
+            }
+            view.onPreview = { [weak self, weak view] image in
+                guard let self, let view, self.allowed() else { return }
+                self.lastSelection = (displayID, view.selection)
                 self.cancel(); self.openImage(image, origin: "截图")
             }
             panel.contentView = view; panels.append(panel)
+            panel.acceptsMouseMovedEvents = true
+            let mouse = NSEvent.mouseLocation
+            view.updateHover(at: CGPoint(x: mouse.x - frame.rect.minX, y: frame.rect.maxY - mouse.y))
             panel.orderFrontRegardless()
             if frame.rect.contains(NSEvent.mouseLocation) { panel.makeKey(); panel.makeFirstResponder(view) }
         }
