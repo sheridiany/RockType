@@ -59,23 +59,3 @@ struct ScreenshotPreviewContent: View {
         .modifier(DesignSurface()).onExitCommand { session.close() }
     }
 }
-
-/// Uses the same design tokens as the result surface, without coupling to the Gallery mock state.
-struct ScreenshotResultContent: View {
-    @Bindable var session: ScreenshotSession
-    let close: () -> Void
-    var body: some View {
-        VStack(alignment: .leading, spacing: Tokens.Space.md) {
-            HStack { Text("截图结果"); Spacer(); Text(session.engine); Button("关闭", action: close) }
-            ScrollView { Text(session.result).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
-                .frame(minHeight: Tokens.Size.row * 5, maxHeight: Tokens.Size.resultMaxHeight)
-            if let notice = session.notice { Notice(text: notice) }
-            HStack {
-                if session.busy { ProgressView().controlSize(.small); Button("取消") { session.cancel() } }
-                Spacer()
-                Button("复制") { session.copyText(session.result) }.disabled(session.result.isEmpty)
-            }
-        }.padding(Tokens.Space.md).frame(width: Tokens.Size.resultWidth)
-            .modifier(DesignSurface()).onExitCommand(perform: close)
-    }
-}

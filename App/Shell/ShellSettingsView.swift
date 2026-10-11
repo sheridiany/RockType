@@ -14,7 +14,7 @@ struct ShellSettingsView: View {
     @FocusState private var focusedSection: SettingsSection?
     @State private var keyboardNavigation = false
     var clearCurrentContent: () -> Void = {}
-    @State var section: SettingsSection = .general
+    @Binding var section: SettingsSection
     @State private var language = LanguagePackModel()
     @Environment(\.colorScheme) private var scheme
     private var p: Tokens.Palette { Tokens.palette(scheme) }

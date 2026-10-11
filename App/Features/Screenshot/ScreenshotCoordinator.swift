@@ -22,9 +22,9 @@ import UniformTypeIdentifiers
     /// Must validate the exact current connection/model against the settings connection-test result.
     var imageCapabilityVerified: (AIConnectionSettings, String) -> Bool = { _, _ in false }
     var configureVision: () -> Void = {}
-    private let operations = OperationsEnvironment()
+    var performText: (OperationRequest) -> Void = { _ in }
+    var imageCompleted: (OperationResult, OperationTemplate) -> Void = { _, _ in }
     private var previewPanel: NSPanel?
-    private var resultPanel: NSPanel?
     private var session: ScreenshotSession?
     var onSelection: (CGImage) -> Void = { _ in }
     private let captureFrames: () async throws -> [ScreenCapture.Frame]
@@ -34,8 +34,8 @@ import UniformTypeIdentifiers
          allowed: @escaping () -> Bool = { SecureInput.status() == .allowed }) {
         self.captureFrames = captureFrames; self.allowed = allowed
     }
-    func start() { running = true; operations.start() }
-    func stop() { running = false; cancel(); closePreview(); operations.stop() }
+    func start() { running = true }
+    func stop() { running = false; cancel(); closePreview() }
     func cancel() {
         generation += 1
         importTask?.cancel(); importTask = nil; importProgress?.cancel(); importProgress = nil
@@ -156,19 +156,18 @@ import UniformTypeIdentifiers
     }
     func closePreview() {
         let old = session; session = nil; old?.close()
-        operations.clearCurrentContent()
         previewPanel?.orderOut(nil); previewPanel?.contentView = nil; previewPanel = nil
-        resultPanel?.orderOut(nil); resultPanel?.contentView = nil; resultPanel = nil
     }
     func openImage(_ image: CGImage, origin: String, complete: Bool = false) {
         guard running, allowed() else { return }
         closePreview()
         let value = ScreenshotSession(image: image, origin: origin, settings: readSettings,
-            verified: imageCapabilityVerified, runner: operations.makeRunner(connectionID: readSettings().ai.id), allowed: allowed)
+            verified: imageCapabilityVerified, allowed: allowed)
         session = value
         value.onClose = { [weak self] in self?.closePreview() }
         value.configureVision = configureVision
-        value.onResult = { [weak self] in self?.showResult() }
+        value.performText = performText
+        value.imageCompleted = imageCompleted
         value.start()
         if complete { value.copyImage(closeAfter: true); return }
         let panel = CapturePanel(contentRect: CGRect(x: 0, y: 0, width: Tokens.Size.resultMaxHeight, height: ScreenshotPreviewContent.height),
@@ -176,18 +175,6 @@ import UniformTypeIdentifiers
         panel.level = .floating; panel.isReleasedWhenClosed = false
         panel.contentView = NSHostingView(rootView: ImagePreviewView(session: value))
         panel.center(); previewPanel = panel; panel.orderFrontRegardless()
-    }
-    private func showResult() {
-        guard let session else { return }
-        resultPanel?.orderOut(nil)
-        let panel = CapturePanel(contentRect: CGRect(x: 0, y: 0, width: 520, height: 400),
-            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-        panel.level = .floating; panel.isReleasedWhenClosed = false
-        panel.contentView = NSHostingView(rootView: ScreenshotResultContent(session: session, close: { [weak self] in
-            self?.session?.cancel(); self?.resultPanel?.orderOut(nil)
-            self?.resultPanel?.contentView = nil; self?.resultPanel = nil
-        }))
-        panel.center(); resultPanel = panel; panel.orderFrontRegardless()
     }
 
 }

@@ -31,6 +31,7 @@
 | D-3 | 完成/保存、OCR、翻译、图片理解 | pi-xpc | 已实现，待集成与人工验收 |
 | D-4 | 剪贴板图片与拖入图片入口 | pi-xpc | 已实现，待菜单栏集成与人工验收 |
 | D-3a | 截图 OCR 独立取词方式与显示 | pi-xpc | 已完成，自动化通过 |
+| D-4a | 主 App 接线、能力门禁、统一结果与最近结果 | pi-platform | 代码集成完成，待完整验证与人工验收 |
 | D-5 | 验收 | Claude + 用户 | 未开始 |
 
 **文件所有权**：`App/Features/Screenshot/`、`App/Surfaces/` 中截图编辑器与图片预览视图（只做接线需要的最小调整，保持 Gallery 可渲染）、`App/Shell/Hotkeys/` 中截图动作一处、`Platform/` 补充（捕获）、对应 `Tests/`。`AppDelegate` 接线由 Claude 集成（提供 `start()`/`stop()`）。
@@ -84,3 +85,11 @@
 - 请 Claude 确认外部图片导入的 40 MB / 6400 万像素上限；当前超限明确提示，不缩小或静默截断。
 - 已按 Claude 决定新增 `ContentSnapshot.CaptureMethod.screenshotOCR`，截图编辑后文字的翻译/总结使用此类型；通用结果浮窗显示“截图 OCR”。本次仅补充枚举显示分支，截图结果并入通用浮窗的接线等待后续通知。
 - 图片理解走现有 AIClient 的非流式图片接口；OCR 文字操作走既有 OperationRunner 流式接口。运行态结果浮窗使用相同 Tokens，尚未与并行开发的通用结果窗口控制器合并；如需共用控制器，由 Claude 集成。
+
+### M4 集成步骤一（pi-platform，2026-10-11）
+
+- AppDelegate 持有截图协调器，接 start/stop、快捷键与菜单截图、图片导入、清除内容、权限说明与 AI 设置定位。图片测试门禁刷新当前连接，核对测试模型及钥匙串密钥 SHA-256 摘要；配置、密钥、读取权限变化使既有测试失效。摘要仅在内存，不记录密钥。
+- 删除截图独立结果窗与独立 OperationsEnvironment。OCR 翻译/总结交给共享 SelectionOperationsController；图片解释期间在预览显示状态和取消，成功后进入通用 ResultWindow / RecentResults。关闭预览不清除共享历史；隐私开关与清除当前内容继续由共享控制器处理。
+- 图片不进入最近结果，追问只使用已完成的文字解释，界面原文说明此限制；最近结果重开保持相同模板与保守的“仅复制”来源行为。
+- `scripts/test.sh` 退出 0：35 XCTest + 124 Swift Testing，以及 Rime、快捷键、权限与标识扫描通过。新增测试覆盖配置/模型/密钥变化、测试期间换密钥、钥匙串读取失败、OCR 修正文本、统一浮窗、图片解释追问、重开、动态隐私与清除。日志 `/tmp/roarkt-m4-tests.log`。
+- 完整构建、Gallery、主 App 启动冒烟尚未运行；真实屏幕录制权限、快捷键、多屏、拖放、剪贴板、真实端点、焦点/键盘与设计验收待人工验证。
