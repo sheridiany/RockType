@@ -60,7 +60,7 @@
 				<key>tsInputModeScriptKey</key>
 				<string>smUnicodeScript</string>
 				<key>tsInputModeLocalizedNameKey</key>
-				<string>RockType Pinyin</string>
+				<string>RockType</string>
 				<key>RoarkTSchemaID</key>
 				<string>roarkt</string>
 			</dict>

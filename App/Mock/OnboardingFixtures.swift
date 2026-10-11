@@ -47,7 +47,7 @@ enum OnboardingStep: String, CaseIterable, Identifiable {
     }
     var success: String {
         switch self {
-        case .input: "试打验证完成 · RockType Pinyin已就绪。"
+        case .input: "试打验证完成 · RockType已就绪。"
         case .language: "简体中文 ↔ 英文语言包已就绪。"
         case .permissions: "所选的辅助功能、屏幕录制、麦克风权限已授权。"
         case .voice: "模型下载与校验完成，下次按住 Fn 即可录音。"

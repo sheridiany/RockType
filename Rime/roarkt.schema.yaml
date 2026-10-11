@@ -3,7 +3,7 @@
 
 schema:
   schema_id: roarkt
-  name: RockType Pinyin
+  name: RockType
   version: "0.3.0"
   author:
     - RoarkT contributors

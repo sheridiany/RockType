@@ -44,4 +44,4 @@ fi
 install -m 644 "$temporary" "$agent"
 launchctl bootstrap "$domain" "$agent"
 "$registrar" register "$app"
-print 'Installed and registered RockType Pinyin / RockType Shuangpin. Add and select them in System Settings.'
+print 'Installed and registered RockType / RockType Shuangpin. Add and select them in System Settings.'

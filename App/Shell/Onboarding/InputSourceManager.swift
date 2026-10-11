@@ -93,7 +93,7 @@ final class InputSourceManager {
         cancel()
         refresh()
         guard let sourceID = snapshot.selectedRoarkTID else {
-            message = "请先在系统输入菜单中选中 RockType Pinyin 或 RockType Shuangpin。"
+            message = "请先在系统输入菜单中选中 RockType 或 RockType Shuangpin。"
             return
         }
         let id = attempt
