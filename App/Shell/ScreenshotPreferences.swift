@@ -16,13 +16,14 @@ enum ScreenshotStylePreferences {
 }
 
 struct ScreenshotStyleSettings: View {
+    @Environment(\.colorScheme) private var scheme
     @Binding var settings: ScreenshotSettings
     @State var expandedTool: ScreenshotTool? = nil
     var body: some View {
         DesignSectionTitle(title: "标注默认样式")
         DesignCard {
             Text("每种工具单独记忆；截图工具栏中的调整也会更新这里。下次截图生效。")
-                .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(.secondary)
+                .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(Tokens.palette(scheme).secondary)
                 .fixedSize(horizontal: false, vertical: true)
             ForEach(ScreenshotTool.allCases.filter { $0 != .eraser }, id: \.rawValue) { tool in
                 DisclosureGroup(tool.title, isExpanded: Binding(get: { expandedTool == tool },
