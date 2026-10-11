@@ -21,14 +21,14 @@ for entry in ./*(DN); do
     scan_roots+=("$entry")
   fi
 done
-if grep -rIl -E 'RoType|洛克|Luoke|im\.roarkai|RoarkTools' \
+if grep -rIl -E 'RoType|洛克输入法|Luoke|im\.roarkai|RoarkTools' \
     --exclude-dir=.git --exclude-dir=.build --exclude-dir=dist --exclude-dir=docs --exclude-dir=specs \
     --exclude='THIRD_PARTY_NOTICES*' --exclude='LICENSE*' --exclude='AGENTS.md' --exclude='README.md' \
     --exclude='test.sh' "${scan_roots[@]}" ; then
   print -u2 "Legacy identifiers found (see files above)."
   exit 1
 fi
-if grep -ri -E 'rotype|洛克|luoke|im\.roarkai|RoarkTools' Rime/; then
+if grep -ri -E 'rotype|洛克输入法|luoke|im\.roarkai|RoarkTools' Rime/; then
   print -u2 "Legacy identifiers found in Rime resources."
   exit 1
 fi
