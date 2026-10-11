@@ -30,6 +30,7 @@ let package = Package(
             path: "Services/TranslationService"
         ),
         .testTarget(name: "RoarkTPlatformTests", dependencies: ["RoarkTPlatform"], path: "Tests/PlatformTests", resources: [.copy("Fixtures")]),
+        .testTarget(name: "RoarkTSurfaceTests", dependencies: ["RoarkTApp", "RoarkTCore"], path: "Tests/SurfaceTests"),
         .testTarget(name: "RoarkTSettingsStoreTests", dependencies: ["RoarkTApp", "RoarkTCore"], path: "Tests/SettingsStoreTests"),
         .testTarget(name: "RoarkTOperationTests", dependencies: ["RoarkTCore", "RoarkTApp"], path: "Tests/OperationTests"),
         .testTarget(name: "RoarkTCoreTests", dependencies: ["RoarkTCore"], path: "Tests/CoreTests"),
