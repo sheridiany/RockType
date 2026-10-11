@@ -24,31 +24,14 @@ protocol SystemTranslationSession: AnyObject {
 
 @available(macOS 26.0, *)
 @MainActor
-private final class AppleTranslationSession: SystemTranslationSession {
-    private let session: TranslationSession
-
-    init(direction: DynamicTranslationDirection) {
-        let chinese = Locale.Language(identifier: "zh-Hans")
-        let english = Locale.Language(identifier: "en")
-        session = direction == .chineseToEnglish
-            ? TranslationSession(installedSource: chinese, target: english)
-            : TranslationSession(installedSource: english, target: chinese)
-    }
-
-    func translate(_ text: String) async throws -> String {
-        try await session.translate(text).targetText
-    }
-}
-
-@available(macOS 26.0, *)
-@MainActor
 final class AppleDynamicTranslator: DynamicTextTranslating {
     private let makeSession: (DynamicTranslationDirection) -> any SystemTranslationSession
     private var chineseToEnglish: (any SystemTranslationSession)?
     private var englishToChinese: (any SystemTranslationSession)?
 
     init(makeSession: @escaping (DynamicTranslationDirection) -> any SystemTranslationSession = {
-        AppleTranslationSession(direction: $0)
+        AppleTranslationSession(source: Locale.Language(identifier: $0 == .chineseToEnglish ? "zh-Hans" : "en"),
+                                target: Locale.Language(identifier: $0 == .chineseToEnglish ? "en" : "zh-Hans"))
     }) {
         self.makeSession = makeSession
     }
