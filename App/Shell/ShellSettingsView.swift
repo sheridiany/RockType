@@ -9,6 +9,8 @@ struct ShellSettingsView: View {
     let sections: ShellSettingsSections
     let persistenceMessage: String
     let exportDiagnostics: () -> Void
+    @FocusState private var focusedSection: SettingsSection?
+    @State private var keyboardNavigation = false
     @State var section: SettingsSection = .general
     @State private var language = LanguagePackModel()
     @State private var templateID = "translate"
@@ -30,7 +32,16 @@ struct ShellSettingsView: View {
                             .foregroundStyle(section == item ? p.accent : p.secondary)
                             .background(section == item ? p.selected : .clear,
                                         in: RoundedRectangle(cornerRadius: Tokens.Radius.control))
-                    }.buttonStyle(.plain).accessibilityAddTraits(section == item ? .isSelected : [])
+                    }.buttonStyle(.plain)
+                        .focused($focusedSection, equals: item)
+                        .focusEffectDisabled()
+                        .overlay {
+                            RoundedRectangle(cornerRadius: Tokens.Radius.control)
+                                .stroke(keyboardNavigation && focusedSection == item ? p.focus : .clear,
+                                        lineWidth: Tokens.Size.focusRing)
+                                .allowsHitTesting(false)
+                        }
+                        .accessibilityAddTraits(section == item ? .isSelected : [])
                 }
                 Spacer()
             }.padding(Tokens.Space.md).frame(width: Tokens.U4.sidebarWidth)
@@ -49,6 +60,13 @@ struct ShellSettingsView: View {
         }.font(Tokens.Typography.font()).foregroundStyle(p.foreground).tint(p.accent)
             .frame(minWidth: Tokens.Size.settingsWidth, minHeight: Tokens.Size.settingsHeight)
             .background(p.background)
+            .background(SettingsSidebarInteraction { keyboard in
+                keyboardNavigation = keyboard
+                if !keyboard { focusedSection = nil }
+            })
+            .onChange(of: focusedSection) { _, focused in
+                if keyboardNavigation, let focused { section = focused }
+            }
     }
 
     @ViewBuilder private var content: some View {

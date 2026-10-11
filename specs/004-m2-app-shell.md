@@ -122,6 +122,12 @@ Settings 模型已提交：f87c60a。`Core/Settings/AppSettings.swift` 为公共
 
 ## 问题
 
+### S5 验收后：设置侧栏焦点（agent/ui）
+
+- **已修复（待 Claude 验收）**：侧栏原先分别管理选中项与系统按钮焦点，鼠标选中“截图”后焦点仍停在其他项。现在仅在本设置窗口收到 Tab/Shift-Tab 后显示焦点环，Tab 聚焦同步选中项；鼠标操作清除侧栏焦点，不影响正文表单的键盘导航。没有修改 Gallery 的纯展示视图。
+- 验证：原生 SwiftUI/AppKit 合成配置窗口，发送 Tab → 鼠标点“截图”，修复前断言失败（选中截图，firstResponder 位于另一侧栏行）；修复后浅深色均通过，firstResponder 不再留在侧栏。再发送 Tab，焦点与“通用”选择一致、环可见；两主题截图已检查。临时复现源与截图：`dist/followup-focus/`（不提交，不含用户数据）。当前环境系统窗口截屏接口不可用，采用测试窗口自身的 NSHostingView 绘制截图并检查真实 firstResponder；未宣称系统截图验收。
+- `scripts/test.sh` 通过；`scripts/render-gallery.sh` 通过，208 张 PNG 与修复前逐文件 SHA-256 完全相同。日志 `/tmp/roarkt-followup-focus-tests.log`、`/tmp/roarkt-followup-focus-gallery.log`。完整构建与后续设置同步任务一起验证。VoiceOver 与 macOS 14 真机仍待人工走查。
+
 - Claude 集成时需在负责输入法的工作树补齐子模块后重跑完整 `scripts/build.sh`；本工作树主 App/翻译服务已签名，不能代替输入法构建验收。
 - 当前 AI Base URL 仅允许 HTTPS（且不允许 userinfo/query/fragment），阻止密钥经明文发送；若产品要支持本机 HTTP 兼容端点，请决定是否只放行 loopback 并另行补充测试。
 - 同一 schemaVersion 当前严格完整解码；不支持的 schema 或缺字段按损坏配置保留副本并回落默认值。后续新增设置字段时需明确默认解码策略；不涉及旧产品迁移。
