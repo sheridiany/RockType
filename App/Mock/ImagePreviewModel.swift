@@ -1,3 +1,4 @@
+#if DEBUG
 struct ImagePreviewModel: Sendable {
     enum State: String, CaseIterable, Sendable {
         case preview, ocrRunning, ocrDone, ocrEmpty, noVision, noPermission, clipboard, drop
@@ -30,3 +31,5 @@ struct ImagePreviewModel: Sendable {
             recognizedText: $0 == .ocrDone ? SurfaceSampleText.ocr : ""))
     }
 }
+
+#endif

@@ -1,3 +1,4 @@
+#if DEBUG
 import SwiftUI
 
 struct MenuBarPanelView: View {
@@ -86,3 +87,5 @@ struct MenuBarPanelView: View {
         .modifier(DesignSurface()).accessibilityLabel("菜单栏面板")
     }
 }
+
+#endif

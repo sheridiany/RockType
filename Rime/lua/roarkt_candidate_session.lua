@@ -1,6 +1,6 @@
 local M = {}
 
-local function snapshot(context)
+local function snapshot(context, ai)
   if not context:is_composing() then return nil end
   local segment = context.composition:back()
   if not segment then return nil end
@@ -22,22 +22,25 @@ local function snapshot(context)
       end
     end
   end
+  if ai and not complete_prefix then return nil end
   local whole = candidate._end == #raw and complete_prefix
   return {
     raw = raw,
-    source = (whole and table.concat(prefix) or "") .. candidate.text,
+    source = ((whole or ai) and table.concat(prefix) or "") .. candidate.text,
     identity = candidate._start .. ":" .. candidate._end .. ":" .. segment.selected_index,
-    scope = whole and "whole" or "segment",
+    scope = whole and "whole" or (ai and "prefix" or "segment"),
     segment = segment,
     candidate = candidate,
     learned = learned and true or false,
   }
 end
 
-local function publish(context, value)
-  context:set_property("roarkt_panel_can_forget", value and value.learned and "1" or "0")
+local function publish(context, value, namespace)
+  if namespace == "roarkt_panel_" then
+    context:set_property("roarkt_panel_can_forget", value and value.learned and "1" or "0")
+  end
   for _, field in ipairs({"raw", "source", "identity", "scope"}) do
-    context:set_property("roarkt_panel_" .. field, value and value[field] or "")
+    context:set_property(namespace .. field, value and value[field] or "")
   end
 end
 
@@ -46,7 +49,8 @@ function M.func(key, env)
   if context:get_property("roarkt_translation_presentation") ~= "panel" then return 2 end
   local repr = key:repr()
   if repr == "F19" then
-    publish(context, snapshot(context))
+    publish(context, snapshot(context), "roarkt_panel_")
+    publish(context, snapshot(context, true), "roarkt_ai_")
     return 1
   end
   if repr ~= "F20" then return 2 end
@@ -54,13 +58,21 @@ function M.func(key, env)
   local text = context:get_property("roarkt_panel_commit_text")
   context:set_property("roarkt_panel_commit_text", "")
   context:set_property("roarkt_panel_committed", "")
-  local current = snapshot(context)
+  local ai = context:get_property("roarkt_panel_commit_ai") == "1"
+  context:set_property("roarkt_panel_commit_ai", "")
+  local current = snapshot(context, ai)
   if not current or not text or text == "" then return 1 end
   for _, field in ipairs({"raw", "source", "identity", "scope"}) do
     if context:get_property("roarkt_panel_commit_" .. field) ~= current[field] then return 1 end
   end
 
-  if current.scope == "whole" then
+  if ai then
+    -- Replace exactly the confirmed prefix + selected candidate; keep unconverted suffix.
+    local remaining = current.raw:sub(current.candidate._end + 1)
+    env.engine:commit_text(text)
+    context:clear()
+    if remaining ~= "" then context:push_input(remaining) end
+  elseif current.scope == "whole" then
     env.engine:commit_text(text)
     context:clear()
   else

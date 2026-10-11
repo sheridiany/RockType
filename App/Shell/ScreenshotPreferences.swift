@@ -19,8 +19,8 @@ struct ScreenshotStyleSettings: View {
     @Binding var settings: ScreenshotSettings
     @State var expandedTool: ScreenshotTool? = nil
     var body: some View {
-        U4SectionTitle(title: "标注默认样式")
-        U4Card {
+        DesignSectionTitle(title: "标注默认样式")
+        DesignCard {
             Text("每种工具单独记忆；截图工具栏中的调整也会更新这里。下次截图生效。")
                 .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

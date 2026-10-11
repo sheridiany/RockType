@@ -80,8 +80,8 @@ struct HotkeySettingsView: View {
     @Binding var appSettings: AppSettings
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
-            U4SectionTitle(title: "全局快捷键")
-            U4Card {
+            DesignSectionTitle(title: "全局快捷键")
+            DesignCard {
                 ForEach(HotkeyCenter.Action.allCases) { action in
                     VStack(alignment: .leading, spacing: Tokens.Space.sm) {
                         HStack {
@@ -108,11 +108,11 @@ struct HotkeySettingsView: View {
                                 }).frame(height: 1)
                         }
                     }
-                    if action != HotkeyCenter.Action.allCases.last { U4Rule() }
+                    if action != HotkeyCenter.Action.allCases.last { DesignRule() }
                 }
                 Button("重试注册") { center.retry() }.buttonStyle(DesignButtonStyle(variant: .ghost))
             }
-            U4Card { InputAISettingsSection(settings: $appSettings) }
+            DesignCard { InputAISettingsSection(settings: $appSettings) }
             Notice(text: "Fn 也可能触发系统听写或切换输入源。若有冲突，请前往系统键盘设置调整 Fn 行为。")
             if let notice = center.notice { Notice(text: notice, tone: .warn) }
             ShortcutReference()

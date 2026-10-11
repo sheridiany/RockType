@@ -1,3 +1,4 @@
+#if DEBUG
 import SwiftUI
 
 /// A view of supplied lifecycle data, never a microphone or a second recorder.
@@ -38,7 +39,7 @@ struct VoiceHUDView: View {
                     .buttonStyle(.plain).accessibilityLabel(model.state == .recording ? "取消录音" : "关闭语音提示")
             }.frame(minHeight: Tokens.Size.row)
             if hasDetail && (isExpanded) {
-                U4Rule()
+                DesignRule()
                 Text(model.detail).font(Tokens.Typography.font(Tokens.Typography.meta))
                     .foregroundStyle(p.secondary).fixedSize(horizontal: false, vertical: true)
                 if model.state == .missingModel {
@@ -75,3 +76,5 @@ struct VoiceHUDDemo: View {
         }
     }
 }
+
+#endif

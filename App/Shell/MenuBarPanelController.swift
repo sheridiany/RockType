@@ -114,7 +114,7 @@ struct ShellMenuBarPanel: View {
                 .padding(Tokens.Space.md).frame(maxWidth: .infinity, alignment: .leading)
                 .background(p.card, in: RoundedRectangle(cornerRadius: Tokens.Radius.card))
             HStack {
-                U4SectionTitle(title: "最近结果")
+                DesignSectionTitle(title: "最近结果")
                 Spacer()
                 Text("\(recent.count) / 10").monospacedDigit()
                     .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(p.secondary)
@@ -149,7 +149,7 @@ struct ShellMenuBarPanel: View {
                 Button("退出贴图鼠标穿透", action: exitPinPassthrough)
                     .buttonStyle(DesignButtonStyle(variant: .secondary))
             }
-            U4Rule()
+            DesignRule()
             Label(aiStatus, systemImage: "sparkles")
                 .font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(p.secondary)
                 .fixedSize(horizontal: false, vertical: true)

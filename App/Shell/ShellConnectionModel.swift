@@ -230,8 +230,8 @@ struct ShellConnectionView: View {
             if !model.configured {
                 Notice(text: "填写服务地址、默认模型并设置密钥，即可开始使用 AI。未配置时，中文输入与本地 OCR 仍可使用。")
             }
-            U4SectionTitle(title: "服务商连接")
-            U4Card {
+            DesignSectionTitle(title: "服务商连接")
+            DesignCard {
                 field("服务名称", $settings.name)
                 field("Base URL", $settings.baseURL)
                 HStack {
@@ -240,20 +240,20 @@ struct ShellConnectionView: View {
                     if model.hasKey { Button("删除") { model.deleteKey() } }
                 }
                 field("默认模型", $settings.defaultModel)
-                U4Rule()
+                DesignRule()
                 SettingsControlRow("默认模型支持图片") {
-                    U4Toggle(title: "默认模型支持图片", isOn: $settings.defaultModelSupportsImages)
+                    SettingsToggle(title: "默认模型支持图片", isOn: $settings.defaultModelSupportsImages)
                 }
                 field("视觉模型（可选）", Binding(get: { settings.visionModel ?? "" }, set: { settings.visionModel = $0.isEmpty ? nil : $0 }))
             }
             Text("OpenAI Chat Completions 兼容接口 · 测试会发送固定样本文字与图片。")
                 .font(Tokens.Typography.font(Tokens.Typography.caption))
             HStack {
-                U4SectionTitle(title: "能力验证"); Spacer()
+                DesignSectionTitle(title: "能力验证"); Spacer()
                 if model.testing { Button("取消测试") { model.cancel() } }
                 else { Button("测试连接") { model.test() }.disabled(!model.configured) }
             }
-            U4Card {
+            DesignCard {
                 ForEach(Array(["文字", "流式", "图片", "取消"].enumerated()), id: \.offset) { index, title in
                     HStack(alignment: .firstTextBaseline) {
                         Text(title).frame(width: 44, alignment: .leading)
@@ -264,7 +264,7 @@ struct ShellConnectionView: View {
                                 model.results[index] == "可用" ? p.ok : p.secondary)
                             .multilineTextAlignment(.trailing)
                     }
-                    if index < 3 { U4Rule() }
+                    if index < 3 { DesignRule() }
                 }
             }
             if !model.message.isEmpty {

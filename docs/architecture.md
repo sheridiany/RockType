@@ -1,6 +1,6 @@
 # RockType 技术架构
 
-需求见 [PRD](prd.md)，决策见 [ADR-0001](adr/0001-swift-merged-product.md)、[ADR-0002](adr/0002-identifiers-license-shortcuts.md)。本文按 2026-10-11 SPEC-014 R2-ARCH 第一阶段的代码现状更新；内部模块及标识符仍使用 RoarkT。后续整理事项见[架构审计](architecture-audit-2026-10.md)，不能将规划接口视为已完成功能。
+需求见 [PRD](prd.md)，决策见 [ADR-0001](adr/0001-swift-merged-product.md)、[ADR-0002](adr/0002-identifiers-license-shortcuts.md)。本文按 2026-10-11 SPEC-014 R3-IME 的代码现状更新；内部模块及标识符仍使用 RoarkT。后续整理事项见[架构审计](architecture-audit-2026-10.md)，不能将规划接口视为已完成功能。
 
 ## 进程与请求路径
 
@@ -15,9 +15,9 @@
 
 当前翻译路由分三个位置实现：
 
-- **候选翻译**：输入法本地精确缓存与技术词保护即时返回；其他请求经输入法 80ms 防抖和服务 120ms 防抖，再调用 macOS 26 Apple Translation。服务不可用时由输入法本地静态词条兜底。缓存为有界、短期、内存缓存；Secure Input 清空。
+- **候选翻译**：输入法本地精确缓存与技术词保护即时返回；其他请求只经输入法 80ms 防抖，服务收到后直接调用 macOS 26 Apple Translation。服务不可用时由输入法本地静态词条兜底。缓存为有界、短期、内存缓存；Secure Input 清空。
 - **划词/截图文字翻译**：App 的 `DefaultOperationRunner` 经 `TextTranslationXPCClient` 先请求 Apple 离线翻译，不可用时按配置在 App 内调用 AI。结果与取消归当前操作会话。服务不是所有 AI/fallback 的统一执行位置。
-- **输入法内显式 AI**：Shared 协议与服务的配置/改写接口已实现；`InputAIController` 生命周期尚未接入 AppDelegate，IMK 触发和上屏 E-3 未完成。状态见 [SPEC-008](../specs/008-m6-input-ai.md)，不能宣称端到端可用。
+- **输入法内显式 AI**：`InputAIController` 已接入 AppDelegate 的 start/stop。启用输入法 AI 后，默认 `⌥Tab` 循环改写/润色/翻译，对已确认前缀与当前高亮候选发送显式请求；AI 与普通翻译共享 session/generation，输入变化、Esc、失焦或保护状态作废，Tab 上屏。AI 不走普通翻译缓存/防抖，部分候选提交保留未转换后缀。自动化结果见 [R3-IME](../specs/evidence/014-R3-IME.md)，真实安装试打仍待人工验证。
 
 macOS 26 专属的无界面 `TranslationSession` 通过 availability 隔离；最低运行系统仍为 macOS 14。旧系统的候选静态词条、App AI 路径与本地 OCR 不依赖该 API。
 
@@ -29,14 +29,16 @@ macOS 26 专属的无界面 `TranslationSession` 通过 availability 隔离；�
 | `Core` | `RoarkTCore` | MIT | 标识符、设置/快捷键、翻译校验、操作会话与路由、AI 客户端、语音模型下载/校验等 Foundation 层能力 |
 | `Platform` | `RoarkTPlatform` | MIT | AX 取词、剪贴板、Vision OCR、截图、钥匙串、权限、全局快捷键、Fn、屏幕坐标、Secure Input |
 | `App` | `RoarkTApp` → `RockType.app` | MIT | `AppDelegate` 组装；`Shell` 外壳；`Features` 真实功能；`DesignSystem` 组件 |
-| `App/Surfaces`、`App/Mock`、`App/Gallery` | 目前仍属于 `RoarkTApp` | MIT | 原型、样本、Gallery；Surfaces 中仍有正式预览包装依赖，Mock 中仍有正式设置导航类型，不能直接排除目录 |
+| `App/Surfaces`、`App/Mock`、`App/Gallery` | `RoarkTApp`，开发代码以 `DEBUG` 隔离 | MIT | Mock/Gallery 与原型视图只在 debug 编译；Surfaces 的正式操作设置和 `ImagePreviewView(session:)` 仍在 release |
 | `Services/TranslationService` | 根包的 `RoarkTTranslationService` | MIT | 签名鉴权、方法角色限制、翻译/AI 协调、端点登记 |
 | `Services/VoiceWorker` | 独立 SPM 包 → `RoarkTVoiceWorker.xpc` | MIT（第三方依各自许可） | MLX 推理；隔离模型依赖、内存与取消退出 |
 | `InputMethod` | `Squirrel.xcodeproj` → `RockType Input.app` | GPL v3（子模块依各自许可） | Squirrel 修改及 librime/plum；不被 MIT 产品 target import 或链接 |
 | `Rime` | 资源 | 按来源 | 方案、词典、Lua；个人词表与学习库在独立用户目录 |
 | `Installer`、`scripts` | 构建、测试、pkg 与安装脚本 | MIT | 组装、签名、注册工具、LaunchAgent 配置；构建不等于安装 |
 
-根 App target 目前只排除 `Info.plist`，release 仍编入 Mock/Gallery，命令行 Gallery 入口也未受 DEBUG 限制。这是 R2-ARCH 后续阶段的明确待办，见审计 A02–A04。Features 已包含功能视图与控制器；后续按真实功能收拢，跨功能无业务组件归 DesignSystem，Gallery 原型跟随其目标。
+R4-UI 为 Mock/Gallery、依赖样本的原型视图和全部 Gallery 启动入口建立完整 `#if DEBUG` 边界。SPM 仍发现这些源文件，但 release 不编译其中的声明；`scripts/build.sh` 用 `nm` 检查正式 App 没有 Gallery/fixtures 符号。`scripts/render-gallery.sh` 显式构建 debug，开发测试可直接调用同一个 GalleryRenderer。
+
+正式 `SettingsSection` 在 `App/Shell/SettingsSection.swift`；正式 `ImagePreviewView(session:)` 只包装 `ScreenshotPreviewContent`，不初始化样本；`ImagePreviewPrototype` 仅在 debug 使用。设计组件按职责命名于 `DesignPrimitives.swift`，短暂浮窗通知由 `TransientNoticeController` 管理。Features 已包含功能视图与控制器；跨功能无业务组件归 DesignSystem。
 
 主 App/服务没有 InputMethod 源码或 librime 链接依赖。输入法 Xcode target 当前直接编译部分 MIT 源文件：Identifiers、Settings/Shortcuts、翻译值协议、VoiceCommitTicket/VoiceInsertionPolicy。此事实与 AGENTS“共享只能通过协议声明”的字面范围尚需主控对齐，见审计 A06；不授权把任何 GPL 实现搬到 MIT 目录。进程间请求仍只能用 XPC。
 
@@ -56,7 +58,7 @@ macOS 26 专属的无界面 `TranslationSession` 通过 availability 隔离；�
 
 | 接口 | 允许调用方 |
 | --- | --- |
-| `translateCandidate` / `rewriteCandidate` / `cancel` | 输入法 → 翻译服务；rewrite 的 IMK 入口尚待接线 |
+| `translateCandidate` / `rewriteCandidate` / `cancel` | 输入法 → 翻译服务；rewrite 仅显式触发 |
 | `translateText` / `cancelText` / `configureAI` / `ping` | 主 App → 翻译服务 |
 | `recordControllerInput` / `controllerInputGeneration` | 输入法写计数 / 主 App 读计数；不传试打原文 |
 | `registerDictationEndpoint` / `dictationEndpoint` | 输入法登记匿名 listener endpoint / 主 App 发现 |
@@ -106,7 +108,7 @@ Swift 唯一来源为 `Core/Identifiers.swift`；ObjC 镜像为 `Shared/XPCProto
 | 总结选区 | `⌃⌥S` |
 | 中英切换 | 轻按 Shift（输入法内） |
 | 译文上屏 | Tab（输入法内） |
-| 输入法内 AI | 设置/规格默认 `⌥Tab`；IMK 触发实现尚未完成 |
+| 输入法内 AI | `⌥Tab` 循环改写 → 润色 → 翻译；需在设置中启用，可改键 |
 
 ## 构建、测试与发布
 

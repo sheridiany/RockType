@@ -1,3 +1,4 @@
+#if DEBUG
 struct ScreenshotEditorModel: Sendable {
     enum State: String, CaseIterable, Sendable {
         case selecting, selected, annotating, ocrRunning, ocrDone
@@ -51,3 +52,5 @@ struct ScreenshotEditorModel: Sendable {
             recognizedText: $0 == .ocrDone ? SurfaceSampleText.ocr : nil))
     }
 }
+
+#endif

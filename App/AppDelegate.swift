@@ -5,7 +5,9 @@ import RoarkTCore
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
+    #if DEBUG
     private let gallery = GalleryWindowController()
+    #endif
     private let store = SettingsStore.shared
     private let clock = MenuBarClock()
     private let login = LoginItemController()
@@ -13,15 +15,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let panel = MenuBarPanelController()
     private let diagnostics = DiagnosticExportController()
     private let permissions = PermissionCenter()
-    private let comingSoon = ComingSoonController()
+    private let noticeController = TransientNoticeController()
+    private lazy var inputAI = InputAIController(store: store)
     private lazy var voice = VoiceInputController(store: store)
     private lazy var screenshot: ScreenshotCoordinator = {
         let coordinator = ScreenshotCoordinator()
         coordinator.readSettings = { [unowned self] in self.store.settings }
-        coordinator.onNotice = { [weak self] in self?.comingSoon.show(message: $0) }
+        coordinator.onNotice = { [weak self] in self?.noticeController.show(message: $0) }
         coordinator.onPermissionRequired = { [weak self] in
             self?.panel.close()
-            self?.comingSoon.show(message: "截图需要屏幕录制权限。授权后请重新按下截图快捷键。")
+            self?.noticeController.show(message: "截图需要屏幕录制权限。授权后请重新按下截图快捷键。")
             self?.permissions.openSettings(.screenRecording)
         }
         coordinator.configureVision = { [weak self] in
@@ -43,18 +46,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var operations = SelectionOperationsController(
         environment: operationsEnvironment, settings: { [unowned self] in self.store.settings },
         aiConfigured: { [unowned self] in AIProviderAvailability.configured(self.store.settings) },
-        notice: { [weak self] in self?.comingSoon.show(message: $0) })
+        notice: { [weak self] in self?.noticeController.show(message: $0) })
     private lazy var selectionController = SelectionController(
         settings: { [unowned self] in self.store.settings },
         perform: { [weak self] request, source, rect in self?.operations.perform(request, source: source, toolbarRect: rect) },
         search: { [weak self] in self?.operations.search($0, settings: $1) },
-        notice: { [weak self] in self?.comingSoon.show(message: $0) },
+        notice: { [weak self] in self?.noticeController.show(message: $0) },
         aiConfigured: { [unowned self] in AIProviderAvailability.configured(self.store.settings) })
     private lazy var hotkeys = HotkeyCenter(
         read: { [unowned self] in self.store.settings.shortcuts },
         write: { [unowned self] in self.store.settings.shortcuts = $0 },
         showSettings: { [weak self] in self?.showSettings() },
-        comingSoon: { [weak self] in self?.comingSoon.show($0) },
+        unavailableAction: { [weak self] in self?.noticeController.show($0) },
         selection: { [weak self] in self?.selectionController.trigger($0) },
         voiceListening: { [weak self] enabled in
             guard let self else { return false }
@@ -74,7 +77,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // The design gallery has no production listeners, preference writes or permission requests.
+    #if DEBUG
         if CommandLine.arguments.contains("--gallery") { gallery.show(); return }
+    #endif
         updateStatusItemVisibility()
         clock.didRefresh = { [weak self] in self?.refreshStatus() }
         NotificationCenter.default.addObserver(self, selector: #selector(settingsChanged), name: SettingsStore.didChange, object: store)
@@ -90,6 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 status: store.persistenceError == nil ? .succeeded : .failed,
                 failure: store.persistenceError == nil ? nil : .storage))
         }
+        inputAI.start()
         permissions.start()
         operationsEnvironment.start()
         selectionController.start()
@@ -101,13 +107,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+    #if DEBUG
         if CommandLine.arguments.contains("--gallery") { gallery.show(); return false }
+    #endif
         showSettings()
         return false
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+    #if DEBUG
         if CommandLine.arguments.contains("--gallery") { clock.stop(); panel.stop(); return }
+    #endif
+        inputAI.stop()
         connection.cancel()
         hotkeys.stop()
         voice.stop()
@@ -115,7 +126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         selectionController.stop()
         operations.stop()
         operationsEnvironment.stop()
-        comingSoon.stop()
+        noticeController.stop()
         permissions.stop()
         clock.stop()
         panel.stop()
@@ -193,14 +204,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         PinnedImageController.shared.closeAll()
         selectionController.dismiss()
         operations.clearCurrentContent()
-        comingSoon.show(message: "当前内容已清除。")
+        noticeController.show(message: "当前内容已清除。")
     }
 
     @objc private func captureScreenshot() { panel.close(); screenshot.capture() }
 
     @objc private func restorePinnedImage() {
         panel.close()
-        if !PinnedImageController.shared.restoreLast() { comingSoon.show(message: "暂无可恢复的贴图，或安全输入保护已开启。") }
+        if !PinnedImageController.shared.restoreLast() { noticeController.show(message: "暂无可恢复的贴图，或安全输入保护已开启。") }
     }
     @objc private func exitPinnedPassthrough() {
         panel.close(); PinnedImageController.shared.exitMousePassthrough()
@@ -210,7 +221,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func recognizeImageFiles() { panel.close(); screenshot.openImageFiles() }
 
     @objc func showSettings() { panel.close(); settingsWindow.show() }
+    #if DEBUG
     @objc private func showGallery() { panel.close(); gallery.show() }
+    #endif
 
     private func makeMenu() -> NSMenu {
         let menu = NSMenu()

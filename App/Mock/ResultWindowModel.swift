@@ -1,3 +1,4 @@
+#if DEBUG
 struct ResultWindowModel: Sendable {
     enum State: String, CaseIterable, Sendable {
         case connecting, streaming, done, followup, interrupted, truncated, cancelled
@@ -101,3 +102,5 @@ struct ResultWindowModel: Sendable {
         return value
     }
 }
+
+#endif

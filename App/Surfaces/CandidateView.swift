@@ -1,3 +1,4 @@
+#if DEBUG
 import SwiftUI
 
 /// Independent SwiftUI design prototype; no IMK/Rime dependency or input capture.
@@ -88,3 +89,5 @@ struct CandidateDemo: View {
         }
     }
 }
+
+#endif

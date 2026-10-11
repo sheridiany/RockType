@@ -9,7 +9,7 @@ struct VoiceSettingsPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
-            U4Card {
+            DesignCard {
                 Picker("识别模型", selection: $settings.model) {
                     Text(VoiceModel.small.title).tag(VoiceSettings.Model.small)
                     Text(VoiceModel.large.title).tag(VoiceSettings.Model.large)
@@ -32,7 +32,7 @@ struct VoiceSettingsPane: View {
                     }
                 }
             }
-            U4Card {
+            DesignCard {
                 option("自动准备模型", detail: "选中 RockType 输入法时加载已下载模型，不开启麦克风；关闭后释放模型内存。", value: $settings.automaticallyPrepareModel)
                 Divider()
                 option("本地文字清理", detail: "去除独立口头填充词、合并多余空格并补中文句号。在本机完成，无需 AI。", value: $settings.cleanUpLocally)

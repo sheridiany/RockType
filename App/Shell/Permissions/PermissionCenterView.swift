@@ -9,9 +9,9 @@ struct PermissionCenterView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
-            U4SectionTitle(title: "系统权限 · 按需开启")
+            DesignSectionTitle(title: "系统权限 · 按需开启")
             ForEach(center.items) { item in
-                U4Card {
+                DesignCard {
                     HStack {
                         Text(item.title).fontWeight(.medium)
                         Spacer()
@@ -34,7 +34,7 @@ struct PermissionCenterView: View {
             if let message = center.message { Notice(text: message, tone: .warn) }
             Text("普通打字无需这些权限。授权或撤销后会自动更新状态；截图需重新触发。")
                 .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(Tokens.palette(scheme).secondary)
-            U4SectionTitle(title: "输入法启用与检查")
+            DesignSectionTitle(title: "输入法启用与检查")
             InputSourceSettingsView(input: input)
         }.onAppear { center.refresh() }
     }
@@ -48,7 +48,7 @@ struct InputSourceSettingsView: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        U4Card {
+        DesignCard {
             HStack {
                 Text("RockType 输入源").fontWeight(.medium)
                 Spacer()
@@ -63,7 +63,7 @@ struct InputSourceSettingsView: View {
                 Button("刷新状态") { input.refresh() }.buttonStyle(DesignButtonStyle(variant: .ghost))
             }
             if let message = input.settingsMessage { Notice(text: message, tone: .warn) }
-            U4Rule()
+            DesignRule()
             Notice(text: input.message, tone: input.verified ? .ok : .neutral)
             if input.isVerifying {
                 TextField("在这里试打 nihao 并选字", text: $trial)

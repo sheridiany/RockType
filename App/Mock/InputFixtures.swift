@@ -1,3 +1,4 @@
+#if DEBUG
 import SwiftUI
 
 struct CandidatePresentation {
@@ -54,3 +55,5 @@ enum InputModePresentation: String, CaseIterable {
     var badge: String { self == .english ? "英" : "中" }
     var detail: String { self == .scheme ? "小鹤双拼" : title }
 }
+
+#endif

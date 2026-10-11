@@ -8,7 +8,7 @@ struct OperationModelSettings: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
-            U4Card {
+            DesignCard {
                 Text("按功能指定模型").font(Tokens.Typography.font(weight: .medium))
                 Text("这里设置跟随默认服务商时使用的模型；按任务指定服务商后以 AI 连接页中的任务配置为准。模板模型优先。")
                     .font(Tokens.Typography.font(Tokens.Typography.meta))
