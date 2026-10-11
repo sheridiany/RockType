@@ -5,7 +5,7 @@ import SwiftUI
 import AppKit
 import Testing
 
-/// Standalone regression checks: compile with ResultWindowState.swift and the Core module.
+/// Controllable event source for the production result-window state.
 @MainActor private final class ControlledRunner: OperationRunner {
     var requests: [OperationRequest] = []
     var streams: [AsyncStream<OperationEvent>.Continuation] = []
