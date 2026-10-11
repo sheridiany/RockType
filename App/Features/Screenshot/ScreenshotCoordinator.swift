@@ -31,14 +31,21 @@ import os
     var performText: (OperationRequest) -> Void = { _ in }
     var imageCompleted: (OperationResult, OperationTemplate) -> Void = { _, _ in }
     private var previewPanel: NSPanel?
-    private var session: ScreenshotSession?
+    private(set) var session: ScreenshotSession?
+    private var batch: ScreenshotBatch?
+    private var imageOpenPanel: NSOpenPanel?
     var onSelection: (CGImage) -> Void = { _ in }
     private let captureFrames: () async throws -> [ScreenCapture.Frame]
     private let allowed: () -> Bool
+    private let readClipboard: () throws -> Data?
+    private let presentPreview: (NSPanel) -> Void
 
     init(captureFrames: @escaping () async throws -> [ScreenCapture.Frame] = { try await ScreenCapture.capture() },
-         allowed: @escaping () -> Bool = { SecureInput.status() == .allowed }) {
+         allowed: @escaping () -> Bool = { SecureInput.status() == .allowed },
+         readClipboard: @escaping () throws -> Data? = { try Clipboard.shared.readPNG() },
+         presentPreview: @escaping (NSPanel) -> Void = { panel in panel.center(); panel.orderFrontRegardless() }) {
         self.captureFrames = captureFrames; self.allowed = allowed
+        self.readClipboard = readClipboard; self.presentPreview = presentPreview
     }
     private var warmupTask: Task<Void, Never>?
     private static let timing = Logger(subsystem: Identifiers.appBundleID, category: "ScreenshotTiming")
@@ -57,6 +64,7 @@ import os
     func stop() { running = false; warmupTask?.cancel(); warmupTask = nil; ScreenCapture.stopWarming(); cancel(); closePreview(); PinnedImageController.shared.closeAll() }
     func cancel() {
         generation += 1
+        imageOpenPanel?.cancel(nil); imageOpenPanel = nil
         importTask?.cancel(); importTask = nil; importProgress?.cancel(); importProgress = nil
         captureTask?.cancel(); captureTask = nil
         protectionTask?.cancel(); protectionTask = nil
@@ -192,13 +200,55 @@ import os
             }
         }
     }
-    func openClipboardImage() {
+    func openClipboardImage(recognize: Bool = false) {
         guard running, allowed() else { return }
         cancel(); closePreview()
         do {
-            guard let data = try Clipboard.shared.readPNG() else { onNotice("剪贴板中没有图片。"); return }
-            decodeImport(data, origin: "剪贴板图片", current: generation)
+            guard let data = try readClipboard() else { onNotice("剪贴板中没有图片。"); return }
+            decodeImport(data, origin: "剪贴板图片", current: generation, recognize: recognize)
         } catch { onNotice("无法读取剪贴板图片，请重新复制后重试。") }
+    }
+    func openImageFiles() {
+        guard running, allowed(), imageOpenPanel == nil else { return }
+        let panel = NSOpenPanel(); imageOpenPanel = panel
+        panel.allowedContentTypes = [.png, .jpeg, .tiff]
+        panel.allowsMultipleSelection = true; panel.canChooseDirectories = false
+        panel.prompt = "识别图片"; panel.message = "最多 10 张，解码后总计 128 MB；图片仅在本机识别。"
+        panel.begin { [weak self] response in
+            guard let self, self.imageOpenPanel === panel else { return }
+            self.imageOpenPanel = nil
+            guard response == .OK, self.running, self.allowed() else { return }
+            self.openImageBatch(panel.urls)
+        }
+    }
+    func openImageBatch(_ urls: [URL]) {
+        guard running, allowed() else { return }
+        cancel(); closePreview(); let current = generation
+        importTask = Task { [weak self] in
+            do {
+                let worker = Task.detached { try ScreenshotBatch.load(urls) }
+                let images = try await withTaskCancellationHandler { try await worker.value } onCancel: { worker.cancel() }
+                guard let self, !Task.isCancelled, self.running, self.allowed(), self.generation == current else { return }
+                let sessions = images.enumerated().map { index, image in
+                    let value = ScreenshotSession(image: image, origin: "批量图片 \(index + 1)", settings: self.readSettings,
+                        verified: self.imageCapabilityVerified, allowed: self.allowed)
+                    value.performText = self.performText; value.configureVision = self.configureVision
+                    value.imageCompleted = self.imageCompleted
+                    value.onClose = { [weak self] in self?.closePreview() }
+                    value.start(); return value
+                }
+                let batch = ScreenshotBatch(sessions: sessions); self.batch = batch
+                let panel = CapturePanel(contentRect: CGRect(x: 0, y: 0, width: ScreenshotPreviewContent.width,
+                    height: ScreenshotPreviewContent.height + 48), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+                panel.level = .floating; panel.isReleasedWhenClosed = false
+                panel.contentView = NSHostingView(rootView: ScreenshotBatchPreview(batch: batch))
+                self.previewPanel = panel; self.presentPreview(panel)
+                batch.current.runOCR()
+            } catch {
+                guard let self, !Task.isCancelled, self.generation == current else { return }
+                self.onNotice("无法打开这批图片。请选择最多 10 张 PNG、JPEG 或 TIFF，总像素内存不超过 128 MB。")
+            }
+        }
     }
     @discardableResult func acceptDrop(_ providers: [NSItemProvider]) -> Bool {
         guard running, allowed(), let provider = providers.first(where: { ScreenshotImageImport.type(for: $0) != nil }),
@@ -228,13 +278,14 @@ import os
         }
         return true
     }
-    private func decodeImport(_ data: Data, origin: String, current: Int) {
+    private func decodeImport(_ data: Data, origin: String, current: Int, recognize: Bool = false) {
         importTask = Task { [weak self] in
             do {
                 let worker = Task.detached { try ScreenshotImageImport.decode(data) }
                 let image = try await withTaskCancellationHandler { try await worker.value } onCancel: { worker.cancel() }
                 guard let self, !Task.isCancelled, self.generation == current, self.allowed() else { return }
                 self.openImage(image, origin: origin)
+                if recognize { self.session?.runOCR() }
             } catch {
                 guard let self, !Task.isCancelled, self.generation == current else { return }
                 self.importFailure(error)
@@ -246,6 +297,7 @@ import os
             ? "图片过大：支持最大 40 MB、6400 万像素，请缩小后重试。" : "图片无法打开，请使用 PNG、JPEG 或 TIFF 图片。")
     }
     func closePreview() {
+        let oldBatch = batch; batch = nil; oldBatch?.close()
         let old = session; session = nil; old?.close()
         previewPanel?.orderOut(nil); previewPanel?.contentView = nil; previewPanel = nil
     }
@@ -261,11 +313,11 @@ import os
         value.imageCompleted = imageCompleted
         value.start()
         if complete { value.copyImage(closeAfter: true); return }
-        let panel = CapturePanel(contentRect: CGRect(x: 0, y: 0, width: Tokens.Size.resultMaxHeight, height: ScreenshotPreviewContent.height),
+        let panel = CapturePanel(contentRect: CGRect(x: 0, y: 0, width: ScreenshotPreviewContent.width, height: ScreenshotPreviewContent.height),
             styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.level = .floating; panel.isReleasedWhenClosed = false
         panel.contentView = NSHostingView(rootView: ImagePreviewView(session: value))
-        panel.center(); previewPanel = panel; panel.orderFrontRegardless()
+        previewPanel = panel; presentPreview(panel)
     }
 
 }
