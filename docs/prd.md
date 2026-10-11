@@ -1,4 +1,6 @@
-# RoarkT 产品需求文档
+# RockType 产品需求文档
+
+> 2026-10-11：产品名定为 **RockType**，全程只用英文名。输入源显示名：RockType Pinyin、RockType Shuangpin。下文中的 RoarkT 为内部代号。
 
 - 版本：v0.1 规划基线（2026-10-11）。
 - 状态：规划；功能未实现、未验收。

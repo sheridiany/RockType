@@ -47,7 +47,7 @@ final class InputSourceManager {
     private(set) var snapshot = InputSourceSnapshot(addedIDs: [], selectedID: nil)
     private(set) var verified = false
     private(set) var isVerifying = false
-    private(set) var message = "添加输入源后，切换到 RoarkT，再开始试打验证。"
+    private(set) var message = "添加输入源后，切换到 RockType，再开始试打验证。"
     private(set) var registrationMessage: String?
     private(set) var isRegistering = false
     private(set) var isOpeningSettings = false
@@ -85,7 +85,7 @@ final class InputSourceManager {
         snapshot = readSources()
         if let evidence, snapshot.selectedRoarkTID != evidence.sourceID {
             cancel()
-            message = "输入源已切换，请选择 RoarkT 后重新开始验证。"
+            message = "输入源已切换，请选择 RockType 后重新开始验证。"
         }
     }
 
@@ -93,7 +93,7 @@ final class InputSourceManager {
         cancel()
         refresh()
         guard let sourceID = snapshot.selectedRoarkTID else {
-            message = "请先在系统输入菜单中选中 RoarkT（全拼或小鹤双拼）。"
+            message = "请先在系统输入菜单中选中 RockType Pinyin 或 RockType Shuangpin。"
             return
         }
         let id = attempt
@@ -125,12 +125,12 @@ final class InputSourceManager {
             if evidence.accepts(current, source: snapshot) {
                 verified = true
                 isVerifying = false
-                message = "已确认 RoarkT 输入法处理了真实按键。"
+                message = "已确认 RockType 输入法处理了真实按键。"
             } else if current.connectionID != evidence.baseline.connectionID || current.value < evidence.baseline.value {
                 cancel()
                 message = "验证服务已重连，请重新开始试打验证。"
             } else {
-                message = "尚未收到新的 RoarkT 按键记录，请继续试打后再验证。"
+                message = "尚未收到新的 RockType 按键记录，请继续试打后再验证。"
             }
         } catch {
             guard attempt == id else { return }
@@ -163,7 +163,7 @@ final class InputSourceManager {
             case .registered:
                 registeredThisSession = true
             case .notInstalled:
-                registrationMessage = "未找到 RoarkT 输入法安装文件，请先完成安装后重新打开主 App。"
+                registrationMessage = "未找到 RockType 输入法安装文件，请先完成安装后重新打开主 App。"
                 return
             case .failed:
                 registrationMessage = "输入源注册失败，请重新安装后打开主 App。"
@@ -171,7 +171,7 @@ final class InputSourceManager {
             }
         }
         guard registeredThisSession else { return }
-        registrationMessage = "正在向当前登录会话注册 RoarkT 输入源…"
+        registrationMessage = "正在向当前登录会话注册 RockType 输入源…"
         for _ in 0..<20 {
             guard !Task.isCancelled else { return }
             if enrollment.isRegistered() {
@@ -181,7 +181,7 @@ final class InputSourceManager {
             }
             do { try await enrollment.pause() } catch { return }
         }
-        registrationMessage = "系统尚未识别 RoarkT 输入源，请注销并重新登录后重试。"
+        registrationMessage = "系统尚未识别 RockType 输入源，请注销并重新登录后重试。"
     }
 
     func openKeyboardSettings() async {
@@ -191,7 +191,7 @@ final class InputSourceManager {
         if await enrollment.openSettings(registeredThisSession) {
             registeredThisSession = false
         } else {
-            registrationMessage = "无法刷新或打开键盘设置，请手动退出系统设置，再打开系统设置 → 键盘 → 输入法 → 编辑… → ＋ → 简体中文 → RoarkT。"
+            registrationMessage = "无法刷新或打开键盘设置，请手动退出系统设置，再打开系统设置 → 键盘 → 输入法 → 编辑… → ＋ → 简体中文 → RockType。"
         }
     }
 }
@@ -214,7 +214,7 @@ struct InputSourceEnrollment {
         }, register: {
             let locations = [FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Input Methods"),
                              URL(fileURLWithPath: "/Library/Input Methods", isDirectory: true)]
-            guard let bundle = locations.map({ $0.appendingPathComponent("RoarkT Input.app", isDirectory: true) })
+            guard let bundle = locations.map({ $0.appendingPathComponent("RockType Input.app", isDirectory: true) })
                 .first(where: { Bundle(url: $0)?.bundleIdentifier == Identifiers.inputMethodBundleID }) else { return .notInstalled }
             return TISRegisterInputSource(bundle as CFURL) == noErr ? .registered : .failed
         }, pause: { try await Task.sleep(for: .milliseconds(100)) }, openSettings: { registeredThisSession in

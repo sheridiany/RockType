@@ -3,9 +3,9 @@
 set -euo pipefail
 repo_dir=${0:A:h:h}
 [[ $EUID -ne 0 ]] || { print -u2 'Run as your logged-in user, without sudo.'; exit 1; }
-source_app="$repo_dir/dist/RoarkT Input.app"
-app="$HOME/Library/Input Methods/RoarkT Input.app"
-service="$repo_dir/dist/RoarkT.app/Contents/Helpers/RoarkTTranslationService"
+source_app="$repo_dir/dist/RockType Input.app"
+app="$HOME/Library/Input Methods/RockType Input.app"
+service="$repo_dir/dist/RockType.app/Contents/Helpers/RoarkTTranslationService"
 registrar="$repo_dir/dist/RoarkTRegisterInputSource"
 label=com.roarkist.roarkt.translation
 agent="$HOME/Library/LaunchAgents/$label.plist"
@@ -14,11 +14,11 @@ domain="gui/$(id -u)"
   print -u2 'Missing build products. Run scripts/build.sh first.'; exit 1
 }
 codesign --verify --strict --deep "$source_app"
-codesign --verify --strict --deep "$repo_dir/dist/RoarkT.app"
+codesign --verify --strict --deep "$repo_dir/dist/RockType.app"
 # Validate an existing target before replacing it. No other input methods are touched.
 if [[ -e "$app" ]]; then
   [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" == com.roarkist.inputmethod.RoarkT ]] || exit 1
-  "$app/Contents/MacOS/RoarkT Input" --quit
+  "$app/Contents/MacOS/RockType Input" --quit
 fi
 mkdir -p "${app:h}" "${agent:h}"
 rm -rf "$app"
@@ -44,4 +44,4 @@ fi
 install -m 644 "$temporary" "$agent"
 launchctl bootstrap "$domain" "$agent"
 "$registrar" register "$app"
-print 'Installed and registered RoarkT（全拼） / RoarkT（小鹤双拼）. Add and select them in System Settings.'
+print 'Installed and registered RockType Pinyin / RockType Shuangpin. Add and select them in System Settings.'

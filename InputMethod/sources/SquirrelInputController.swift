@@ -389,7 +389,7 @@ final class SquirrelInputController: IMKInputController, @unchecked Sendable {
       logDir.target = self
       let setting = NSMenuItem(title: NSLocalizedString("Settings...", comment: "Menu item"), action: #selector(openRimeFolder), keyEquivalent: "")
       setting.target = self
-      let roarkTSettings = NSMenuItem(title: "RoarkT 设置…", action: #selector(openRoarkTSettings), keyEquivalent: "")
+      let roarkTSettings = NSMenuItem(title: "RockType 设置…", action: #selector(openRoarkTSettings), keyEquivalent: "")
       roarkTSettings.target = self
       roarkTSettings.isEnabled = NSWorkspace.shared.urlForApplication(withBundleIdentifier: ROARKT_APP_BUNDLE_ID) != nil
 
@@ -847,7 +847,7 @@ private extension SquirrelInputController {
   private func reportTranslationError(_ error: Error) {
     guard error.localizedDescription != lastTranslationError else { return }
     lastTranslationError = error.localizedDescription
-    NSLog("RoarkT dynamic translation failed (code: %ld)", (error as NSError).code)
+    NSLog("RockType dynamic translation failed (code: %ld)", (error as NSError).code)
   }
 
   func commit(string: String) {

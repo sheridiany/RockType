@@ -10,7 +10,7 @@ if [[ -z "$identity" ]]; then
 fi
 [[ -n "$identity" ]] || { print -u2 "No signing identity; set ROARKT_CODESIGN_IDENTITY."; exit 1; }
 
-# Keep build products out of Spotlight/Launchpad: several worktrees build RoarkT.app,
+# Keep build products out of Spotlight/Launchpad: several worktrees build RockType.app,
 # and indexed copies would also be candidates when LaunchServices opens the bundle ID.
 dist_store="$repo_dir/.build/dist.noindex"
 mkdir -p "$dist_store"
@@ -23,17 +23,17 @@ swift build -c release --product RoarkTApp
 swift build -c release --product RoarkTTranslationService
 bin_dir=$(swift build -c release --show-bin-path)
 
-app="$repo_dir/dist/RoarkT.app"
+app="$repo_dir/dist/RockType.app"
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Helpers" "$app/Contents/Resources"
 cp "$repo_dir/App/Info.plist" "$app/Contents/Info.plist"
-cp "$bin_dir/RoarkTApp" "$app/Contents/MacOS/RoarkT"
+cp "$bin_dir/RoarkTApp" "$app/Contents/MacOS/RockType"
 cp "$bin_dir/RoarkTTranslationService" "$app/Contents/Helpers/RoarkTTranslationService"
 # Sparkle (SPEC-009 R-4) is a dynamic SPM framework; embed it and sign it before the app.
 if [[ -d "$bin_dir/Sparkle.framework" ]]; then
   mkdir -p "$app/Contents/Frameworks"
   ditto "$bin_dir/Sparkle.framework" "$app/Contents/Frameworks/Sparkle.framework"
-  install_name_tool -add_rpath @executable_path/../Frameworks "$app/Contents/MacOS/RoarkT"
+  install_name_tool -add_rpath @executable_path/../Frameworks "$app/Contents/MacOS/RockType"
   codesign --force --deep --options runtime --timestamp=none --sign "$identity" \
     "$app/Contents/Frameworks/Sparkle.framework"
 fi
@@ -64,9 +64,9 @@ done
 xcodebuild -project "$repo_dir/InputMethod/Squirrel.xcodeproj" -scheme Squirrel \
   -configuration Release -derivedDataPath "$repo_dir/.build/ime" \
   ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build
-input_app="$repo_dir/dist/RoarkT Input.app"
+input_app="$repo_dir/dist/RockType Input.app"
 rm -rf "$input_app"
-ditto "$repo_dir/.build/ime/Build/Products/Release/RoarkT Input.app" "$input_app"
+ditto "$repo_dir/.build/ime/Build/Products/Release/RockType Input.app" "$input_app"
 xcrun swift "$repo_dir/scripts/generate-menu-icon.swift" \
   "$input_app/Contents/Resources/roarktMenuTemplate.pdf"
 # Sign nested executables/libraries before the bundle (without --deep signing).

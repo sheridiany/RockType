@@ -3,7 +3,7 @@ import Darwin
 
 /// Only patch existing schema entries; never copy the GPL double-pinyin algebra into the app.
 public enum RimeSettingsPatch {
-    public static let marker = "# 由 RoarkT 生成；请通过 RoarkT 设置修改。"
+    public static let marker = "# 由 RockType 生成；请通过 RockType 设置修改。"
     public static let fileNames = ["roarkt.custom.yaml", "roarkt_flypy.custom.yaml"]
 
     public static func yaml(for scheme: InputSettings.Scheme, settings: InputSettings) -> String {

@@ -9,8 +9,12 @@ pkg=${1:-"$repo_dir/dist/RoarkT-$version-macOS-arm64.pkg"}
 pkgutil --check-signature "$pkg" | grep -q 'Developer ID Installer:.*(DF7J2VBQD8)' || {
   print -u2 'Installer must be signed by the RoarkT team.'; exit 1
 }
-# --wait returns a submission status; staple is an additional accepted-ticket gate.
-xcrun notarytool submit "$pkg" --keychain-profile "$profile" --wait
+# notarytool may exit successfully after an Invalid submission. Require Accepted explicitly.
+result=$(mktemp -t roarkt-notary)
+trap 'rm -f "$result"' EXIT
+xcrun notarytool submit "$pkg" --keychain-profile "$profile" --wait --output-format json > "$result"
+submission_status=$(/usr/bin/plutil -extract status raw -o - "$result")
+[[ "$submission_status" == Accepted ]] || { print -u2 "Notarization was not accepted ($submission_status). Inspect the submission in notarytool; installer was not stapled."; exit 1; }
 xcrun stapler staple "$pkg"
 xcrun stapler validate "$pkg"
 spctl --assess --type install --verbose=4 "$pkg"

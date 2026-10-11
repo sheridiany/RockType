@@ -18,8 +18,8 @@ final class LoginItemController {
         switch status {
         case .enabled: message = "登录后在菜单栏常驻"
         case .notRegistered: message = "未启用开机启动"
-        case .requiresApproval: message = "请在系统设置 → 通用 → 登录项中允许 RoarkT"
-        case .notFound: message = "请从已安装的 RoarkT.app 中设置开机启动"
+        case .requiresApproval: message = "请在系统设置 → 通用 → 登录项中允许 RockType"
+        case .notFound: message = "请从已安装的 RockType.app 中设置开机启动"
         @unknown default: message = "无法确认开机启动状态"
         }
     }

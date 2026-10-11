@@ -197,13 +197,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "RoarkT"
+            "value" : "RockType"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "RoarkT"
+            "value" : "RockType"
           }
         }
       }

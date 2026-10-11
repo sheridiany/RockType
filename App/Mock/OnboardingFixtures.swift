@@ -11,7 +11,7 @@ enum OnboardingStep: String, CaseIterable, Identifiable {
     }
     var headline: String {
         switch self {
-        case .input: "让 RoarkT 成为你的输入法"
+        case .input: "让 RockType 成为你的输入法"
         case .language: "准备中英离线翻译"
         case .permissions: "只授权你需要的能力"
         case .voice: "按住 Fn，把想法说出来"
@@ -20,7 +20,7 @@ enum OnboardingStep: String, CaseIterable, Identifiable {
     }
     var explanation: String {
         switch self {
-        case .input: "添加输入源后，切换到 RoarkT，再试打一句中文。"
+        case .input: "添加输入源后，切换到 RockType，再试打一句中文。"
         case .language: "语言包就绪后，候选旁可显示译文；普通输入不必等待。"
         case .permissions: "权限属于主 App；输入法自身不申请隐私权限。"
         case .voice: "本地识别，松开后填入当前输入位置，不自动发送。"
@@ -38,7 +38,7 @@ enum OnboardingStep: String, CaseIterable, Identifiable {
     }
     var progressing: String {
         switch self {
-        case .input: "等待试打验证：请切换到 RoarkT，在下方输入 nihao。"
+        case .input: "等待试打验证：请切换到 RockType，在下方输入 nihao。"
         case .language: "正在准备简体中文 ↔ 英文语言包…"
         case .permissions: "等待授权结果。完成后返回这里重新检查。"
         case .voice: "正在下载 0.6B 8bit 模型，完成后将校验文件。"
@@ -47,7 +47,7 @@ enum OnboardingStep: String, CaseIterable, Identifiable {
     }
     var success: String {
         switch self {
-        case .input: "试打验证完成 · RoarkT（全拼）已就绪。"
+        case .input: "试打验证完成 · RockType Pinyin已就绪。"
         case .language: "简体中文 ↔ 英文语言包已就绪。"
         case .permissions: "所选的辅助功能、屏幕录制、麦克风权限已授权。"
         case .voice: "模型下载与校验完成，下次按住 Fn 即可录音。"
@@ -56,7 +56,7 @@ enum OnboardingStep: String, CaseIterable, Identifiable {
     }
     var failure: String {
         switch self {
-        case .input: "未收到 RoarkT 的试打确认。请检查当前输入源后再试。"
+        case .input: "未收到 RockType 的试打确认。请检查当前输入源后再试。"
         case .language: "语言包未能准备完成。请检查网络后重试；输入仍可使用。"
         case .permissions: "麦克风未授权。可前往系统设置修改，或暂时跳过语音。"
         case .voice: "模型校验失败，文件未被加载。请重新下载。"

@@ -172,7 +172,7 @@ import RoarkTPlatform
             } catch {
                 guard session == id else { return }
                 bridge.cancel(target); target = nil
-                show(.failed, "无法绑定输入位置，请选中 RoarkT 输入法后重试。")
+                show(.failed, "无法绑定输入位置，请选中 RockType 输入法后重试。")
             }
         }
     }

@@ -77,6 +77,7 @@ struct ShortcutRecorder: NSViewRepresentable {
 
 struct HotkeySettingsView: View {
     @Bindable var center: HotkeyCenter
+    @Binding var appSettings: AppSettings
     var body: some View {
         Form {
             Section("全局快捷键") {
@@ -104,10 +105,10 @@ struct HotkeySettingsView: View {
                 }
                 Button("重试注册") { center.retry() }
             }
+            InputAISettingsSection(settings: $appSettings)
             Section {
                 Text("截图、翻译与总结使用上方快捷键；语音按住 Fn 录音，松开后识别。")
                 Text("Fn 由系统共同监听；如同时触发系统听写或输入源切换，请在键盘设置中调整 Fn 行为。")
-                Text("输入法内 AI 快捷键即将推出。")
                 if let notice = center.notice { Text(notice) }
             }
         }

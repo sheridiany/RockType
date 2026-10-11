@@ -22,7 +22,7 @@ struct ShellSettingsView: View {
     var body: some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: Tokens.Space.xs) {
-                Text("RoarkT").font(Tokens.Typography.font(Tokens.Typography.input, weight: .semibold))
+                Text("RockType").font(Tokens.Typography.font(Tokens.Typography.input, weight: .semibold))
                     .padding(Tokens.Space.md)
                 ForEach(SettingsSection.allCases) { item in
                     Button { section = item } label: {
@@ -81,7 +81,7 @@ struct ShellSettingsView: View {
         case .screenshot: screenshot
         case .ai: ShellConnectionView(model: connection, settings: $settings.ai)
         case .templates: sections.templatesPane(settings: $settings, showAIConnection: { section = .ai })
-        case .shortcuts: sections.shortcutsPane()
+        case .shortcuts: sections.shortcutsPane(settings: $settings)
         case .permissions: sections.permissionsPane()
         case .privacy: privacy
         case .about: about
@@ -239,12 +239,13 @@ struct ShellSettingsView: View {
     private var about: some View {
         Group {
             U4Card {
-                Text("RoarkT").font(Tokens.Typography.font(Tokens.Typography.display, weight: .semibold))
+                Text("RockType").font(Tokens.Typography.font(Tokens.Typography.display, weight: .semibold))
                 Text("版本 " + (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "开发版本"))
                 Text("macOS 14 及以上 · Apple Silicon")
                 U4Rule()
                 Text("主 App：MIT · 输入法：GPL v3，按进程隔离。")
-                Text("自动更新与卸载即将推出。")
+                UpdateSettingsView()
+                Button("卸载 RockType…") { UninstallController.confirm() }
             }
             Button("导出诊断…", action: exportDiagnostics)
         }

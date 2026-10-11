@@ -18,7 +18,7 @@ struct OnboardingShellView: View {
         let palette = Tokens.palette(scheme)
         VStack(alignment: .leading, spacing: Tokens.Space.xl) {
             HStack {
-                Text("欢迎使用 RoarkT").font(Tokens.Typography.font(Tokens.Typography.input, weight: .semibold))
+                Text("欢迎使用 RockType").font(Tokens.Typography.font(Tokens.Typography.input, weight: .semibold))
                 Spacer()
                 Text("\((OnboardingStep.allCases.firstIndex(of: flow.step) ?? 0) + 1) / 5")
                     .monospacedDigit().foregroundStyle(palette.secondary)
@@ -91,7 +91,7 @@ struct OnboardingShellView: View {
     @ViewBuilder private var content: some View {
         switch flow.step {
         case .input:
-            Text("系统设置 → 键盘 → 输入法 → 编辑… → ＋ → 简体中文 → RoarkT")
+            Text("系统设置 → 键盘 → 输入法 → 编辑… → ＋ → 简体中文 → RockType")
                 .font(Tokens.Typography.font(Tokens.Typography.meta))
             HStack {
                 Chip(text: input.snapshot.addedIDs.isEmpty ? "尚未添加" : "已添加", tone: input.snapshot.addedIDs.isEmpty ? .warn : .ok)

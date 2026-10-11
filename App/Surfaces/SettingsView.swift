@@ -65,7 +65,7 @@ struct SettingsView: View {
                 Text("R").font(Tokens.Typography.font(weight: .semibold))
                     .frame(width: Tokens.Size.control, height: Tokens.Size.control)
                     .foregroundStyle(p.onAccent).background(p.accent, in: RoundedRectangle(cornerRadius: Tokens.Radius.control))
-                Text("RoarkT").font(Tokens.Typography.font(weight: .semibold))
+                Text("RockType").font(Tokens.Typography.font(weight: .semibold))
             }.padding(.vertical, Tokens.Space.md).padding(.horizontal, Tokens.Space.sm)
             ForEach(SettingsSection.allCases) { item in
                 Button {
@@ -450,7 +450,7 @@ struct SettingsView: View {
     private var aboutPane: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.lg) {
             U4Card {
-                Text("RoarkT").font(Tokens.Typography.font(Tokens.Typography.display, weight: .semibold))
+                Text("RockType").font(Tokens.Typography.font(Tokens.Typography.display, weight: .semibold))
                 Text("设计基线 · D0").foregroundStyle(p.secondary)
                 Text("macOS 14 及以上 · Apple Silicon")
                 U4Rule()
@@ -463,7 +463,7 @@ struct SettingsView: View {
                 }
                 row("版本更新", detail: "自动更新将在分发阶段提供。") { Chip(text: "即将推出") }
             }
-            Button("卸载 RoarkT…") { feedback = "卸载将在分发阶段提供；本预览不会删除程序或用户数据" }
+            Button("卸载 RockType…") { feedback = "卸载将在分发阶段提供；本预览不会删除程序或用户数据" }
                 .buttonStyle(DesignButtonStyle(variant: .danger))
         }
     }
