@@ -1,6 +1,6 @@
 # RockType 技术架构
 
-需求见 [PRD](prd.md)，决策见 [ADR-0001](adr/0001-swift-merged-product.md)、[ADR-0002](adr/0002-identifiers-license-shortcuts.md)。本文按 2026-10-11 SPEC-014 R4-IME 的代码现状更新；内部模块及标识符仍使用 RoarkT。后续整理事项见[架构审计](architecture-audit-2026-10.md)，不能将规划接口视为已完成功能。
+需求见 [PRD](prd.md)，决策见 [ADR-0001](adr/0001-swift-merged-product.md)、[ADR-0002](adr/0002-identifiers-license-shortcuts.md)。本文按 2026-10-11 SPEC-014 R5-IME 的代码现状更新；内部模块及标识符仍使用 RoarkT。后续整理事项见[架构审计](architecture-audit-2026-10.md)，不能将规划接口视为已完成功能。
 
 ## 进程与请求路径
 
@@ -65,6 +65,12 @@ R4-UI 为 Mock/Gallery、依赖样本的原型视图和全部 Gallery 启动入�
 `VoiceInputController` 管理 Fn 会话、取消、保护检查与 HUD，依赖 `VoiceInterfaces` 中的本地接口。`VoiceEnvironment` 提供系统状态；`VoiceWorkerClient` 管理识别连接/准备；`VoiceCommitBridge` 管理端点发现和 ticket；`VoiceReply` 使成功、错误、超时、取消只完成一次。`VoiceModelStore` 管理下载状态，`VoiceModelVerification` 记录并复检已校验的文件身份。
 
 主 App 只在按住 Fn 的录音阶段获取麦克风数据。模型预加载不录音。识别后可选 AI 润色，失败保留原文；填入前仍须核对来源、ticket、期限、Secure Input 和密码框。没有模拟粘贴或自动发送。
+
+录音内存上限 180 秒（16 kHz 单声道 Float32，11.52 MB）；到限自动停止并识别。`VoiceAudioSegmentation` 是 Core 中的 MIT Foundation 策略，worker 通过源链接编译同一源文件：最多 28 秒一段，在上限前搜索静音，段间不重叠、不丢样；各段独立 token 预算，拼接不去重、不改已有标点。模型准备时用一秒合成静音预热首个解码步骤，不启用麦克风。
+
+App 每 3 秒取新音频做一次预览，同一连接只允许一个预览在途，避免与最终识别并发。预览只进入 HUD 的独立字段；松键后同步停录，等待当前有界预览，然后完整重识别所有音频。RTF 超过 0.8 或预览失败会在本次运行内按模型停用预览；失败导致 worker 退出时，松键后恢复已校验模型。取消/安全输入/新会话丢弃迟到回复并清空预览。自动准备在受保护输入下不开始。
+
+长录音使用固定 600 秒 ticket 租约（App 截止时间提前 10 秒），没有续租或重新绑定；原 120 秒默认票据语义保留。按键、激活/失焦、连接身份、选区、Secure Input 与单次消费检查不变。最慢路径超出租约时仍拒绝填入并提供结果复制。`VoiceLatency` 区分松键后的阶段耗时与录音期间的重采样总耗时，后者不能再次计入首字延迟；日志不包含文字、音频或上下文。
 
 识别上下文来自单独打包的 MIT `VoiceVocabulary.dict.yaml` 与可选个人词表，最多 128 词/4096 UTF-8 字节，个人词上限 32；不扫描 userdb、文档或写持久上下文缓存。音频与词表上下文只经本地 worker XPC。模型下载、上下文和合成语音评测细节见 [VoiceWorker README](../Services/VoiceWorker/README.md)。
 

@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import RoarkTCore
 
 @MainActor protocol VoiceRecording: AnyObject {
     var level: Double { get }
@@ -7,6 +8,15 @@ import Foundation
     func start() throws
     func finish() -> Data
     func cancel()
+    var sampleCount: Int { get }
+    var resamplingSeconds: Double { get }
+    func preview(after offset: Int) -> Data?
+}
+
+extension VoiceRecording {
+    var sampleCount: Int { 0 }
+    var resamplingSeconds: Double { 0 }
+    func preview(after offset: Int) -> Data? { nil }
 }
 
 final class VoiceSamples: @unchecked Sendable {
@@ -15,11 +25,12 @@ final class VoiceSamples: @unchecked Sendable {
     private var accepting = true
     private var peak: Float = 0
     private var meter: Double = 0
+    private var conversionSeconds: Double = 0
     func append(_ buffer: AVAudioPCMBuffer) {
         guard let values = buffer.floatChannelData?[0], buffer.frameLength > 0 else { return }
         lock.lock(); defer { lock.unlock() }
         guard accepting else { return }
-        let count = min(Int(buffer.frameLength), (60 * 16_000 * 4 - samples.count) / 4)
+        let count = min(Int(buffer.frameLength), (VoiceAudioSegmentation.maximumBytes - samples.count) / 4)
         guard count > 0 else { return }
         var energy: Float = 0
         for index in 0..<count { energy += values[index] * values[index] }
@@ -27,6 +38,15 @@ final class VoiceSamples: @unchecked Sendable {
         peak = max(peak, rms)
         meter = min(1, Double(rms) * 12)
         samples.append(UnsafeBufferPointer(start: values, count: count))
+    }
+    var sampleCount: Int { lock.lock(); defer { lock.unlock() }; return samples.count / 4 }
+    var resamplingSeconds: Double { lock.lock(); defer { lock.unlock() }; return conversionSeconds }
+    func recordConversion(seconds: Double) { lock.lock(); defer { lock.unlock() }; conversionSeconds += seconds }
+    func preview(after offset: Int) -> Data? {
+        lock.lock(); defer { lock.unlock() }
+        let count = VoiceAudioSegmentation.previewSeconds * VoiceAudioSegmentation.sampleRate
+        guard accepting, offset >= 0, offset <= samples.count / 4 - count else { return nil }
+        return samples.subdata(in: (offset * 4)..<((offset + count) * 4))
     }
     var level: Double { lock.lock(); defer { lock.unlock() }; return meter }
     func take() -> Data {
@@ -57,8 +77,12 @@ private final class VoiceConversionInput: @unchecked Sendable {
     private var samples: VoiceSamples?
     var level: Double { samples?.level ?? 0 }
     var isRecording: Bool { engine?.isRunning == true }
+    var sampleCount: Int { samples?.sampleCount ?? 0 }
+    private(set) var resamplingSeconds: Double = 0
+    func preview(after offset: Int) -> Data? { samples?.preview(after: offset) }
     func start() throws {
         cancel()
+        resamplingSeconds = 0
         let engine = AVAudioEngine()
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
@@ -73,6 +97,7 @@ private final class VoiceConversionInput: @unchecked Sendable {
     }
     func finish() -> Data {
         engine?.stop(); engine?.inputNode.removeTap(onBus: 0); engine = nil
+        resamplingSeconds = samples?.resamplingSeconds ?? 0
         let data = samples?.take() ?? Data()
         samples = nil
         return data
@@ -99,6 +124,8 @@ final class VoiceTapProcessor: @unchecked Sendable {
         self.inputFormat = input; self.output = output; self.converter = converter; self.samples = samples
     }
     func process(_ buffer: AVAudioPCMBuffer) {
+        let start = ProcessInfo.processInfo.systemUptime
+        defer { samples.recordConversion(seconds: ProcessInfo.processInfo.systemUptime - start) }
         let capacity = AVAudioFrameCount(ceil(Double(buffer.frameLength) * 16_000 / inputFormat.sampleRate)) + 32
         guard let converted = AVAudioPCMBuffer(pcmFormat: output, frameCapacity: capacity) else { return }
         let source = VoiceConversionInput(buffer)

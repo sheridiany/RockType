@@ -26,6 +26,10 @@ private final class Recognition {
         let task = Task<Bool, Never> { @MainActor in
             do {
                 self.model = try await Qwen3ASRModel.fromModelDirectory(URL(fileURLWithPath: directory))
+                // Prime the first encoder/decoder step before recording with synthetic silence.
+                // No microphone data, transcript or personal vocabulary participates in warmup.
+                _ = self.model?.generate(audio: MLXArray.zeros([16_000]), maxTokens: 1,
+                                         context: "", language: nil, chunkDuration: 28)
                 self.loadedDirectory = directory
                 return true
             } catch { return false }
@@ -37,16 +41,28 @@ private final class Recognition {
         return ready
     }
     func transcribe(_ data: Data, context: String) -> String? {
-        guard !busy, let model, context.utf8.count <= 4096, !data.isEmpty, data.count <= 60 * 16_000 * 4,
+        guard !busy, let model, context.utf8.count <= 4096, !data.isEmpty, data.count <= VoiceAudioSegmentation.maximumBytes,
               data.count.isMultiple(of: 4) else { return nil }
         busy = true
         defer { busy = false }
-        let samples = data.withUnsafeBytes { bytes in
-            stride(from: 0, to: data.count, by: 4).map { bytes.loadUnaligned(fromByteOffset: $0, as: Float.self) }
+        let samples = [Float](unsafeUninitializedCapacity: data.count / 4) { buffer, initialized in
+            data.withUnsafeBytes { UnsafeMutableRawBufferPointer(buffer).copyMemory(from: $0) }
+            initialized = buffer.count
         }
         guard samples.allSatisfy({ $0.isFinite && abs($0) <= 1 }) else { return nil }
-        let result = model.generate(audio: MLXArray(samples), maxTokens: 1024, context: context, language: nil, chunkDuration: 30)
-        return result.text
+        var texts = [String]()
+        for range in VoiceAudioSegmentation.ranges(in: samples) {
+            let chunk = Array(samples[range])
+            // Silence cannot contribute a transcript; avoid hallucinations on silent tails.
+            guard chunk.contains(where: { abs($0) > 0.001 }) else { continue }
+            // Each bounded segment gets its own token budget. The SDK otherwise shares a
+            // global budget across chunks and may stop before consuming the recording.
+            let result = model.generate(audio: MLXArray(chunk), maxTokens: 1024, context: context,
+                                        language: nil, chunkDuration: Float(VoiceAudioSegmentation.segmentSeconds))
+            guard result.generationTokens < 1024 else { return nil } // Never report a truncated final result.
+            texts.append(result.text)
+        }
+        return VoiceAudioSegmentation.join(texts)
     }
 }
 

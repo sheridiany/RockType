@@ -7,6 +7,8 @@ import RoarkTPlatform
     var phase: Phase = .hidden
     var message = ""
     var result = ""
+    var preview = ""
+    var previewStatus = ""
     var levels = Array(repeating: 0.05, count: 9) {
         didSet { onMeterChange?() }
     }
@@ -25,7 +27,7 @@ import RoarkTPlatform
         self.hud = hud
         hud.onCancel = { [weak self] in self?.onCancel() }
         hud.onCopy = { [weak self] in
-            guard let self, !state.result.isEmpty, SecureInput.status() == .allowed else { return }
+            guard let self, [.done, .failed].contains(state.phase), !state.result.isEmpty, SecureInput.status() == .allowed else { return }
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(state.result, forType: .string)
         }
@@ -41,7 +43,9 @@ import RoarkTPlatform
         switch state.phase {
         case .hidden: hud.hide()
         case .preparing, .loading: hud.show(.activity(state.message))
-        case .recording: hud.show(.recording)
+        case .recording:
+            hud.show(.recording)
+            hud.updatePreview(state.preview, status: state.previewStatus)
         case .recognizing, .polishing: hud.show(.activity(state.message))
         case .done: hud.show(.success(state.message))
         case .failed:

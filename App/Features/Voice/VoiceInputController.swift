@@ -36,6 +36,10 @@ import RoarkTPlatform
     private var observedSettings: VoiceSettings?
     private var idleTicks = 0
     private var dismissal: Task<Void, Never>?
+    private var previewTask: Task<Void, Never>?
+    private var previewOffset = 0
+    private var previewPolicy = VoicePreviewPolicy()
+    private(set) var lastLatency: VoiceLatency?
 
     init(store: SettingsStore = .shared, models: VoiceModelStore = .shared,
          recorder: (any VoiceRecording)? = nil, worker: (any VoiceRecognizing)? = nil,
@@ -152,8 +156,9 @@ import RoarkTPlatform
                 }
                 guard environment.held(), environment.allowed(), environment.pid() == pid else { cancel(); return }
                 try recorder.start()
-                recordingStarted = ProcessInfo.processInfo.systemUptime
-                show(.recording, "录音中")
+                recordingStarted = environment.now()
+                state.previewStatus = previewPolicy.disabled.contains(model) ? "预览已暂停 · 松键后识别" : "实时预览 · 松键后确认"
+                show(.recording, "录音中 · 最长 3 分钟")
             } catch {
                 guard session == id else { return }
                 Self.log.error("voice preparation failed")
@@ -172,7 +177,13 @@ import RoarkTPlatform
             return
         }
         // Close the microphone synchronously, before scheduling model work.
+        let releasedAt = environment.now()
         let audio = recorder.finish()
+        var latency = VoiceLatency()
+        latency.stop = environment.now() - releasedAt
+        latency.resamplingDuringCapture = recorder.resamplingSeconds
+        let pendingPreview = previewTask
+        state.preview = ""
         recordingStarted = nil
         guard environment.allowed() else { cancel(); return }
         guard !audio.isEmpty else {
@@ -185,11 +196,31 @@ import RoarkTPlatform
         task = Task { [weak self] in
             guard let self else { return }
             do {
-                let text = try await worker.transcribe(audio)
+                var stage = environment.now()
+                // Serialize behind the one bounded preview. Never cancel a healthy worker on
+                // release (which would lose its warm model), and never commit preview text.
+                await pendingPreview?.value
+                latency.previewWait = environment.now() - stage
                 guard session == id, !Task.isCancelled, environment.allowed() else { return }
+                if preparedModel == nil {
+                    stage = environment.now()
+                    let model = VoiceModel(environment.settings().model)
+                    let directory = try await environment.validate(model)
+                    guard session == id, !Task.isCancelled, environment.allowed() else { return }
+                    try await worker.prepare(directory: directory)
+                    guard session == id, !Task.isCancelled, environment.allowed() else { return }
+                    preparedModel = model
+                    latency.modelRecovery = environment.now() - stage
+                }
+                stage = environment.now()
+                let text = try await worker.transcribe(audio)
+                latency.recognition = environment.now() - stage
+                guard session == id, !Task.isCancelled, environment.allowed() else { return }
+                stage = environment.now()
                 let normalized = environment.settings().cleanUpLocally
                     ? VoiceTextCleaner.clean(text)
                     : text.trimmingCharacters(in: .whitespacesAndNewlines)
+                latency.cleanup = environment.now() - stage
                 guard !normalized.isEmpty else {
                     bridge.cancel(target); self.target = nil
                     if !environment.settings().automaticallyPrepareModel || !environment.inputSourceSelected() {
@@ -200,13 +231,20 @@ import RoarkTPlatform
                 }
                 state.result = normalized
                 if environment.settings().polishWithAI { show(.polishing, "正在润色…") }
+                stage = environment.now()
                 let polished = await environment.polish(normalized)
+                latency.polish = environment.now() - stage
                 guard session == id, !Task.isCancelled, environment.allowed() else { return }
                 state.result = polished
                 let eligible = environment.pid() == sourcePID &&
                     VoiceInsertionPolicy.allowsAutomaticInsertion(text: polished, applicationID: target.applicationID)
+                stage = environment.now()
                 let accepted = eligible ? ((try? await bridge.commit(polished, target: target)) ?? false) : false
                 guard session == id, !Task.isCancelled, environment.allowed() else { return }
+                latency.commit = environment.now() - stage
+                latency.total = environment.now() - releasedAt
+                lastLatency = latency
+                Self.log.info("voice timing stop=\(latency.stop) resample_during_capture=\(latency.resamplingDuringCapture) preview_wait=\(latency.previewWait) model_recovery=\(latency.modelRecovery) recognition=\(latency.recognition) cleanup=\(latency.cleanup) polish=\(latency.polish) commit=\(latency.commit) total=\(latency.total)")
                 bridge.cancel(target); self.target = nil
                 if !environment.settings().automaticallyPrepareModel || !environment.inputSourceSelected() {
                     worker.stop(); preparedModel = nil
@@ -235,14 +273,16 @@ import RoarkTPlatform
         preparationID = UUID(); preparation?.cancel(); preparation = nil
         attemptedPreparation = nil
         task?.cancel(); task = nil
+        previewTask?.cancel(); previewTask = nil; previewOffset = 0
+        lastLatency = nil
         recorder.cancel(); bridge.cancel(target)
         if !preservingPrepared { worker.stop(); preparedModel = nil }
         target = nil; sourcePID = nil; recordingStarted = nil
-        state.result = ""; state.phase = .hidden; state.message = ""
+        state.result = ""; state.preview = ""; state.previewStatus = ""; state.phase = .hidden; state.message = ""
         state.seconds = 0; state.levels = Array(repeating: 0.05, count: 9)
         hud?.hide()
     }
-    private func tick() {
+    func tick() {
         guard running else { return }
         idleTicks += 1
         if idleTicks >= 20 { idleTicks = 0; refreshPreparation() }
@@ -257,11 +297,55 @@ import RoarkTPlatform
         if !recorder.isRecording { cancel(); return }
         if !environment.held() { release(); return }
         if environment.pid() != sourcePID { cancel(); return }
-        let elapsed = ProcessInfo.processInfo.systemUptime - recordingStarted
-        if elapsed >= 60 { cancel(); return }
+        let elapsed = environment.now() - recordingStarted
+        if elapsed >= Double(VoiceAudioSegmentation.maximumSeconds) || recorder.sampleCount >= VoiceAudioSegmentation.maximumSeconds * VoiceAudioSegmentation.sampleRate {
+            release()
+            if state.phase == .recognizing { show(.recognizing, "已达 3 分钟上限，正在识别…") }
+            return
+        }
+        requestPreview()
         state.seconds = Int(elapsed)
         state.levels.removeFirst(); state.levels.append(recorder.level)
     }
+    private func requestPreview() {
+        let model = VoiceModel(environment.settings().model)
+        guard previewTask == nil, !previewPolicy.disabled.contains(model),
+              environment.allowed(), let audio = recorder.preview(after: previewOffset) else { return }
+        previewOffset += audio.count / MemoryLayout<Float>.size
+        let id = session
+        let start = environment.now()
+        previewTask = Task { [weak self] in
+            guard let self else { return }
+            defer { if session == id { previewTask = nil } }
+            do {
+                let text = try await worker.preview(audio)
+                guard session == id, !Task.isCancelled, environment.allowed() else { return }
+                let elapsed = environment.now() - start
+                previewPolicy.observe(model: model, seconds: elapsed, audioSeconds: Double(audio.count) / 64_000)
+                Self.log.info("voice preview model=\(model.rawValue, privacy: .public) seconds=\(elapsed) audio_seconds=\(Double(audio.count) / 64_000) degraded=\(self.previewPolicy.disabled.contains(model))")
+                guard state.phase == .recording else { return }
+                if previewPolicy.disabled.contains(model) {
+                    state.previewStatus = "预览跟不上 · 松键后识别"
+                } else {
+                    state.preview = String(VoiceAudioSegmentation.join([state.preview, text]).suffix(600))
+                }
+                hud?.show()
+            } catch {
+                guard session == id, !Task.isCancelled, environment.allowed() else { return }
+                previewPolicy.fail(model: model)
+                let elapsed = environment.now() - start
+                let reason = (error as? VoiceFailure) == .timeout ? "timeout" : "unavailable"
+                Self.log.info("voice preview stopped model=\(model.rawValue, privacy: .public) seconds=\(elapsed) reason=\(reason, privacy: .public)")
+                // Real worker client tears down failed/timed-out work. Reload only after release.
+                preparedModel = nil
+                if state.phase == .recording {
+                    state.previewStatus = "预览已暂停 · 松键后识别"
+                    hud?.show()
+                }
+            }
+        }
+    }
+
     /// Input-source/settings changes only load a verified local model. Never opens the mic.
     func refreshPreparation() {
         guard running else { return }
@@ -282,6 +366,11 @@ import RoarkTPlatform
         }
         let model = VoiceModel(settings.model)
         guard !active, !environment.held(), environment.modelPresent(model), preparedModel != model else { return }
+        guard environment.allowed() else {
+            if preparation != nil { cancel() }
+            attemptedPreparation = nil
+            return
+        }
         let key = model.rawValue + ":" + String(environment.modelRevision())
         guard preparation == nil, attemptedPreparation != key else { return }
         attemptedPreparation = key
@@ -291,9 +380,9 @@ import RoarkTPlatform
             defer { if preparationID == id { preparation = nil } }
             do {
                 let directory = try await environment.validate(model)
-                guard preparationID == id, !Task.isCancelled else { return }
+                guard preparationID == id, !Task.isCancelled, environment.allowed() else { return }
                 try await worker.prepare(directory: directory)
-                guard preparationID == id, !Task.isCancelled else { return }
+                guard preparationID == id, !Task.isCancelled, environment.allowed() else { return }
                 preparedModel = model
             } catch {
                 guard preparationID == id else { return }
