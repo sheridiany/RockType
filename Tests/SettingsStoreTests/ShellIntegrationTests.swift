@@ -7,7 +7,6 @@ import RoarkTCore
     var entries: [(Shortcut, @MainActor () -> Void)] = []
     func handler(_ shortcut: Shortcut) -> (@MainActor () -> Void)? { entries.first { $0.0 == shortcut }?.1 }
     func register(_ shortcut: Shortcut, handler: @escaping @MainActor () -> Void) throws { entries.append((shortcut, handler)) }
-    func startFn(handler: @escaping @MainActor () -> Void) throws {}
     func stop() { entries.removeAll() }
 }
 
@@ -93,4 +92,46 @@ import RoarkTCore
     #expect(placeholders == [.screenshot])
     center.stop(); summarize()
     #expect(received.count == 3)
+}
+
+@MainActor @Test func voiceListenerOwnershipFollowsRecordingPermissionsAndConflicts() {
+    let registrar = ShellRegistrar()
+    var settings = ShortcutSettings()
+    var trusted = true
+    var monitorAvailable = true
+    var transitions: [Bool] = []
+    let center = HotkeyCenter(read: { settings }, write: { settings = $0 }, showSettings: {},
+        registrar: registrar, allowed: { true }, trusted: { trusted }, voiceListening: {
+            transitions.append($0); return !$0 || monitorAvailable
+        })
+    center.start()
+    #expect(transitions == [true])
+    #expect(registrar.entries.count == 3) // Fn is never registered by HotkeyCenter.
+    center.beginRecording(.screenshot)
+    #expect(transitions == [true, false] && center.statuses[.voiceHoldToTalk] == .recording)
+    trusted = false; center.refreshPermissions()
+    trusted = true; center.refreshPermissions()
+    #expect(transitions == [true, false]) // Regrant cannot resume while recording.
+    center.cancelRecording()
+    #expect(transitions == [true, false, true])
+    trusted = false; center.refreshPermissions()
+    #expect(transitions.last == false && center.statuses[.voiceHoldToTalk] == .needsAccessibility)
+    trusted = true; center.refreshPermissions()
+    #expect(transitions.suffix(2) == [false, true])
+    center.set(Shortcut(key: nil, modifiers: .function), for: .screenshot)
+    #expect(center.statuses[.voiceHoldToTalk] == .conflict && transitions.last == false)
+    center.restoreDefault(for: .screenshot)
+    #expect(center.statuses[.voiceHoldToTalk] == .registered && transitions.last == true)
+    center.set(nil, for: .voiceHoldToTalk)
+    #expect(center.statuses[.voiceHoldToTalk] == .unassigned && transitions.last == false)
+    monitorAvailable = false
+    center.restoreDefault(for: .voiceHoldToTalk)
+    #expect(center.statuses[.voiceHoldToTalk] == .unavailable)
+    monitorAvailable = true; center.retry()
+    #expect(center.statuses[.voiceHoldToTalk] == .registered)
+    center.stop()
+    #expect(transitions.last == false)
+    let count = transitions.count
+    trusted = false; center.refreshPermissions(); center.cancelRecording()
+    #expect(transitions.count == count)
 }

@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let diagnostics = DiagnosticExportController()
     private let permissions = PermissionCenter()
     private let comingSoon = ComingSoonController()
+    private lazy var voice = VoiceInputController(store: store)
     private let operationsEnvironment = OperationsEnvironment()
     private lazy var operations = SelectionOperationsController(
         environment: operationsEnvironment, settings: { [unowned self] in self.store.settings },
@@ -30,7 +31,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         write: { [unowned self] in self.store.settings.shortcuts = $0 },
         showSettings: { [weak self] in self?.showSettings() },
         comingSoon: { [weak self] in self?.comingSoon.show($0) },
-        selection: { [weak self] in self?.selectionController.trigger($0) })
+        selection: { [weak self] in self?.selectionController.trigger($0) },
+        voiceListening: { [weak self] enabled in
+            guard let self else { return false }
+            self.voice.stop()
+            if enabled { self.voice.start() }
+            let available = !enabled || self.voice.monitoringAvailable
+            if !available { self.voice.stop() }
+            return available
+        })
     private lazy var onboarding = OnboardingWindowController(
         store: store,
         permissions: { [unowned self] in AnyView(PermissionCenterView(center: self.permissions)) },
@@ -88,6 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--gallery") { clock.stop(); panel.stop(); return }
         connection.cancel()
         hotkeys.stop()
+        voice.stop()
         selectionController.stop()
         operations.stop()
         operationsEnvironment.stop()
