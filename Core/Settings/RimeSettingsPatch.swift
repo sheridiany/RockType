@@ -35,7 +35,7 @@ public struct RimeSettingsPatchWriter: Sendable {
         public var conflicts: [String]
     }
     public let directory: URL
-    public init(directory: URL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Rime")) {
+    public init(directory: URL = Identifiers.rimeUserDirectory()) {
         self.directory = directory
     }
 

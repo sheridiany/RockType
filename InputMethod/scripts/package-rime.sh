@@ -1,5 +1,5 @@
 #!/bin/bash
-# Xcode build phase: package this repository's factory data without touching ~/Library/Rime.
+# Xcode build phase: package this repository's factory data without touching the runtime user directory.
 set -euo pipefail
 shared="$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/SharedSupport"
 mkdir -p "$shared/lua"

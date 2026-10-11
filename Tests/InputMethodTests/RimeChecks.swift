@@ -11,6 +11,12 @@ struct RimeChecks {
     guard condition() else { fatalError(reason) }
   }
   static func main() {
+    if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "--private-directory" {
+      let home = URL(fileURLWithPath: CommandLine.arguments[2], isDirectory: true)
+      try! Identifiers.prepareRimeDirectory(home: home)
+      print(Identifiers.rimeUserDirectory(home: home).path)
+      return
+    }
     require(CommandLine.arguments.count == 6, "shared user build schema action required")
     let args = CommandLine.arguments
     requireLua()
@@ -25,6 +31,17 @@ struct RimeChecks {
     traits.min_log_level = 3
     api.setup(&traits)
     api.initialize(&traits)
+    if args[5] == "sync-path" {
+      _ = api.start_maintenance(false)
+      api.join_maintenance_thread()
+      var path = [CChar](repeating: 0, count: 4096)
+      api.get_sync_dir_s(&path, path.count)
+      require(String(cString: path) == URL(fileURLWithPath: args[2]).appendingPathComponent("sync").path,
+              "librime sync directory remains in private profile")
+      require(FileManager.default.fileExists(atPath: args[2] + "/installation.yaml"), "private installation metadata")
+      api.finalize()
+      return
+    }
     let session = api.create_session()
     require(session != 0 && api.select_schema(session, args[4]), "schema selection")
     defer {
@@ -76,6 +93,14 @@ struct RimeChecks {
     }
     let reading = args[4] == "roarkt_flypy" ? "uijm" : "shijian"
     switch args[5] {
+    case "isolation":
+      input("nihao")
+      require(page().words.first == "你好", "private Chinese database usable")
+      input("compu")
+      require(page().words.contains("computer"), "private English database usable")
+      try! Data().write(to: URL(fileURLWithPath: args[2]).appendingPathComponent("ready"))
+      require(readLine() == "release", "isolation controller releases process")
+      print("isolated database handles passed")
     case "samples":
       let samples =
         args[4] == "roarkt_flypy"

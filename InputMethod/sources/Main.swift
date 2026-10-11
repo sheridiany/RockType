@@ -10,14 +10,10 @@ import InputMethodKit
 
 @main
 struct SquirrelApp {
-  static let userDir = if let pwuid = getpwuid(getuid()) {
-    URL(fileURLWithFileSystemRepresentation: pwuid.pointee.pw_dir, isDirectory: true, relativeTo: nil).appending(components: "Library", "Rime")
-  } else {
-    try! FileManager.default.url(for: .libraryDirectory, in: .userDomainMask, appropriateFor: nil, create: false).appendingPathComponent("Rime", isDirectory: true)
-  }
+  static let userDir = Identifiers.rimeUserDirectory()
   // Register the currently executing bundle.
   static let appDir = Bundle.main.bundleURL
-  static let logDir = FileManager.default.temporaryDirectory.appending(component: "rime.squirrel", directoryHint: .isDirectory)
+  static let logDir = userDir.appendingPathComponent("logs", isDirectory: true)
 
   // swiftlint:disable:next cyclomatic_complexity
   static func main() {
@@ -80,12 +76,19 @@ struct SquirrelApp {
         case "--build":
           // Notification
           SquirrelApplicationDelegate.showMessage(msgText: NSLocalizedString("deploy_update", comment: ""))
-          // Build all schemas in current directory
+          // Deploy the private profile using the bundled factory data.
+          do {
+            try Identifiers.prepareRimeDirectory()
+            try FileManager.default.createDirectory(at: logDir, withIntermediateDirectories: true)
+          } catch { Foundation.exit(EXIT_FAILURE) }
           var builderTraits = RimeTraits.rimeStructInit()
           builderTraits.setCString("rime.squirrel-builder", to: \.app_name)
+          builderTraits.setCString(Bundle.main.sharedSupportPath!, to: \.shared_data_dir)
+          builderTraits.setCString(userDir.path, to: \.user_data_dir)
+          builderTraits.setCString(logDir.path, to: \.log_dir)
           rimeAPI.setup(&builderTraits)
           rimeAPI.deployer_initialize(nil)
-          _ = rimeAPI.deploy()
+          guard rimeAPI.deploy() else { Foundation.exit(EXIT_FAILURE) }
           return true
         case "--preview-candidates":
           guard args.count >= 3 else { Foundation.exit(EXIT_FAILURE) }
@@ -147,7 +150,7 @@ struct SquirrelApp {
 Supported arguments:
 Perform actions:
   --quit                     quit all Squirrel process
-  --build                    build all schemas in current directory
+  --build                    deploy the RockType Rime user directory
 Install Squirrel:
   --install, --register-input-source    register input source
   --enable-input-source [source id...]  input source list optional
