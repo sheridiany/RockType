@@ -133,7 +133,6 @@ struct ShellSettingsView: View {
                     Text("百度").tag("https://www.baidu.com/s?wd={query}")
                 }
             }
-            Button("重新运行首次引导") { sections.showOnboarding() }
         }
     }
     private var input: some View {

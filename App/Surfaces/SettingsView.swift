@@ -14,7 +14,6 @@ struct SettingsView: View {
     @State private var selectedSelectionTab = "行为"
     @State private var actions = ["翻译", "解释", "总结", "润色", "搜索"]
     @State private var templates = ["翻译", "总结", "润色", "解释"]
-    @State private var showGuide = false
     @Environment(\.colorScheme) private var scheme
     private var p: Tokens.Palette { Tokens.palette(scheme) }
 
@@ -50,13 +49,6 @@ struct SettingsView: View {
         .font(Tokens.Typography.font()).foregroundStyle(p.foreground)
         .frame(width: Tokens.Size.settingsWidth, height: Tokens.Size.settingsHeight)
         .background(p.background, in: RoundedRectangle(cornerRadius: Tokens.Radius.window))
-        .sheet(isPresented: $showGuide) {
-            VStack(spacing: 0) {
-                HStack { Spacer(); Button("关闭引导预览") { showGuide = false }.keyboardShortcut(.cancelAction) }
-                    .padding(Tokens.Space.md)
-                OnboardingDemo(step: .input, phase: .pending)
-            }
-        }
     }
 
     private var sidebar: some View {
@@ -147,7 +139,6 @@ struct SettingsView: View {
             }
             U4SectionTitle(title: "默认值")
             U4Card { choice("搜索引擎", "search", ["Google", "Bing", "DuckDuckGo", "百度"]) }
-            Button("重新打开首次引导") { showGuide = true }.buttonStyle(DesignButtonStyle(variant: .ghost))
         }
     }
     private var inputPane: some View {
