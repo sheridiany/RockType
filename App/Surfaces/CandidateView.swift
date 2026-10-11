@@ -19,15 +19,15 @@ struct CandidateView: View {
                         Button { onCandidate(index) } label: {
                             HStack(spacing: Tokens.Space.xs) {
                                 Text(String(index + 1)).font(Tokens.Typography.font(Tokens.Typography.caption))
-                                    .foregroundStyle(index == 0 ? p.onAccent : p.tertiary)
+                                    .foregroundStyle(index == model.selectedIndex ? p.onAccent : p.tertiary)
                                 Text(text).lineLimit(1)
                             }.padding(.horizontal, Tokens.Space.sm)
                                 .frame(height: Tokens.Size.row)
-                                .foregroundStyle(index == 0 ? p.onAccent : p.foreground)
-                                .background(index == 0 ? p.accent : .clear,
+                                .foregroundStyle(index == model.selectedIndex ? p.onAccent : p.foreground)
+                                .background(index == model.selectedIndex ? p.accent : .clear,
                                             in: RoundedRectangle(cornerRadius: Tokens.Radius.control))
                         }.buttonStyle(.plain).accessibilityLabel("候选 \(index + 1)，\(text)")
-                            .accessibilityAddTraits(index == 0 ? .isSelected : [])
+                            .accessibilityAddTraits(index == model.selectedIndex ? .isSelected : [])
                             .help(text)
                     }
                 }
@@ -61,5 +61,30 @@ struct CandidateView: View {
             if model.canCommit { Kbd("Tab") }
         }.padding(Tokens.Space.md).frame(maxWidth: .infinity, alignment: .leading)
             .modifier(DesignSurface())
+    }
+}
+
+/// Clicks demonstrate selection locally; no text is submitted to another application.
+struct CandidateDemo: View {
+    let initial: CandidatePresentation
+    @State private var selected = 0
+    @State private var feedback = ""
+    private var presentation: CandidatePresentation {
+        var model = selected == 0 ? initial : CandidatePresentation(
+            state: .none, preedit: initial.preedit, candidates: initial.candidates,
+            translation: "", source: initial.source)
+        model.selectedIndex = selected
+        return model
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.sm) {
+            CandidateView(model: presentation, onCandidate: { index in
+                selected = index
+                feedback = "预览：选中候选「" + initial.candidates[index] + "」"
+            }, onTranslation: { feedback = "预览：已选择译文，未执行真实上屏" })
+            if !feedback.isEmpty {
+                Text(feedback).font(Tokens.Typography.font(Tokens.Typography.caption))
+            }
+        }
     }
 }

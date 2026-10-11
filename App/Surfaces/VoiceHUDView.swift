@@ -59,10 +59,18 @@ struct VoiceHUDDemo: View {
     let expanded: Bool
     @State private var state: VoicePresentation.State?
     @State private var showSettings = false
+    @State private var dismissed = false
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
-            VoiceHUDView(model: .fixture(state ?? initial), initiallyExpanded: expanded,
-                         onCancel: { state = .cancelled }, onSettings: { showSettings = true })
+            if dismissed {
+                Button("重新显示语音预览") { dismissed = false; state = nil }.buttonStyle(DesignButtonStyle())
+            } else {
+                VoiceHUDView(model: .fixture(state ?? initial), initiallyExpanded: expanded,
+                             onCancel: {
+                                 if [.recording, .recognizing].contains(state ?? initial) { state = .cancelled }
+                                 else { dismissed = true }
+                             }, onSettings: { showSettings = true })
+            }
             if showSettings { Notice(text: "预览：请在设置面板的语音分区管理模型。") }
         }
     }

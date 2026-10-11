@@ -22,6 +22,7 @@ struct CandidatePresentation {
     let candidates: [String]
     let translation: String
     let source: String
+    var selectedIndex = 0
     var canCommit: Bool { ![.none, .translating, .unavailable].contains(state) }
 }
 

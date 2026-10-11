@@ -4,7 +4,7 @@ import SwiftUI
 enum InputVoiceGallery {
     static let entries: [GalleryEntry] = CandidatePresentation.State.allCases.map { state in
         GalleryEntry(surface: "candidate", state: state.rawValue, title: "候选窗 · " + state.title) {
-            AnyView(CandidateView(model: InputFixtures.candidate(state)))
+            AnyView(CandidateDemo(initial: InputFixtures.candidate(state)).id(state.rawValue))
         }
     } + InputModePresentation.allCases.map { mode in
         GalleryEntry(surface: "input-mode", state: mode.rawValue, title: "输入模式 · " + mode.title) {
