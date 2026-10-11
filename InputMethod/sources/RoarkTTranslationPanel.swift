@@ -7,7 +7,9 @@ final class RoarkTTranslationPanel: NSPanel {
   var onActivate: (() -> Void)?
 
   init() {
-    super.init(contentRect: .zero, styleMask: [.nonactivatingPanel, .borderless], backing: .buffered, defer: false)
+    super.init(
+      contentRect: .zero, styleMask: [.nonactivatingPanel, .borderless], backing: .buffered,
+      defer: false)
     isOpaque = false
     backgroundColor = .clear
     hasShadow = true
@@ -21,7 +23,10 @@ final class RoarkTTranslationPanel: NSPanel {
   override var canBecomeMain: Bool { false }
 
   func show(_ state: RoarkTCandidateTranslationSession, beside parent: NSPanel) {
-    guard state.ticket != nil, parent.isVisible else { orderOut(nil); return }
+    guard state.ticket != nil, parent.isVisible else {
+      orderOut(nil)
+      return
+    }
     appearance = parent.appearance
     level = parent.level
     row.ready = state.commit != nil
@@ -34,7 +39,10 @@ final class RoarkTTranslationPanel: NSPanel {
     row.setAccessibilityLabel("\(row.title)：\(row.text)")
     row.setAccessibilityHelp(row.retry ? "点击或按 Tab 重试" : row.ready ? "点击或按 Tab 上屏" : "继续输入无需等待")
     let screen = parent.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? parent.frame
-    setFrame(RoarkTPanelDesign.place(size: NSSize(width: parent.frame.width, height: 60), caret: parent.frame, screen: screen), display: true)
+    setFrame(
+      RoarkTPanelDesign.place(
+        size: NSSize(width: parent.frame.width, height: 60), caret: parent.frame, screen: screen),
+      display: true)
     row.needsDisplay = true
     orderFront(nil)
   }
@@ -55,7 +63,8 @@ private final class TranslationRow: NSView {
   required init?(coder: NSCoder) { nil }
   override func accessibilityPerformPress() -> Bool {
     guard ready || retry else { return false }
-    onActivate?(); return true
+    onActivate?()
+    return true
   }
   override func mouseUp(with event: NSEvent) {
     guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
@@ -73,14 +82,18 @@ private final class TranslationRow: NSView {
       tinted.draw(in: NSRect(x: 12, y: 22, width: 16, height: 16))
     }
     let textWidth = max(0, bounds.width - 36 - 12 - ((ready || retry) ? 38 : 0))
-    RoarkTPanelDesign.text(title, in: NSRect(x: 36, y: 12, width: textWidth, height: 14), size: 11, color: RoarkTPanelDesign.secondary)
+    RoarkTPanelDesign.text(
+      title, in: NSRect(x: 36, y: 12, width: textWidth, height: 14), size: 11,
+      color: RoarkTPanelDesign.secondary)
     RoarkTPanelDesign.text(text, in: NSRect(x: 36, y: 30, width: textWidth, height: 18), color: ink)
     if ready || retry {
       let rect = NSRect(x: bounds.width - 42, y: 20, width: 30, height: 20)
       RoarkTPanelDesign.line.setStroke()
       let path = NSBezierPath(roundedRect: rect, xRadius: 7, yRadius: 7)
-      path.lineWidth = 0.5; path.stroke()
-      RoarkTPanelDesign.text("Tab", in: rect.insetBy(dx: 5, dy: 3), size: 11, color: RoarkTPanelDesign.secondary)
+      path.lineWidth = 0.5
+      path.stroke()
+      RoarkTPanelDesign.text(
+        "Tab", in: rect.insetBy(dx: 5, dy: 3), size: 11, color: RoarkTPanelDesign.secondary)
     }
   }
 }

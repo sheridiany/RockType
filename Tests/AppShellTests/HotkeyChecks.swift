@@ -34,13 +34,17 @@ import RoarkTPlatform
                                   showSettings: { prefs.settingsOpened += 1 },
                                   comingSoon: { prefs.actions.append($0) }, registrar: registrar,
                                   allowed: { prefs.allowed }, trusted: { true }, probe: { prefs.probes += 1 })
+        var screenshots = 0
+        center.screenshotAction = { screenshots += 1 }
         center.start()
         precondition(registrar.registered.count == 3 && registrar.fn != nil)
         registrar.handlers.forEach { $0() }
-        precondition(prefs.actions == [.screenshot, .translateSelection, .summarizeSelection])
+        // M4: screenshot runs the real capture; selection actions are wired in M3-6.
+        precondition(screenshots == 1)
+        precondition(prefs.actions == [.translateSelection, .summarizeSelection])
         prefs.allowed = false
         registrar.handlers.forEach { $0() }
-        precondition(prefs.actions.count == 3, "Secure Input must suppress notices and diagnostics")
+        precondition(prefs.actions.count == 2 && screenshots == 1, "Secure Input must suppress notices, diagnostics and capture")
         prefs.allowed = true
         let staleAction = registrar.handlers.first
         let staleFn = registrar.fn
@@ -51,7 +55,7 @@ import RoarkTPlatform
         center.set(replacement, for: .screenshot)
         precondition(prefs.settings.bindings[.screenshot] == replacement)
         precondition(registrar.registered.contains(replacement))
-        staleAction?(); precondition(prefs.actions.count == 3)
+        staleAction?(); precondition(prefs.actions.count == 2 && screenshots == 1, "Stale screenshot handler must not run")
         staleFn?(); precondition(prefs.probes == 1, "Queued old handler must not run after re-registration")
         // A caller other than this view changes the observable Store.
         prefs.settings.bindings[.screenshot] = Shortcut(key: "j", modifiers: .control)

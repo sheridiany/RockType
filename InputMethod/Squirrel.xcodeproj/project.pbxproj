@@ -80,6 +80,10 @@
 		C10A00012F20000100A00012 /* VoiceCommitTicket.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10A00022F20000100A00012 /* VoiceCommitTicket.swift */; };
 		C10A00012F20000100A00013 /* VoiceInsertionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10A00022F20000100A00013 /* VoiceInsertionPolicy.swift */; };
 		C10A00012F20000100A00014 /* Identifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10A00022F20000100A00014 /* Identifiers.swift */; };
+		D51C00010000000000000001 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = D51C00020000000000000001 /* AppSettings.swift */; };
+		D51C00010000000000000002 /* InputMethodPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = D51C00020000000000000002 /* InputMethodPreferences.swift */; };
+		D51C00010000000000000003 /* Shortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = D51C00020000000000000003 /* Shortcuts.swift */; };
+		D51C00010000000000000004 /* RoarkTInputSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = D51C00020000000000000004 /* RoarkTInputSettings.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -259,6 +263,10 @@
 		C10A00022F20000100A00012 /* VoiceCommitTicket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VoiceCommitTicket.swift; path = ../Core/Voice/VoiceCommitTicket.swift; sourceTree = SOURCE_ROOT; };
 		C10A00022F20000100A00013 /* VoiceInsertionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VoiceInsertionPolicy.swift; path = ../Core/Voice/VoiceInsertionPolicy.swift; sourceTree = SOURCE_ROOT; };
 		C10A00022F20000100A00014 /* Identifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Identifiers.swift; path = ../Core/Identifiers.swift; sourceTree = SOURCE_ROOT; };
+		D51C00020000000000000001 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppSettings.swift; path = ../Core/Settings/AppSettings.swift; sourceTree = SOURCE_ROOT; };
+		D51C00020000000000000002 /* InputMethodPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = InputMethodPreferences.swift; path = ../Core/Settings/InputMethodPreferences.swift; sourceTree = SOURCE_ROOT; };
+		D51C00020000000000000003 /* Shortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Shortcuts.swift; path = ../Core/Shortcuts.swift; sourceTree = SOURCE_ROOT; };
+		D51C00020000000000000004 /* RoarkTInputSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RoarkTInputSettings.swift; path = sources/RoarkTInputSettings.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -287,6 +295,10 @@
 				C10A00022F20000100A00003 /* RoarkTProcessTrust.swift */,
 				C10A00022F20000100A00006 /* DynamicTranslationProtocol.swift */,
                 C10A00022F20000100A00014 /* Identifiers.swift */,
+                D51C00020000000000000004 /* RoarkTInputSettings.swift */,
+                D51C00020000000000000003 /* Shortcuts.swift */,
+                D51C00020000000000000002 /* InputMethodPreferences.swift */,
+                D51C00020000000000000001 /* AppSettings.swift */,
 				C10A00022F20000100A00004 /* RoarkTCandidateTranslationSession.swift */,
 				C10A00022F20000100A00005 /* RoarkTTranslationPanel.swift */,
 				C10A00022F20000100A00009 /* RoarkTInputModePanel.swift */,
@@ -555,6 +567,10 @@
 				C10A00012F20000100A00003 /* RoarkTProcessTrust.swift in Sources */,
 				C10A00012F20000100A00006 /* DynamicTranslationProtocol.swift in Sources */,
                 C10A00012F20000100A00014 /* Identifiers.swift in Sources */,
+                D51C00010000000000000004 /* RoarkTInputSettings.swift in Sources */,
+                D51C00010000000000000003 /* Shortcuts.swift in Sources */,
+                D51C00010000000000000002 /* InputMethodPreferences.swift in Sources */,
+                D51C00010000000000000001 /* AppSettings.swift in Sources */,
 				C10A00012F20000100A00004 /* RoarkTCandidateTranslationSession.swift in Sources */,
 				C10A00012F20000100A00005 /* RoarkTTranslationPanel.swift in Sources */,
 				C10A00012F20000100A00009 /* RoarkTInputModePanel.swift in Sources */,

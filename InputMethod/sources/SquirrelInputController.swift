@@ -24,6 +24,47 @@ final class SquirrelInputController: IMKInputController, @unchecked Sendable {
   private var session: RimeSessionId = 0
   private var schemaId: String = ""
   private var selectedSchema = "roarkt"
+  private var inputPreferences = InputMethodPreferences.defaults
+  private var pendingPreferredSchema: String?
+
+  var hasActiveComposition: Bool {
+    guard session != 0, rimeAPI.find_session(session), let input = rimeAPI.get_input(session) else { return false }
+    return input.pointee != 0
+  }
+
+  func applyPreferences(_ preferences: InputMethodPreferences) {
+    if preferences.input.scheme != inputPreferences.input.scheme {
+      pendingPreferredSchema = preferences.input.scheme.rawValue
+    }
+    let translationChanged = preferences.input.candidateTranslation != inputPreferences.input.candidateTranslation
+      || preferences.translation != inputPreferences.translation
+    let modeChanged = preferences.input.showModeIndicator != inputPreferences.input.showModeIndicator
+    inputPreferences = preferences
+    if translationChanged {
+      cancelDynamicTranslation()
+      if preferences.input.candidateTranslation, client != nil, session != 0, rimeAPI.find_session(session) {
+        requestDynamicTranslationIfNeeded()
+      }
+    }
+    if !preferences.input.showModeIndicator { inputModePanel.hide() }
+    else if modeChanged, client != nil { inputModePanel.activate(client: client, ascii: rimeAPI.get_option(session, "ascii_mode")) }
+  }
+
+  func applyPendingScheme() {
+    guard !hasActiveComposition, let schema = pendingPreferredSchema else { return }
+    pendingPreferredSchema = nil
+    selectedSchema = schema
+    if session != 0, rimeAPI.find_session(session) {
+      cancelDynamicTranslation()
+      _ = rimeAPI.select_schema(session, schema)
+    }
+  }
+
+  func prepareForSettingsDeployment() {
+    cancelDynamicTranslation()
+    inputModePanel.hide()
+    destroySession()
+  }
   private var inlinePreedit = false
   private var inlineCandidate = false
   // for chord-typing
@@ -164,6 +205,7 @@ final class SquirrelInputController: IMKInputController, @unchecked Sendable {
   }
 
   func performTranslationAction() {
+    guard inputPreferences.input.candidateTranslation, !IsSecureEventInputEnabled() else { cancelDynamicTranslation(); return }
     if candidateTranslation.canRetry {
       guard translationSnapshot() == candidateTranslation.ticket?.snapshot,
             let request = candidateTranslation.retry() else { return }
@@ -240,6 +282,7 @@ final class SquirrelInputController: IMKInputController, @unchecked Sendable {
       default: return
       }
       selectedSchema = schema
+      pendingPreferredSchema = nil // An explicit system input-source selection wins over the pending default.
       if session != 0 {
         cancelDynamicTranslation()
         _ = rimeAPI.select_schema(session, schema)
@@ -278,7 +321,9 @@ final class SquirrelInputController: IMKInputController, @unchecked Sendable {
         updateAppOptions()
       }
       NSApp.squirrelAppDelegate.inputControllerDidActivate(self)
-      inputModePanel.activate(client: client, ascii: rimeAPI.get_option(session, "ascii_mode"))
+      if inputPreferences.input.showModeIndicator {
+        inputModePanel.activate(client: client, ascii: rimeAPI.get_option(session, "ascii_mode"))
+      }
     }
   }
 
@@ -287,6 +332,9 @@ final class SquirrelInputController: IMKInputController, @unchecked Sendable {
     nonisolated(unsafe) let client = client
     MainActor.assumeIsolated {
       self.client = client as? IMKTextInput
+      inputPreferences = RoarkTInputSettings.shared.preferences
+      selectedSchema = inputPreferences.input.scheme.rawValue
+      RoarkTInputSettings.shared.track(self)
       createSession()
     }
   }
@@ -487,7 +535,9 @@ private extension SquirrelInputController {
   }
 
   func processKey(_ rimeKeycode: UInt32, modifiers rimeModifiers: UInt32) -> Bool {
-    // TODO add special key event preprocessing here
+    if !inputPreferences.input.shiftTogglesLanguage && (rimeKeycode == XK_Shift_L || rimeKeycode == XK_Shift_R) {
+      return false
+    }
 
     // with linear candidate list, arrow keys may behave differently.
     if let panel = NSApp.squirrelAppDelegate.panel {
@@ -540,7 +590,10 @@ private extension SquirrelInputController {
 
   // swiftlint:disable:next cyclomatic_complexity
   func rimeUpdate() {
-    defer { inputModePanel.update(ascii: rimeAPI.get_option(session, "ascii_mode")) }
+    defer {
+      if inputPreferences.input.showModeIndicator { inputModePanel.update(ascii: rimeAPI.get_option(session, "ascii_mode")) }
+      else { inputModePanel.hide() }
+    }
     rimeConsumeCommittedText()
 
     var status = RimeStatus_stdbool.rimeStructInit()
@@ -666,7 +719,7 @@ private extension SquirrelInputController {
   }
 
   private func requestDynamicTranslationIfNeeded() {
-    guard let snapshot = translationSnapshot() else {
+    guard inputPreferences.input.candidateTranslation, let snapshot = translationSnapshot() else {
       cancelDynamicTranslation()
       return
     }
@@ -676,6 +729,7 @@ private extension SquirrelInputController {
   }
 
   private func sendTranslation(_ request: RoarkTCandidateTranslationSession.Ticket) {
+    guard inputPreferences.input.candidateTranslation, !IsSecureEventInputEnabled() else { cancelDynamicTranslation(); return }
     let snapshot = request.snapshot
     // Also cancel older work when this candidate has no valid request payload.
     translationClient.cancel(sessionID: translationSessionID, throughGeneration: request.generation - 1)
@@ -757,7 +811,7 @@ private extension SquirrelInputController {
   }
 
   func commitTranslationSelection() {
-    guard let submission = candidateTranslation.commit,
+    guard inputPreferences.input.candidateTranslation, let submission = candidateTranslation.commit,
           translationSnapshot() == submission.snapshot else { return }
     let snapshot = submission.snapshot
     for (key, value) in [("raw", snapshot.rawInput), ("source", snapshot.source),

@@ -21,6 +21,7 @@ import RoarkTCore
     let center = HotkeyCenter(read: { store.settings.shortcuts }, write: { store.settings.shortcuts = $0 },
                               showSettings: {}, comingSoon: { received.append($0) },
                               registrar: registrar, allowed: { true }, trusted: { true })
+    center.screenshotAction = { received.append(.screenshot) }
     center.start()
     defer { center.stop() }
     let original = try #require(Shortcut.defaults[.screenshot])

@@ -10,6 +10,9 @@ let package = Package(
         .executable(name: "RoarkTTranslationService", targets: ["RoarkTTranslationService"]),
         .library(name: "RoarkTCore", targets: ["RoarkTCore"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle.git", exact: "2.8.0"),
+    ],
     targets: [
         .target(
             name: "RoarkTXPCProtocol",
@@ -20,7 +23,7 @@ let package = Package(
         .target(name: "RoarkTPlatform", dependencies: ["RoarkTCore"], path: "Platform"),
         .executableTarget(
             name: "RoarkTApp",
-            dependencies: ["RoarkTCore", "RoarkTPlatform", "RoarkTXPCProtocol"],
+            dependencies: ["RoarkTCore", "RoarkTPlatform", "RoarkTXPCProtocol", .product(name: "Sparkle", package: "Sparkle")],
             path: "App",
             exclude: ["Info.plist"]
         ),
@@ -29,6 +32,7 @@ let package = Package(
             dependencies: ["RoarkTCore", "RoarkTXPCProtocol"],
             path: "Services/TranslationService"
         ),
+        .testTarget(name: "RoarkTScreenshotTests", dependencies: ["RoarkTApp", "RoarkTPlatform"], path: "Tests/ScreenshotTests"),
         .testTarget(name: "RoarkTPlatformTests", dependencies: ["RoarkTPlatform"], path: "Tests/PlatformTests", resources: [.copy("Fixtures")]),
         .testTarget(name: "RoarkTSurfaceTests", dependencies: ["RoarkTApp", "RoarkTCore"], path: "Tests/SurfaceTests"),
         .testTarget(name: "RoarkTSettingsStoreTests", dependencies: ["RoarkTApp", "RoarkTCore"], path: "Tests/SettingsStoreTests"),

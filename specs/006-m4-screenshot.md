@@ -2,7 +2,7 @@
 
 - 阶段：M4
 - 覆盖需求：FR-D1–D7
-- 状态：Ready
+- 状态：InProgress
 - 依赖：SPEC-004（`⌃1` 快捷键、屏幕录制权限）、SPEC-005 M3-1（操作引擎、翻译路由）、SPEC-010（OCR、Placement、ScreenGeometry、Clipboard）、D0 U3 截图编辑器与图片预览
 
 ## 范围
@@ -26,10 +26,10 @@
 
 | # | 任务 | 执行 | 状态 |
 | --- | --- | --- | --- |
-| D-1 | 捕获、遮罩窗口、选区与调整、Esc 取消、⌃1 接入 | pi-xpc | 未开始 |
-| D-2 | 标注工具与原始分辨率合成、撤销 | pi-xpc | 未开始 |
-| D-3 | 完成/保存、OCR、翻译、图片理解 | pi-xpc | 未开始 |
-| D-4 | 剪贴板图片与拖入图片入口 | pi-xpc | 未开始 |
+| D-1 | 捕获、遮罩窗口、选区与调整、Esc 取消、⌃1 接入 | pi-xpc | 已实现，待集成与人工验收 |
+| D-2 | 标注工具与原始分辨率合成、撤销 | pi-xpc | 已实现，待人工验收 |
+| D-3 | 完成/保存、OCR、翻译、图片理解 | pi-xpc | 已实现，待集成与人工验收 |
+| D-4 | 剪贴板图片与拖入图片入口 | pi-xpc | 已实现，待菜单栏集成与人工验收 |
 | D-5 | 验收 | Claude + 用户 | 未开始 |
 
 **文件所有权**：`App/Features/Screenshot/`、`App/Surfaces/` 中截图编辑器与图片预览视图（只做接线需要的最小调整，保持 Gallery 可渲染）、`App/Shell/Hotkeys/` 中截图动作一处、`Platform/` 补充（捕获）、对应 `Tests/`。`AppDelegate` 接线由 Claude 集成（提供 `start()`/`stop()`）。
@@ -38,15 +38,44 @@
 
 | 项 | 方法 | 结果 | 证据 |
 | --- | --- | --- | --- |
-| 合成按原始分辨率（2x 屏幕） | 单元测试：给定图像与标注，输出像素尺寸与关键像素 | 未运行 | |
-| 选区几何、手柄、微调 | 单元测试 | 未运行 | |
-| Esc 取消无文件、无请求 | 单元测试 + 手工 | 未运行 | |
+| 合成按原始分辨率（2x 屏幕） | 单元测试：给定图像与标注，输出像素尺寸与关键像素 | 通过 | `CompositorTests`：2× 尺寸、边框/背景像素、上下方向、撤销重做 |
+| 选区几何、手柄、微调 | 单元测试 | 通过 | `CaptureTests`：反向拖动、边界移动、8 手柄极限；真实方向键/Shift 待人工 |
+| Esc 取消无文件、无请求 | 单元测试 + 手工 | 自动化通过；待人工验证 | `CaptureTests` 取消后迟到捕获不完成；`SessionTests` 关闭后 OCR 不更新、安全输入零请求。真实 Esc 事件及文件/网络监测未运行 |
 | ⌃1 冻结所有屏幕，自身浮窗不入镜 | 手工 | 待人工验证 | |
 | 完成后剪贴板图片与选区一致 | 手工 | 待人工验证 | |
 | OCR 断网可用；翻译结果进结果浮窗 | 手工 | 待人工验证 | |
-| 无视觉模型时图片理解被阻止并引导 | 单元测试 + 手工 | 未运行 | |
-| `scripts/test.sh`、`scripts/build.sh`、`scripts/render-gallery.sh` | 命令 | 未运行 | |
+| 无视觉模型时图片理解被阻止并引导 | 单元测试 + 手工 | 自动化通过；待人工验证 | `SessionTests` 验证未通过时零发送、预览确认前零发送、连接变化后拒绝发送；设置引导待集成 |
+| `scripts/test.sh`、`scripts/build.sh`、`scripts/render-gallery.sh` | 命令 | 通过 | 2026-10-11：32 XCTest + 91 Swift Testing、Rime 部署及标识检查通过；全部产物构建签名通过；Gallery 输出 208 张 PNG。Gallery 只验证原型可渲染，不代表实际编辑器已验收 |
+| 外部图片导入 | 单元测试 + 手工 | 自动化通过；待人工验证 | `ImportTests`：PNG 尺寸、损坏/超限数据拒绝、远程 URL/目录拒绝、图片与文件拖放类型识别；真实拖放及剪贴板待集成 |
 
 ## 进度
 
+- D-1：ScreenCaptureKit 单次内存捕获，排除自身应用；每屏独立遮罩、8 手柄、方向键/Shift 微调、像素尺寸、Esc 取消与迟到捕获丢弃。HotkeyCenter.screenshotAction 供 Claude 接线。`scripts/test.sh` 通过（几何、取消与快捷键回归）；真实多屏、权限及焦点待人工验证。
+
+- D-2：七种标注、文字输入、撤销/重做，工具栏沿用 Tokens。合成以原图像素为准；`scripts/test.sh` 通过，2× 合成尺寸与红色边框/未覆盖区域像素断言通过。Gallery 原型未改；实际编辑器外观待 D-5。
+
+- D-3：完成写 PNG 剪贴板并关闭；预览提供 PNG/JPEG 另存为、本机 OCR、编辑后翻译/总结、图片发送确认和结果浮窗。复用 OperationsEnvironment/OperationRunner 与 AIClient。`scripts/test.sh` 通过：编辑后文字传递、视觉能力门禁、确认前零发送、配置变化失效、关闭后迟到结果丢弃、安全输入零请求。实际剪贴板/保存、断网 OCR、真实 XPC/视觉端点待人工验证。
+
+- D-4：显式剪贴板读取复用 `Clipboard.readPNG()`；提供菜单栏可嵌入的 `ScreenshotImportControls`（按钮与拖入区域），图片/文件拖放共用预览流程。后台解码、EXIF 方向校正、40 MB / 6400 万像素限制、迟到导入丢弃。最终检查补充捕获等待期全局 Esc、关闭时清空本功能最近内容、翻转画布正确显示与小屏滚动预览。最终三条验收命令均通过。
+
+### Claude 集成清单（未修改 AppDelegate 或菜单栏所有权文件）
+
+1. AppDelegate 持有一个 `ScreenshotCoordinator`，启动/退出调用 `start()` / `stop()`；清除当前内容时调用 `cancel()` 和 `closePreview()`。
+2. `hotkeys.screenshotAction = { [weak screenshot] in screenshot?.capture() }`；菜单栏截图也调用 `capture()`。快捷键设置中的“截图即将推出”文案仍在范围外的 `ShortcutRecorder.swift`，请集成时移除截图占位。
+3. 设置 `readSettings` 读取当前 SettingsStore；`onNotice` 展示脱敏错误；`onPermissionRequired` 接屏幕录制权限说明；`configureVision` 打开 AI 连接设置。
+4. 设置 `imageCapabilityVerified(connection, model)`：只有**当前相同连接、模型和密钥测试状态**的图片能力为“可用”才返回 true。默认 false，避免未接线时误上传。现有 `ShellConnectionModel.results[2]` 是图片测试结果；应在确认配置未变化、已刷新状态后桥接，不能只用 supportsImages 标记。
+5. 将 `ScreenshotImportControls(coordinator: screenshot)` 嵌入菜单栏面板；也可直接使用 `openClipboardImage()` 与 `acceptDrop(_:)`。本分支不修改 MenuBarPanelView，不创建 Dock 入口。
+6. 实际遮罩由 `CaptureCanvas` / `CaptureToolbar` 驱动；完成按钮复制并关闭，OCR 图标进入预览，预览提供识别、翻译、总结、保存和发送图片确认。`ImagePreviewView(session:)` 是运行态入口，原 Gallery 初始化器保持可用。
+
+### 待人工验证（D-5）
+
+- 真实 ⌃1、多屏不同缩放/负坐标、全屏应用、自身浮窗隐藏、跨屏拖动被限制；拖动/8 手柄/方向键/Shift/文字输入/撤销重做，Esc 在捕获等待与编辑中均生效。
+- 七种标注、尤其文字/箭头/马赛克的实际外观；原始像素预览与完成后的剪贴板一致；PNG/JPEG 保存、保存取消、Esc 无内容文件。
+- 断网 OCR；编辑 OCR 后通过真实 XPC 翻译及总结；视觉模型门禁、设置引导、发送前图片一致和真实端点收到图片；网络/限流/权限错误与取消。
+- 剪贴板 PNG/TIFF、Finder 文件与应用图片拖放；Secure Input/密码框前后切换、关闭内容释放、焦点与小屏/深浅色/VoiceOver。Gallery 抽看截图编辑器和图片 OCR 原型正常，运行态设计尚未验收。
+
 ## 问题
+
+- 请 Claude 确认外部图片导入的 40 MB / 6400 万像素上限；当前超限明确提示，不缩小或静默截断。
+- Core 的 `ContentSnapshot.CaptureMethod` 目前只有 accessibility/copyFallback/paste，本功能暂以 `.paste` 承载已编辑 OCR 文字，来源显示为“截图 OCR”。是否增加专门的 OCR 枚举由 Claude 跨模块决定；本分支未改 Core。
+- 图片理解走现有 AIClient 的非流式图片接口；OCR 文字操作走既有 OperationRunner 流式接口。运行态结果浮窗使用相同 Tokens，尚未与并行开发的通用结果窗口控制器合并；如需共用控制器，由 Claude 集成。

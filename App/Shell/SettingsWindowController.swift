@@ -54,7 +54,8 @@ private struct SettingsRoot: View {
     }
     var body: some View {
         ShellSettingsView(settings: $store.settings, login: login, connection: connection, sections: sections,
-                          persistenceMessage: persistenceMessage, exportDiagnostics: export)
+                          persistenceMessage: persistenceMessage, exportDiagnostics: export,
+                          inputMethodSyncMessage: store.inputMethodSyncMessage, retryInputMethodSync: { store.flush() })
             .preferredColorScheme(store.settings.general.appearance == .system ? nil :
                 store.settings.general.appearance == .dark ? .dark : .light)
     }
