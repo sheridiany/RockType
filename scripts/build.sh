@@ -84,3 +84,13 @@ print "Built $input_app and registration tool (signed with $identity)"
 
 # Packaged voice worker: launch, signature-bound XPC, wrong-identifier rejection.
 zsh "$repo_dir/Tests/VoiceWorkerSmoke/run.sh"
+
+# Xcode and smoke launches register every built bundle with LaunchServices, which then shows
+# up in Launchpad. Keep only main's dist/RockType.app; worktrees keep none.
+lsregister=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+for bundle in "$repo_dir/.build/ime/Build/Products/Release/"*.app(N) "$repo_dir/dist/"*Input.app(N); do
+  "$lsregister" -u "$bundle" 2>/dev/null || true
+done
+if [[ "$(git -C "$repo_dir" rev-parse --git-dir)" != "$(git -C "$repo_dir" rev-parse --git-common-dir)" ]]; then
+  for bundle in "$repo_dir/dist/"*.app(N); do "$lsregister" -u "$bundle" 2>/dev/null || true; done
+fi

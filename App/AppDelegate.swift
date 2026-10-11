@@ -81,14 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // The design gallery has no production listeners, preference writes or onboarding.
         if CommandLine.arguments.contains("--gallery") { gallery.show(); return }
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.image = Self.statusImage()
-        item.button?.imagePosition = .imageLeading
-        item.button?.target = self
-        item.button?.action = #selector(statusClicked)
-        item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        item.button?.setAccessibilityLabel("RockType 菜单栏")
-        statusItem = item
+        updateStatusItemVisibility()
         clock.didRefresh = { [weak self] in self?.refreshStatus() }
         NotificationCenter.default.addObserver(self, selector: #selector(settingsChanged), name: SettingsStore.didChange, object: store)
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(becameActive),
@@ -148,7 +141,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         connection.refresh(store.settings.ai)
     }
 
+    /// The menu bar item is opt-in (settings → general); no item means no menu bar presence at all.
+    private func updateStatusItemVisibility() {
+        if store.settings.general.showsMenuBarItem {
+            guard statusItem == nil else { return }
+            let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+            item.button?.image = Self.statusImage()
+            item.button?.imagePosition = .imageLeading
+            item.button?.target = self
+            item.button?.action = #selector(statusClicked)
+            item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            item.button?.setAccessibilityLabel("RockType 菜单栏")
+            statusItem = item
+        } else if let item = statusItem {
+            panel.close()
+            NSStatusBar.system.removeStatusItem(item)
+            statusItem = nil
+        }
+    }
+
     private func refreshStatus() {
+        updateStatusItemVisibility()
         statusItem?.button?.title = store.settings.general.showBeijingTime ? " 北京 " + clock.beijingTime : ""
         statusItem?.button?.toolTip = "RockType · 北京 " + clock.beijingDate + " " + clock.beijingTime
     }
