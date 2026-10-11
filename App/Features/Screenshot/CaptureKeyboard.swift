@@ -5,6 +5,7 @@ enum CaptureKeyCommand: Equatable {
     case cancel, copy, quickSave, saveAs, pin, restore, ocrCopy, copyColor
     case undo, redo, delete, tool(ScreenshotTool?)
     case hierarchy(parent: Bool)
+    case scrollCapture
     case nudge(CaptureDirection, CaptureEdge?, fast: Bool)
 }
 enum CaptureDirection: CaseIterable { case left, right, up, down
@@ -43,6 +44,7 @@ enum CaptureKeyboard {
             case "c": return .copyColor
             case "p": return .pin
             case "r": return .restore
+            case "l": return .scrollCapture
             case "e": return .tool(.eraser)
             case "v": return .tool(nil)
             default: break

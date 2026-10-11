@@ -28,6 +28,8 @@ import os
     }()
     private let saveAs: ScreenshotSaveAsController
     private var saving = false
+    private var scrollCapture: ScrollCaptureController?
+    private let scrollHUD = ScrollCaptureHUD()
     private var captureTask: Task<Void, Never>?
     private var protectionTask: Task<Void, Never>?
     private let overlays = CaptureOverlayGroup()
@@ -104,6 +106,8 @@ import os
     func stop() { running = false; historyPanel.close(); history.stop(); warmupTask?.cancel(); warmupTask = nil; ScreenCapture.stopWarming(); cancel(); closePreview(); PinnedImageController.shared.closeAll() }
     func cancel() {
         generation += 1
+        let scroll = scrollCapture; scrollCapture = nil
+        scroll?.onCancel = {}; scroll?.cancel(); scrollHUD.close()
         elementQuery.cancel(); elementSnapshot = nil
         saving = false; saveAs.cancel()
         imageOpenPanel?.cancel(nil); imageOpenPanel = nil
@@ -206,6 +210,10 @@ import os
                 for canvas in self.overlays.canvases.values { canvas.toolStyles[tool.rawValue] = style }
             }
             view.onCancel = { [weak self] in self?.cancel() }
+            view.onScrollCapture = { [weak self, weak view] in
+                guard let self, let view else { return }
+                self.beginScrollCapture(view, frame: frame)
+            }
             view.onComplete = { [weak self, weak view] image in
                 guard let self, let view, self.captureAllowed() else { return }
                 do {
@@ -272,6 +280,47 @@ import os
                 panel.makeKey(); panel.makeFirstResponder(view)
             }
         }
+    }
+    private func beginScrollCapture(_ canvas: CaptureCanvas, frame: ScreenCapture.Frame) {
+        guard allowed(), canvas.selection.width >= 32, canvas.selection.height >= 32 else {
+            canvas.showNotice("请选取至少 32 × 32 点的区域，并确认辅助功能与安全输入状态。"); return
+        }
+        let selection = canvas.selection
+        guard let window = frame.windows.first(where: { $0.contains(CGPoint(x: selection.midX, y: selection.midY)) }), window.contains(selection) else {
+            canvas.showNotice("长截图的选区必须完整位于同一个窗口内。"); return
+        }
+        let region = CaptureGeometry.globalScreenRect(selection, screen: frame.rect)
+        let expectedWindow = CaptureGeometry.globalScreenRect(window, screen: frame.rect)
+        let pid = previousApp?.processIdentifier
+        let rounded = readSettings().screenshot.roundedCorners ?? true
+        lastSelection = (frame.displayID, selection)
+        cancel() // Releases frozen full-screen images, restores the source app, and removes overlay monitors.
+        let current = generation
+        let controller = ScrollCaptureController(allowed: allowed, prepare: {
+            try await ScrollRegionCapture.prepare(selection: region, expectedWindow: expectedWindow, expectedPID: pid)
+        })
+        scrollCapture = controller
+        controller.onCancel = { [weak self] in
+            guard let self, self.generation == current else { return }; self.cancel()
+        }
+        controller.onFailure = { [weak self] message in
+            guard let self, self.generation == current else { return }; self.cancel(); self.onNotice(message)
+        }
+        controller.onComplete = { [weak self] image in
+            guard let self, self.generation == current, self.allowed() else { return }
+            self.completeScrollCapture(image, region: region, rounded: rounded)
+        }
+        scrollHUD.show(controller, near: region); controller.start()
+    }
+    /// One finalized scroll result shares the normal screenshot history and editable OCR cache.
+    func completeScrollCapture(_ image: CGImage, region: CGRect, rounded: Bool) {
+        guard running, allowed(), region.width > 0 else { return }
+        let scale = CGFloat(image.width) / region.width
+        guard let result = ScreenshotExport.render(image: image,
+            pointSize: CGSize(width: region.width, height: CGFloat(image.height) / scale), roundedCorners: rounded) else {
+            cancel(); onNotice("无法生成长截图，请缩小选区后重试。"); return
+        }
+        cancel(); openImage(result, origin: "滚动长截图", historyID: history.record(result))
     }
     func saveSelection(_ image: CGImage, canvas: CaptureCanvas, displayID: CGDirectDisplayID) {
         guard captureAllowed(), !saving else { return }

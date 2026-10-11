@@ -31,6 +31,7 @@ import RoarkTPlatform
     var notice: String?
     var confirmingImage: Bool { visual.phase == .confirming }
     var onClose: () -> Void = {}
+    var onPin: @MainActor (CGImage) -> Bool = ScreenshotSession.pin
     var onTextChanged: (String) -> Void = { _ in }
     var performText: (OperationRequest) -> Void = { _ in }
     var imageCompleted: (OperationResult, OperationTemplate) -> Void = { _, _ in }
@@ -171,14 +172,17 @@ import RoarkTPlatform
         overlay.run(image: image, lines: ocrLines, settings: config)
     }
     func pinDisplayedImage() {
-        guard check(), let image = displayedImage, let screen = NSScreen.main else { return }
+        guard check(), let image = displayedImage else { return }
+        notice = onPin(image) ? "图片已贴图" : "无法贴图，请检查安全输入状态。"
+    }
+    private static func pin(_ image: CGImage) -> Bool {
+        guard let screen = NSScreen.main else { return false }
         let width = min(CGFloat(image.width), screen.visibleFrame.width * 0.6)
         let height = min(CGFloat(image.height) * width / CGFloat(image.width), screen.visibleFrame.height * 0.6)
         let size = CGSize(width: height * CGFloat(image.width) / CGFloat(image.height), height: height)
         let rect = CGRect(x: screen.visibleFrame.midX - size.width / 2, y: screen.visibleFrame.midY - size.height / 2,
             width: size.width, height: size.height)
-        if PinnedImageController.shared.pin(image, at: rect) { notice = "图片已贴图" }
-        else { notice = "无法贴图，请检查安全输入状态。" }
+        return PinnedImageController.shared.pin(image, at: rect)
     }
     func translate() {
         guard check(), !busy else { return }
