@@ -17,7 +17,7 @@ public final class DefaultOperationRunner: OperationRunner {
     private let isAllowed: () -> Bool
     private let offline: (any TextTranslationClient)?
     private let recent: (any RecentResults)?
-    private let streamAI: AIStream
+    private let streamAI: AIStream?
     private var generation: UInt64 = 0
     private var task: Task<Void, Never>?
     private var protectionTask: Task<Void, Never>?
@@ -28,10 +28,7 @@ public final class DefaultOperationRunner: OperationRunner {
     /// key should fetch the current connection's credential from Keychain on demand.
     public init(offline: (any TextTranslationClient)? = nil, recent: (any RecentResults)? = nil,
                 apiKey: @escaping () throws -> String, isAllowed: @escaping () -> Bool,
-                streamAI: @escaping AIStream = { connection, text, key, model, onDelta in
-                    try await AIClient(connection: connection).stream(text: text, apiKey: key,
-                        model: model, onDelta: onDelta)
-                }) {
+                streamAI: AIStream? = nil) {
         self.offline = offline; self.recent = recent; self.key = apiKey
         self.isAllowed = isAllowed; self.streamAI = streamAI
     }
@@ -126,8 +123,15 @@ public final class DefaultOperationRunner: OperationRunner {
                 do { credential = try key() } catch { throw AIClientError.configuration }
                 try check(current)
                 continuation?.yield(.engine(model))
-                text = try await streamAI(request.settings.ai, prompt, credential, model) { [weak self] delta in
-                    await self?.receive(delta, generation: current)
+                if let streamAI {
+                    text = try await streamAI(request.settings.ai, prompt, credential, model) { [weak self] delta in
+                        await self?.receive(delta, generation: current)
+                    }
+                } else {
+                    text = try await AIClient(connection: request.settings.ai).stream(text: prompt, apiKey: credential,
+                        model: model, onThinking: { [weak self] in await self?.thinking(generation: current) }) { [weak self] delta in
+                            await self?.receive(delta, generation: current)
+                        }
                 }
             }
             try check(current)
@@ -153,6 +157,12 @@ public final class DefaultOperationRunner: OperationRunner {
         }
     }
 
+    private func thinking(generation current: UInt64) {
+        guard generation == current, continuation != nil else { return }
+        guard isAllowed() else { rejectProtected(); return }
+        continuation?.yield(.thinking)
+    }
+
     private func receive(_ delta: String, generation current: UInt64) {
         guard generation == current, continuation != nil else { return }
         guard isAllowed() else { rejectProtected(); return }
@@ -172,7 +182,10 @@ public final class DefaultOperationRunner: OperationRunner {
     }
 
     private static func prompt(_ request: OperationRequest, target: String) -> String {
-        var text = request.template.prompt.replacingOccurrences(of: "{{target}}", with: target)
+        var text = OperationPrompts.resolved(request.template).replacingOccurrences(of: "{{target}}", with: target)
+        if request.question != nil {
+            text = "这是同一会话的追问。请直接回答最后一个 question，遵循该问题要求的语言与格式；最初操作仅作为背景，不要再次执行。\n<initial_task>\n" + text + "\n</initial_task>"
+        }
         text += "\n\n<content>\n" + request.session.snapshot.text + "\n</content>"
         for turn in request.session.turns {
             text += "\n\n<question>\n" + turn.question + "\n</question>\n<answer>\n" + turn.answer + "\n</answer>"

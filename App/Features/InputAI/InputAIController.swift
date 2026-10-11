@@ -126,9 +126,9 @@ import RoarkTPlatform
               let key = try? secret(settings.ai.id), !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               !key.contains("\n"), !key.contains("\r") else { return [:] }
         let values = ["baseURL": settings.ai.baseURL, "model": settings.ai.defaultModel, "apiKey": key,
-                      "timeout": String(input.timeout), "polishPrompt": polish.prompt,
-                      "rewritePrompt": polish.prompt + "\n请改写措辞与句式，保留原意，仅输出改写结果。",
-                      "translatePrompt": translate.prompt]
+                      "timeout": String(input.timeout), "polishPrompt": OperationPrompts.resolved(polish),
+                      "rewritePrompt": OperationPrompts.resolved(polish) + "\n请改写措辞与句式，保留原意，仅输出改写结果。",
+                      "translatePrompt": OperationPrompts.resolved(translate)]
         guard values.values.allSatisfy({ $0.utf8.count <= 32_768 }) else { return [:] }
         return values
     }
