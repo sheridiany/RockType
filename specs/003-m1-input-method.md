@@ -96,5 +96,9 @@
 
 - [x] 菜单图标：迁移原 22×16pt、4.5pt 圆角、透明 R 镂空生成器与像素测试、SystemRendererProbe、截图比较工具；两输入源共六个图标键改为 `roarktMenuTemplate.pdf`；构建在签名前生成 Bundle 资源。
 - 图标验证：`scripts/test.sh` 通过（真实退出码 0）；系统 renderer 输出 44×32px / 22×16pt，R 字高 8pt。PNG：`.build/ime-evidence/menu-icon-system.png`。安装后真实系统菜单仍待 Claude 验证。
-- [ ] 恢复中英圆形提示、候选窗/译文栏/方案提示与旧配色。
+- [x] 恢复中英圆形提示、候选窗/译文栏/方案提示与旧配色。
 - [ ] 完成逐文件资源盘点、完整构建与离屏对照。
+
+- 面板恢复验证：`scripts/test.sh` 真实退出码 0；完整 `scripts/build.sh` 真实退出码 0（含签名与 worker XPC 冒烟，未启动输入法）。恢复原 SquirrelPanel/SquirrelTheme/SquirrelView 路径，移除 D0 固定宽度、卡片标题/图标与胶囊。额外保留候选可访问性动作、不可激活窗口、输入变化隐藏旧译文、加载态隐藏旧文字。输入模式计时器替换/1.1 秒消失/按键路径隐藏与有效屏幕边缘测试通过。
+- 原源码离屏对照：在临时目录编译只读旧源码（仅重命名与 Swift 6 隔离适配），使用相同样例/主题导出 `.build/ime-evidence/reference/`；浅/深候选、就绪译文、中文圆形、英文圆形、方案提示共 10 对 PNG 逐像素比较，差异均为 0。记录 `.build/ime-evidence/reference-comparison.txt`。
+- 配色核对：当前 `InputMethod/data/squirrel.yaml` 已与旧源码仅有产品/配色名称差异，末尾不存在 D0 覆盖段；安装旧版的 style/配色也相同，只少一些 app_options。不更改该文件、词库或用户数据。
