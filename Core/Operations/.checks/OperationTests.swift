@@ -216,3 +216,65 @@ private actor Gate {
         #expect(throws: OperationFailure.invalidSearchURL) { try SearchURL.make(query: "probe", engine: template) }
     }
 }
+
+private final class HangingStreamStub: URLProtocol, @unchecked Sendable {
+    private final class State: @unchecked Sendable {
+        let lock = NSLock()
+        var started = false
+        var stopped = false
+        func use<T>(_ body: (State) -> T) -> T { lock.lock(); defer { lock.unlock() }; return body(self) }
+    }
+    private static let state = State()
+    static var started: Bool { state.use { $0.started } }
+    static var stopped: Bool { state.use { $0.stopped } }
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        Self.state.use { $0.started = true }
+        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: 200,
+            httpVersion: nil, headerFields: ["Content-Type": "text/event-stream"])!, cacheStoragePolicy: .notAllowed)
+    }
+    override func stopLoading() { Self.state.use { $0.stopped = true } }
+}
+@Test @MainActor func runnerCancellationStopsURLSessionTransport() async throws {
+    let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [HangingStreamStub.self]
+    let network = URLSession(configuration: config)
+    defer { network.invalidateAndCancel() }
+    let runner = DefaultOperationRunner(apiKey: { "synthetic" }, isAllowed: { true },
+        streamAI: { settings, text, key, model, delta in
+            try await AIClient(connection: settings, session: network).stream(text: text, apiKey: key, model: model, onDelta: delta)
+        })
+    let events = runner.run(request())
+    for _ in 0..<100 where !HangingStreamStub.started { try await Task.sleep(for: .milliseconds(5)) }
+    #expect(HangingStreamStub.started)
+    runner.cancel()
+    #expect(await collect(events).last == .cancelled)
+    for _ in 0..<100 where !HangingStreamStub.stopped { try await Task.sleep(for: .milliseconds(5)) }
+    #expect(HangingStreamStub.stopped)
+}
+
+@Test @MainActor func modelErrorsAndDisabledHistoryDoNotSaveResults() async {
+    let recent = InMemoryRecentResults()
+    let runner = DefaultOperationRunner(recent: recent, apiKey: { "synthetic" }, isAllowed: { true },
+        streamAI: { _, _, _, _, _ in throw AIClientError.unauthorized })
+    #expect(await collect(runner.run(request())).last == .failed(.ai(.unauthorized)))
+    #expect(recent.results.isEmpty)
+    let successful = DefaultOperationRunner(recent: recent, apiKey: { "synthetic" }, isAllowed: { true },
+        streamAI: { _, _, _, _, _ in "Synthetic answer" })
+    var settings = AppSettings(); settings.privacy.keepRecentResultsInMemory = false
+    let disabled = OperationRequest(session: OperationSession(snapshot: snapshot()),
+        template: OperationTemplate.defaults[1], settings: settings)
+    #expect(result(await collect(successful.run(disabled))) != nil)
+    #expect(recent.results.isEmpty)
+    var image = OperationTemplate.defaults[1]; image.input = .image
+    let unsupported = OperationRequest(session: disabled.session, template: image, settings: settings)
+    #expect(await collect(successful.run(unsupported)).last == .failed(.unsupportedInput))
+}
+
+@Test @MainActor func emptyCompletionCannotEnterHistory() async {
+    let recent = InMemoryRecentResults()
+    let runner = DefaultOperationRunner(recent: recent, apiKey: { "synthetic" }, isAllowed: { true },
+        streamAI: { _, _, _, _, _ in " \n" })
+    #expect(await collect(runner.run(request())).last == .failed(.unavailable))
+    #expect(recent.results.isEmpty)
+}

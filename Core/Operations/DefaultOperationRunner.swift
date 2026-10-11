@@ -132,6 +132,9 @@ public final class DefaultOperationRunner: OperationRunner {
             }
             try check(current)
             let answer = text ?? ""
+            guard !answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw OperationFailure.unavailable
+            }
             let turn = OperationTurn(question: request.question ?? request.template.prompt, answer: answer)
             let session = OperationSession(id: request.session.id, snapshot: request.session.snapshot,
                 turns: request.session.turns + [turn])
