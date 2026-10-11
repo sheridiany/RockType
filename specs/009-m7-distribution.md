@@ -32,7 +32,7 @@
 | R-1 | `scripts/build-installer.sh`、pre/postinstall、pkg 产出（未公证也可本地安装测试） | pi-surfaces | 已实现；安装待人工验证 |
 | R-2 | `scripts/notarize.sh`（无凭据时清晰报错退出） | pi-surfaces | 已实现；真实公证待凭据 |
 | R-3 | 卸载流程接到设置 → 关于 | pi-surfaces | 已实现；授权与真实卸载待人工验证 |
-| R-4 | Sparkle 2 集成、appcast 脚本、设置 → 关于 中“检查更新” | pi-surfaces | 未开始 |
+| R-4 | Sparkle 2 集成、appcast 脚本、设置 → 关于 中“检查更新” | pi-surfaces | 已实现入口与 feed 工具；配置、启动接线和真实更新待验收 |
 | R-5 | 第三方声明与许可证文件核对 | pi-surfaces | 未开始 |
 | R-6 | 干净账户安装 → 引导 → 卸载 验收 | 用户 + Claude | 未开始 |
 
@@ -72,3 +72,11 @@
 - 勾选清理时预先复制用户权限的工具，待主 App 退出后删除设置/模型、RoarkT 方案与独立学习数据、当前用户 AI 钥匙串条目；保留共享词典、其他方案、无归属标记的 custom.yaml。不执行用户提供的 root 脚本。
 - `scripts/test.sh` 通过（119 Swift tests）；隔离目录验证保留共享数据、重复清理、拒绝符号链接跳转；独立清理工具 `swiftc` 编译通过。未执行真实删除、管理员弹窗和退出后清理，待人工验证。
 - 平台限制：TIS 无公开 unregister API，执行 disable + 移除输入法 bundle 后提示注销并重新登录。需要 Claude 确认这作为“移除输入源注册”的验收口径。
+
+### R-4 验收证据（2026-10-11）
+
+- Sparkle 2.8.0 使用已固定的依赖；生产关于页接“检查更新”，公开 `UpdateController.shared.start()` 由 Claude 集成到 AppDelegate。缺少真实 feed、公钥时禁用检查并说明，避免占位 URL 网络请求。
+- 安装包包含 Sparkle 框架，按嵌套层级签名；保留 main 已有的开发构建框架嵌入工作。输入法 Sources / 工程 / Resources 检索未发现独立 Sparkle 更新入口，无需删除代码；子模块保留。
+- appcast 脚本从钥匙串签署已公证 pkg，从包内读取版本/公钥并验证签名，生成 `guided-package` enclosure；不上传、不生成私钥。
+- `scripts/test.sh` 通过（121 Swift tests）；覆盖包篡改、错误公钥、未配置 feed、无效 URL 拒绝。独立 appcast 工具编译通过。
+- 真实 appcast 签名与跨版本更新未运行：待仓库 URL、EdDSA 公钥及用户钥匙串私钥、公证 profile。自动启动接线留给 Claude；真实安装包最终构建记录见后续验收。
