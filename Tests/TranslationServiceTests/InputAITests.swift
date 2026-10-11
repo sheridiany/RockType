@@ -238,3 +238,29 @@ private final class AIListener: NSObject, NSXPCListenerDelegate, @unchecked Send
     #expect(await aiPerform(ai).result == "Synthetic result")
     client.invalidate()
 }
+
+@Test @MainActor func inputAIOldOwnerCannotRevokeNewConnectionConfiguration() async {
+    let ai = InputAICoordinator(isSecure: { false }, complete: { _, _ in "Synthetic result" })
+    let old = UUID(), current = UUID()
+    #expect(ai.configure(aiConfig(), owner: old) == nil)
+    #expect(ai.configure(aiConfig(), owner: current) == nil)
+    #expect(ai.configure([:], owner: old) == nil)
+    ai.removeConnection(old)
+    #expect(await aiPerform(ai).result == "Synthetic result")
+    #expect(ai.configure([:], owner: current) == nil)
+    #expect(await aiPerform(ai).code == 101)
+}
+
+@Test @MainActor func inputAIEndpointPolicyMatchesSharedAIClient() async {
+    let ai = InputAICoordinator(isSecure: { false }, complete: { _, _ in "Synthetic" })
+    for baseURL in ["http://127.0.0.1:8080/v1", "http://[::1]:8080/v1", "http://localhost/v1", "https://example.invalid/v1"] {
+        var config = aiConfig(); config["baseURL"] = baseURL
+        #expect(ai.configure(config, owner: UUID()) == nil)
+        #expect(await aiPerform(ai).result == "Synthetic")
+    }
+    for baseURL in ["http://example.invalid", "http://127.0.0.2", "http://localhost.example.invalid", "https://user:pass@example.invalid", "https://example.invalid?key=synthetic"] {
+        var config = aiConfig(); config["baseURL"] = baseURL
+        #expect(ai.configure(config, owner: UUID())?.code == 100)
+        #expect(await aiPerform(ai).code == 101)
+    }
+}

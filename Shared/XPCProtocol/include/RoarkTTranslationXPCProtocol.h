@@ -55,7 +55,8 @@ NS_ASSUME_NONNULL_BEGIN
 // Explicit input AI uses the same authenticated listener. Existing narrow clients
 // may keep their interface; E-3 clients select this interface to call rewrite.
 @protocol RoarkTInputAIXPCProtocol <RoarkTTextTranslationXPCProtocol>
-// Main App only. Empty dictionary revokes configuration and in-flight requests.
+// Main App only. Empty dictionary revokes this connection's configuration and
+// in-flight requests; an old owner cannot clear a replacement connection's config.
 // Required string keys: baseURL, model, apiKey, timeout (seconds, 0.1...120),
 // rewritePrompt, polishPrompt, translatePrompt. Prompts use {{target}};
 // the service appends the source. Memory-only; revoked on owner disconnect.

@@ -91,7 +91,7 @@ public struct AIClient: Sendable {
     }
 
     /// HTTPS everywhere; plain HTTP only for a local relay on the loopback interface.
-    static func isAllowedEndpoint(_ url: URLComponents) -> Bool {
+    public static func isAllowedEndpoint(_ url: URLComponents) -> Bool {
         guard let host = url.host?.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "[]")), !host.isEmpty else { return false }
         if url.scheme == "https" { return true }
         return url.scheme == "http" && ["127.0.0.1", "::1", "localhost"].contains(host)

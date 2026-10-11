@@ -2,7 +2,7 @@
 
 - 阶段：M6
 - 覆盖需求：FR-E3、FR-E8、NFR-2
-- 状态：Ready（服务与主 App 部分）；输入法部分待 M1 合并
+- 状态：InProgress（E-1/E-2 代码及自动化完成；AppDelegate 接线、E-3/E-4 与真实验收未完成）
 - 依赖：SPEC-001 翻译服务、SPEC-004 AI 连接、SPEC-005 操作引擎与模板、SPEC-003 候选窗
 
 ## 范围
@@ -54,11 +54,21 @@
 - 提供 `App/Features/InputAI/InputAIController` 的 `start()/stop()`：启动下发，监听 SettingsStore（AI 配置、模板、输入法 AI 设置）与无内容钥匙串事件；事件注册失败时每 2 秒重读。专用 XPC 客户端做签名绑定、串行更新、超时/取消与断连重试，停止时下发空配置后关闭连接。
 - `InputSettings.inputAI` 新增可选设置（缺失时默认关闭、`⌥Tab`、30 秒）；通过现有设置文件和通知同步到输入法。未使用旧的 `ShortcutSettings.inputMethodAI` 占位字段，不做迁移。设置 → 快捷键新增开关、录制、清除、恢复默认和与已配置全局键的冲突提示；不把输入法按键注册为全局键。
 - 验证：`swift test --filter inputAI` 退出 0（13 tests）；补匿名 XPC 主 App 客户端下发/清空/重连及快捷键冲突检查后，`scripts/test.sh` 退出 0（139 tests + Rime + Hotkey/Permission checks）。初次编译因 Swift 6 通知隔离与 Security 枚举导入名称报错，已修复并通过复测。
-- 验证覆盖启动、重复 start/stop、设置/模板/模拟钥匙串变化、删除密钥、读取失败、并发编辑时串行下发、停止后重启、配置不含密钥的持久化、IME 设置投影。系统钥匙串回调实机送达与设置 UI 走查待人工。
+- 验证覆盖启动、重复 start/stop、设置/模板/模拟钥匙串变化、删除密钥、读取失败、并发编辑时串行下发、停止后重启、配置不含密钥的持久化、IME 设置投影。系统钥匙串回调后续已用隔离合成条目验证（见下）；设置 UI 走查待人工。
 - 未改 AppDelegate。Claude 集成时持有一个 `InputAIController`，设置就绪后调用 `start()`，`applicationWillTerminate` 调用 `stop()`。在此接线与 E-3 完成前，不能宣称输入法内 AI 已端到端可用。
-- 已按通知在 E-1 后执行 `git merge main`，取得本机环境规则。E-2 提交后将再次合入 main，并复用新增 `AIClient.isAllowedEndpoint` 统一地址校验。
+- 已按通知分别在 E-1、E-2 提交后执行 `git merge main`，取得本机环境规则及回环 HTTP 支持。
+
+### main 同步与最终复核（2026-10-11）
+
+- 两端统一调用 `AIClient.isAllowedEndpoint`，仅给该方法新增 `public` 可见性；允许共享规则规定的回环 HTTP，拒绝外部 HTTP、相似主机名及带 URL 凭据的配置。未另建 URL 协议规则。
+- 加固连接交替：旧连接的迟到清空不能撤销新连接配置；断连前排队的成功回复不能阻止新连接重新下发配置。已加回归测试。
+- `swift test --filter inputAI` 退出 0（18 tests）；隔离系统钥匙串新增/更换/删除测试 `swift test --filter inputAIKeychainMonitorReceivesIsolatedKeyEdits` 退出 0（1 test），只操作随机测试服务名下的合成条目，已清理。
+- 最终 `scripts/test.sh` 退出 0（144 项 Swift Testing + 32 项 XCTest、Rime 临时目录部署、Hotkey/Permission checks）；已有 `Core/Voice/LICENSE.md` 未声明资源警告不影响退出码。
+- `scripts/build.sh` 退出 0：主 App、翻译服务、输入法、语音 worker 构建及签名完成，脚本内语音 MLX self-test、签名 XPC helper 往返与错误身份拒绝均通过。产物仅位于本 worktree 的 `dist/`（指向 `.build/dist.noindex`）。
+- `git diff --check` 最终退出 0。未运行 install-dev/uninstall-dev、未注册或启动输入法、未加载 LaunchAgent、未启动本 worktree 的主 App；安装和真实交互留给 Claude 从 main 验收。
 
 ## 问题
 
 - 待 Claude 集成 AppDelegate 生命周期并从 main 做安装/签名鉴权、真实端点、按键 P95、三动作 Tab 上屏、Secure Input/密码框与浅深色 UI/键盘/VoiceOver 验收。
-- 钥匙串事件接口为 macOS 现有但已标记 deprecated 的 `SecKeychainAddCallback`；注册失败有重读兜底。需实机验证更换、删除、锁定钥匙串时配置能撤销/刷新。
+- 钥匙串事件接口为 macOS 现有但已标记 deprecated 的 `SecKeychainAddCallback`；注册失败有重读兜底。隔离条目的新增、更换、删除已自动验证；仍待真实 App 连接和钥匙串锁定/解锁走查。
+- E-3 需决定未配置 AI 时隐藏入口的状态来源：目前协议提供请求时的明确 `notConfigured` 错误，InputSettings 只同步用户开关，不同步密钥是否存在。若要在首次触发前准确隐藏入口，应由 Claude 确认增加无内容的可用性查询或运行时状态同步；不得让输入法读钥匙串。

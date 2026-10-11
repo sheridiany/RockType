@@ -15,6 +15,7 @@ import RoarkTPlatform
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     @ObservationIgnored private var running = false
     @ObservationIgnored private var revision = 0
+    @ObservationIgnored private var connectionRevision = 0
     @ObservationIgnored private var lastSent: [String: String]?
     @ObservationIgnored private var sending: Task<Void, Never>?
     @ObservationIgnored private var retry: Task<Void, Never>?
@@ -34,7 +35,7 @@ import RoarkTPlatform
         running = true
         transport.onDisconnect = { [weak self] in
             guard let self, self.running else { return }
-            self.lastSent = nil; self.scheduleRetry()
+            self.connectionRevision += 1; self.lastSent = nil; self.scheduleRetry()
         }
         observers.append(NotificationCenter.default.addObserver(forName: SettingsStore.didChange, object: nil, queue: .main) { [weak self] note in
             let changedStore = note.object as? SettingsStore
@@ -81,11 +82,15 @@ import RoarkTPlatform
     private func synchronize() async {
         while running, !Task.isCancelled {
             let current = revision
+            let connection = connectionRevision
             let config = configuration()
             if config != lastSent {
                 do {
                     try await transport.configure(config)
                     guard running, !Task.isCancelled else { return }
+                    // A reply queued just before a disconnect must not make the
+                    // next connection appear configured. Re-send the latest snapshot.
+                    guard connection == connectionRevision else { continue }
                     lastSent = config
                     message = config.isEmpty ? "输入法 AI 已关闭或尚未配置。" : "输入法 AI 配置已同步。"
                 } catch {
@@ -111,7 +116,7 @@ import RoarkTPlatform
         let settings = store.settings
         let input = settings.input.inputAI ?? InputAISettings()
         guard input.enabled, input.timeout.isFinite, (0.1...120).contains(input.timeout),
-              let url = URLComponents(string: settings.ai.baseURL), url.scheme == "https", url.host?.isEmpty == false,
+              let url = URLComponents(string: settings.ai.baseURL), AIClient.isAllowedEndpoint(url),
               url.user == nil, url.password == nil, url.query == nil, url.fragment == nil,
               !settings.ai.defaultModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               let polish = settings.templates.first(where: { $0.id == "polish" && $0.input == .text }),

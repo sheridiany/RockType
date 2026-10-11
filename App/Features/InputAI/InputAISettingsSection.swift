@@ -24,6 +24,10 @@ struct InputAISettingsSection: View {
                 Text("按组合键完成录制，Esc 取消。")
             }
             if let notice { Text(notice).foregroundStyle(.secondary) }
+            else if let shortcut = preferences.wrappedValue.shortcut,
+                    Self.conflicts(shortcut, settings: settings.shortcuts) {
+                Text("与已配置的全局快捷键冲突，请重新录制。").foregroundStyle(.secondary)
+            }
             Text("仅在输入法组词时触发，每次按键切换一个动作；Esc 返回普通候选翻译。需要先在 AI 连接中配置服务与密钥。")
                 .foregroundStyle(.secondary)
             Text("此键由输入法处理。与 Rime 或其他应用的冲突需在实际输入时验证。")

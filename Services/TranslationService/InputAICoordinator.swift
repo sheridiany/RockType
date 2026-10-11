@@ -52,7 +52,7 @@ struct InputAIConfiguration: Sendable {
         let keys: Set<String> = ["baseURL", "model", "apiKey", "timeout", "rewritePrompt", "polishPrompt", "translatePrompt"]
         guard Set(values.keys) == keys,
               values.values.allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.utf8.count <= 32_768 }),
-              let url = URLComponents(string: values["baseURL"]!), url.scheme == "https", url.host?.isEmpty == false,
+              let url = URLComponents(string: values["baseURL"]!), AIClient.isAllowedEndpoint(url),
               url.user == nil, url.password == nil, url.query == nil, url.fragment == nil,
               let timeout = Double(values["timeout"]!), timeout.isFinite, (0.1...120).contains(timeout),
               !values["apiKey"]!.contains("\r"), !values["apiKey"]!.contains("\n") else {
@@ -99,9 +99,13 @@ final class InputAICoordinator {
     }
 
     func configure(_ values: [String: String], owner: UUID) -> NSError? {
+        // A closing old app connection must not revoke a newer connection's config.
+        if values.isEmpty {
+            if self.owner == owner { clearConfiguration() }
+            return nil
+        }
         // A broken replacement must revoke the previous credential too.
         clearConfiguration()
-        guard !values.isEmpty else { return nil }
         do { configuration = try InputAIConfiguration(values); self.owner = owner; return nil }
         catch { return InputAIError.invalidRequest.nsError }
     }

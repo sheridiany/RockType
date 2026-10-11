@@ -146,3 +146,24 @@ import RoarkTCore
     var settings = ShortcutSettings(); settings.showSettings = Shortcut(key: "tab", modifiers: .option)
     #expect(InputAISettingsSection.conflicts(Shortcut(key: "tab", modifiers: .option), settings: settings))
 }
+
+@Test @MainActor func inputAIAppAcceptsOnlySharedEndpointPolicyAndReplaysAckAcrossDisconnect() async {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = configuredStore(directory.appendingPathComponent("settings.json")), sink = ConfigurationSink()
+    store.settings.ai.baseURL = "http://127.0.0.1:8080/v1"
+    let controller = InputAIController(store: store, transport: sink, secret: { _ in "synthetic-key" },
+        beginKeyMonitoring: { true }, endKeyMonitoring: {})
+    sink.holdNext = true; controller.start()
+    await awaitInputAI { sink.held != nil }
+    #expect(sink.payloads.last?["baseURL"] == "http://127.0.0.1:8080/v1")
+    sink.release(); sink.onDisconnect?()
+    await awaitInputAI { sink.payloads.count == 2 }
+    for baseURL in ["http://[::1]:8080/v1", "http://localhost/v1"] {
+        store.settings.ai.baseURL = baseURL
+        await awaitInputAI { sink.payloads.last?["baseURL"] == baseURL }
+    }
+    store.settings.ai.baseURL = "http://localhost.example.invalid"
+    await awaitInputAI { sink.payloads.last == [:] }
+    controller.stop(); store.flush()
+}
