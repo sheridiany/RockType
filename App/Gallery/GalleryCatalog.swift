@@ -21,6 +21,7 @@ enum GalleryCatalog {
     ]
     // U4: independent registration block; surfaces 1–5 are maintained separately.
     + InputVoiceGallery.entries
+    + OnboardingGallery.entries
 }
 
 enum GalleryTheme: String, CaseIterable, Identifiable {
