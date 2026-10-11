@@ -27,7 +27,7 @@
 | --- | --- | --- | --- |
 | M3-1 | 操作引擎、快照、会话、最近结果、搜索、模型选择（C6–C9、C11、C14、C15） | pi-xpc | 完成（待验收） |
 | M3-2 | 翻译服务 `translateText` 与翻译路由（FR-E1 划词路径） | pi-xpc | 完成（待验收） |
-| M3-3 | 划词监听、取词管线、黑白名单、工具栏窗口、快捷键 ⌃⌥T/⌃⌥S 接入（C1–C5） | pi-platform | 未开始 |
+| M3-3 | 划词监听、取词管线、黑白名单、工具栏窗口、快捷键 ⌃⌥T/⌃⌥S 接入（C1–C5） | pi-platform | 完成（待验收） |
 | M3-4 | 结果浮窗窗口与交互、复制并返回、追问、置顶（C12、C13） | pi-surfaces | 未开始 |
 | M3-5 | 设置：操作模板编辑与自定义模板、按功能指定模型（C9、C10、C15 的界面） | pi-surfaces | 未开始 |
 | M3-6 | 集成与验收 | Claude | 未开始 |
@@ -51,6 +51,8 @@
 
 ## 进度
 
+- M3-3 第一段：合入 `agent/xpc` 接口 `bf7ee55` / 登记 `3142b7b`；新增 SelectionCapture、SelectionPolicy 与 Platform.SelectionSource。AX 优先、仅 unsupported 时复制回退；安全输入、取消、来源应用/焦点/窗口身份前后校验；在快照边界转为 AppKit 坐标。`scripts/test.sh` 通过；独立 `SELECTION_CHECKS` 检查通过，真实应用兼容性待人工验证。
+
 - pi-xpc 接口先行：`bf7ee55`（独立 commit，仅 `Core/Operations/` 公开类型与 `StubOperationRunner`）；`scripts/test.sh` 通过。pi-platform / pi-surfaces 可 cherry-pick 此提交。
 - 接口约定：每个结果窗持有一个 `@MainActor OperationRunner`；`run(_:)` 返回 `AsyncStream<OperationEvent>`，终态后结束；`cancel()` / `stop()` 取消。`ContentSnapshot.Source` 保存来源，矩形为 AppKit 屏幕坐标；追问使用上次 `OperationResult.session`（仅已完成问答），新建使用新 `OperationSession`。`RecentResults` 为内存存储协议。
 
@@ -60,9 +62,40 @@
 - 文件边界：未修改 AppDelegate、Package.swift、共享 Tests 或其他 worktree。新行为检查位于归属目录的 `.checks/`；脚本创建临时 Swift 测试包并在结束后清理。它们目前需单独执行，未修改 `scripts/test.sh`。
 - 最终验证命令：`Core/Operations/.checks/run.sh`（11/11）、`Services/TranslationService/.checks/run.sh`（9/9）、`scripts/test.sh`（通过）、`scripts/build.sh`（输入法依赖阻塞）、`scripts/render-gallery.sh`（208 PNG，生成不等于视觉验收）、`git diff --check`（通过）。检查夹具均为合成内容，不含真实选区、用户文件或凭据。构建/图库产物只在本 worktree 的忽略目录中。
 
+### M3-3 验收证据（2026-10-11）
+
+- 第一段提交 `11dae58`：取词管线、来源身份、过滤策略与独立检查。第二段：按 Claude 通知合入 main（`7368d26`），测试迁入 Tests/SelectionTests 并新增 RoarkTSelectionTests testTarget，全部由 scripts/test.sh 执行。SelectionController / SelectionToolbarWindow 提供 `start()`、`stop()`、`trigger(_ action: ShortcutAction)`；按设置监听拖选/双击/三击，90ms 等待 AX 更新，generation 隔离迟到结果；外部点击、按键、滚动、切换应用/空间、睡眠、设置变更均撤销；可见期间检查安全输入和来源身份并隐藏。
+- 工具栏为不可成为 key/main 的 nonactivating NSPanel，使用 Placement 与统一 Tokens；支持启用、禁用、顺序、自定义文字模板，过多操作使用紧凑按钮与“更多操作”。默认 Finder 黑名单；白名单未知应用保守拒绝；快捷键同样遵守应用过滤，但不受“仅快捷键”触发模式限制。
+- 显式动作交付不可变 ContentSnapshot / OperationRequest；复制直接写剪贴板，搜索交给注入回调。快照不落盘，不记录内容。Clipboard 仅增加 synthetic copy 的 eventSourceUserData 标记，避免自身监听取消复制回退；既有 changeCount 保存/恢复逻辑不变。
+- 文件边界：实现只改 `App/Features/Selection/`、`Platform/`；按新增授权改 `Tests/SelectionTests/` 和 Package.swift 中自己的 testTarget，并更新本规格。未自行修改 AppDelegate、HotkeyCenter、Core 或其他 worktree；仅将 main 合入本分支，未 push / 未合并到 main。
+
+| M3-3 检查 | 结果 | 证据与限制 |
+| --- | --- | --- |
+| `scripts/test.sh` | 通过 | 合入最新 main 后 19 个 XCTest + 93 个 Swift Testing 测试（含本任务 2 项）；三个 Rime 方案部署及旧标识扫描通过。已有 Core/Voice/LICENSE.md 未归类资源警告不在本任务范围。 |
+| `swift test --filter selectionCaptureProtectsSourcesAndRejectsLateResults` | 通过 | AX 优先且不复制、安全输入禁止读取、空选区不复制、unsupported 复制回退、异步返回时来源变化/保护状态变化拒绝、开始前取消/挂起后取消拒绝迟到结果、坐标转换、Finder 黑名单/白名单、操作禁用排序去重与图片模板过滤。全部使用合成内容。 |
+| `swift test --filter selectionToolbarRendersThemesAndStaysNonactivating` | 通过 | 普通/大量操作 × 浅/深四张 PNG，宽度受限；实际 NSPanel 检查 nonactivating、不能 key/main、隐藏有效。`dist/selection-review/` 四图已查看；ImageRenderer 不支持原生 Menu，导出仅替换该菜单标签为省略号，不能证明菜单交互。 |
+| `scripts/render-gallery.sh` | 通过 | 原有 Gallery 导出 208 PNG；本任务新增生产工具栏单独按上一行导出，未越界改 Gallery 注册表。 |
+| `scripts/build.sh` | **阻塞** | 主 App / 翻译服务 Release 编译、签名和 strict/deep 验证通过；脚本随后因本 worktree 的 InputMethod/librime、plum、Sparkle 子模块为空退出 1。未初始化或修改不归本任务所有的输入法目录。不能声称全产物构建通过。 |
+| `git diff --check` | 通过 | 最终修改无空白错误。 |
+| 真实 TextEdit / Safari / VS Code / 企业微信取词；全屏/多屏；纯键盘/VoiceOver | 待人工验证 | 未接 AppDelegate，不把测试桩、PNG 或面板属性断言当作实际跨应用验收。 |
+| Secure Input / 密码框、权限撤销、来源前台保持、用户新复制不覆盖、实际快捷键冲突/改键 | 待人工验证 | 管线与现有 Clipboard 自动化通过，但真实系统状态与键鼠时序仍需集成后验证。 |
+
+测试位于 `Tests/SelectionTests/`，通过 @testable import RoarkTApp 检查生产类型；App 内已移除全部测试入口与编译开关。默认测试不输出 PNG，需要重建自查图片时运行：
+
+```sh
+scripts/test.sh
+ROARKT_SELECTION_RENDER_DIR="$PWD/dist/selection-review" swift test --filter selectionToolbarRendersThemesAndStaysNonactivating
+scripts/render-gallery.sh
+```
+
 ## 问题
 
 - 待 Claude 决定：各真实模型的输入预算。`OperationRequest.maximumInputBytes` 默认 16,384 UTF-8 字节，对完整提示词及会话一起校验、绝不截断；可由调用方按已验证模型的输入预算覆盖。当前设置没有模型上下文容量元数据，默认值不是对所有模型上限的声明。
 - 待 Claude 确认产品语义：翻译模板自定义提示词用于 AI 路径；`offlineFirst` 成功时仍按规格使用 Apple Translation（该 API 不支持提示词），不会应用自定义提示词。若希望编辑翻译提示词后必走 AI，需要在设置/路由规格中明确。
-- 待 Claude 集成：是否把两个 `.checks/run.sh` 纳入统一测试入口；本分支受文件所有权限制未修改该入口。初始化输入法构建子模块后需重新运行完整 build.sh。
+- 已由 Claude 在 `44e7aad` 将 M3-1/M3-2 测试迁入 Tests 并接入 Package；原 `.checks/run.sh` 记录为历史证据，当前使用 scripts/test.sh。初始化输入法构建子模块后仍需重新运行完整 build.sh。
 - 待人工验证：真实端点/模型及错误响应；已安装 Apple 语言包的中英与指定目标翻译；macOS < 26 回落；签名 App 到 LaunchAgent 的真实调用；密码框与终端 Secure Keyboard Entry 的无请求/无缓存；结果浮窗追问、复制并返回、最近结果菜单和设计验收（由 M3-3～M3-6 集成）。
+
+- **M3-3 集成交给 Claude**：构造并持有 SelectionController，`settings` 闭包读取 SettingsStore.settings（Observation 自动跟踪）；`perform` 将 OperationRequest 交给 M3-4 结果窗/runner，`search` 调用 `operationsEnvironment.search(snapshot.text, settings: settings.selection)` 并处理 false/错误，`notice` 展示无内容的错误提示；AppDelegate 生命周期调用 start/stop。窗口 followToolbar / automaticallyClose / automaticallyPin / windowOpacity 已在 request.settings 中，具体效果由 M3-4 结果窗处理。
+- **快捷键接线必须由 Claude 完成**：现有 `App/Shell/Hotkeys/HotkeyCenter.swift` 已注册翻译/总结，但 handler 仍调用 comingSoon；它不归 M3-3 所有。可在 AppDelegate 注入的 comingSoon 回调中将这两项分发至 `selectionController.trigger(.translateSelection / .summarizeSelection)`，保留现有冲突提示、录制暂停与即时改键。M3-3 不重复注册 Carbon 快捷键。真实快捷键端到端尚未完成。
+- **来源标识约定**：Platform.SelectionSource 的 windowIdentifier 是 AX 窗口 CFHash 得到的运行期不透明标识，不是 CGWindowID；在取词/工具栏期间另持有 AX 窗口与焦点元素并用 CFEqual 校验。M3-4 若需要实际定位来源窗口，应由 Claude 协调接口，不能把此字符串强转 CGWindowID。
+- 复制回退沿用 SPEC-010 已接受的 changeCount 竞争限制：NSPasteboard 不提供写入者身份/原子 compare-and-swap；外部首次写入、超时后迟到复制无法完全识别。未增加后台剪贴板监听。
