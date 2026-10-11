@@ -52,7 +52,12 @@ final class SettingsStore {
         pendingSave?.cancel()
         pendingSave = nil
         firstPendingChange = nil
-        guard !readFailed else { return } // Preserve an unreadable original until the next successful launch.
+        if readFailed {
+            // Retry the read: once the file is absent, or backed up as corrupt, writing cannot
+            // destroy the user's only copy. A now-readable original is still never overwritten.
+            guard let status = try? persistence.load().status, status != .loaded else { return }
+            readFailed = false
+        }
         do {
             try persistence.save(settings)
             persistenceError = nil
