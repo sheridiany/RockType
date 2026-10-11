@@ -72,3 +72,12 @@
 | 与 RoarkTools 基线视觉一致 | 对照截图走查 | 未运行 | |
 | Gallery 可键盘操作 | 手工 | 待人工验证 | |
 | `swift build`、`scripts/test.sh` 通过 | 命令 | 未运行 | |
+
+## U3 分段证据
+
+- A 段（2026-10-11）：`App/Mock/` 中建立界面 1–5 的纯 Swift 数据模型，39 个确定性合成状态样例（菜单栏 6、划词工具栏 5、结果浮窗 15、截图编辑器 5、图片预览 8）。不引用 SwiftUI、DesignSystem 或 Gallery。
+- `swift build` 通过；`scripts/test.sh` 中 2 个 Swift 测试通过，但 Rime 部署被阻塞：独立 worktree 下现有脚本无法定位相邻运行时，报 `Missing Rime deployment dependency: /bin/rime_deployer`。尚未生成 PNG；B 段等待 U1/U2。
+
+## 问题
+
+- U3：独立 worktree 的 `scripts/test-rime.sh` 只搜索相邻一层目录，当前布局下找不到 Rime 运行时。该脚本不属于 U3 文件所有权；需维护者提供运行时或调整测试入口后复验。
