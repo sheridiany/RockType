@@ -76,6 +76,21 @@ struct PanelChecks {
       let row = translation.contentView!.subviews.compactMap { $0 as? NSButton }.first!
       precondition(!translation.canBecomeKey && row.accessibilityPerformPress())
       precondition(activations > 0)
+      let keycap = translation.contentView!.subviews.compactMap { $0 as? NSTextField }.first!
+      precondition(!keycap.isHidden && keycap.accessibilityLabel() == "Tab 上屏译文")
+      NSAppearance(named: appearance)!.performAsCurrentDrawingAppearance {
+        let ink = (keycap.attributedStringValue.attribute(.foregroundColor, at: 0, effectiveRange: nil) as! NSColor).usingColorSpace(.deviceRGB)!
+        let fill = NSColor(cgColor: keycap.layer!.backgroundColor!)!.usingColorSpace(.deviceRGB)!
+        let surface = theme.backgroundColor.usingColorSpace(.deviceRGB)!
+        func luminance(_ c: NSColor) -> CGFloat {
+          let channels = [c.redComponent, c.greenComponent, c.blueComponent].map { $0 <= 0.04045 ? $0 / 12.92 : pow(($0 + 0.055) / 1.055, 2.4) }
+          return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722
+        }
+        let a = fill.alphaComponent
+        let composite = NSColor(srgbRed: fill.redComponent * a + surface.redComponent * (1-a), green: fill.greenComponent * a + surface.greenComponent * (1-a), blue: fill.blueComponent * a + surface.blueComponent * (1-a), alpha: 1)
+        let l1 = luminance(ink), l2 = luminance(composite)
+        precondition((max(l1, l2) + 0.05) / (min(l1, l2) + 0.05) >= 4.5, "Tab meets text contrast in both themes")
+      }
       try render(translation, "translation-ready-" + name)
       candidate.updateTranslation(session)
       let attached = NSApp.windows.compactMap { $0 as? RoarkTTranslationPanel }

@@ -19,7 +19,7 @@ final class RoarkTTranslationPanel: NSPanel {
         let ink = comment[.foregroundColor] as? NSColor ?? .secondaryLabelColor
         // Desaturate custom comment colors too, so retained text reads as disabled.
         appearance.performAsCurrentDrawingAppearance {
-          attributes[.foregroundColor] = ink.usingColorSpace(.deviceGray)?.withAlphaComponent(0.7) ?? ink
+          attributes[.foregroundColor] = ink.usingColorSpace(.deviceGray)?.withAlphaComponent(1) ?? ink
         }
       }
       return attributes
@@ -72,12 +72,21 @@ final class RoarkTTranslationPanel: NSPanel {
     effectiveAppearance.performAsCurrentDrawingAppearance {
       surface.layer?.backgroundColor = style.background.cgColor
       surface.layer?.borderColor = (style.border ?? .clear).cgColor
-      shortcutLabel.layer?.backgroundColor = (style.highlight ?? .clear).cgColor
+      // A keycap is a control hint, not a selected candidate. Pair semantic ink
+      // and fill rather than inheriting a low-contrast candidate number color.
+      shortcutLabel.layer?.backgroundColor = NSColor.quaternaryLabelColor.cgColor
+      shortcutLabel.layer?.borderColor = NSColor.separatorColor.cgColor
     }
     let scope = ticket.snapshot.scope == "whole" ? "整句" : "当前词"
     shortcutLabel.stringValue = "Tab"
     shortcutLabel.isHidden = state.commit == nil && !state.canRetry
-    shortcutLabel.attributedStringValue = NSAttributedString(string: "Tab", attributes: style.label)
+    shortcutLabel.attributedStringValue = NSAttributedString(string: "Tab", attributes: [
+      .font: NSFont.systemFont(ofSize: 11, weight: .medium),
+      .foregroundColor: NSColor.labelColor
+    ])
+    shortcutLabel.layer?.borderWidth = 0.5
+    shortcutLabel.layer?.cornerRadius = 4
+    shortcutLabel.setAccessibilityLabel(state.canRetry ? "Tab 重试翻译" : "Tab 上屏译文")
     // A pending ticket may retain text from a previous candidate. Never draw it.
     let text = state.isLoading ? "正在翻译…" : state.displayText
     let attributes = style.actionAttributes(ready: state.commit != nil, appearance: effectiveAppearance)
@@ -102,8 +111,8 @@ final class RoarkTTranslationPanel: NSPanel {
     origin.y = max(screen.minY, min(origin.y, screen.maxY - height))
     setFrame(NSRect(origin: origin, size: NSSize(width: width, height: height)), display: true)
     action.frame = NSRect(x: 12, y: 3, width: textWidth, height: height - 6)
-    shortcutLabel.frame = NSRect(x: width - shortcutWidth - 8, y: (height - shortcutSize.height) / 2,
-                                width: shortcutWidth, height: shortcutSize.height)
+    shortcutLabel.frame = NSRect(x: width - shortcutWidth - 8, y: (height - shortcutSize.height - 4) / 2,
+                                width: shortcutWidth, height: shortcutSize.height + 4)
     // Ordering an already visible panel forces a synchronous WindowServer round trip per key.
     if !isVisible { orderFront(nil) }
   }

@@ -91,16 +91,17 @@ private final class ModeBadgeView: NSView {
       image.draw(in: bounds)
       return
     }
+    let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
     let circle = NSBezierPath(ovalIn: bounds.insetBy(dx: 3, dy: 3))
-    (ascii ? NSColor(srgbRed: 0.96, green: 0.32, blue: 0.10, alpha: 1)
-           : NSColor(srgbRed: 0.98, green: 0.97, blue: 0.94, alpha: 1)).setFill()
+    (ascii ? NSColor(srgbRed: 0.72, green: 0.23, blue: 0.07, alpha: 1)
+           : (dark ? NSColor(white: 0.18, alpha: 1) : NSColor(white: 0.98, alpha: 1))).setFill()
     circle.fill()
-    NSColor(srgbRed: 0.22, green: 0.21, blue: 0.20, alpha: 1).setStroke()
+    (dark ? NSColor(white: 0.6, alpha: 1) : NSColor(white: 0.4, alpha: 1)).setStroke()
     circle.lineWidth = 1.3
     circle.stroke()
     let text = NSAttributedString(string: ascii ? "EN" : "中", attributes: [
       .font: NSFont.systemFont(ofSize: ascii ? 15 : 20, weight: .semibold),
-      .foregroundColor: ascii ? NSColor.white : NSColor(srgbRed: 0.16, green: 0.16, blue: 0.15, alpha: 1)
+      .foregroundColor: ascii ? NSColor.white : NSColor.labelColor
     ])
     let size = text.size()
     text.draw(at: NSPoint(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2))
