@@ -57,7 +57,7 @@
 
 | # | 任务 | 执行 | 状态 |
 | --- | --- | --- | --- |
-| U1 | DesignSystem：Tokens + 组件 | pi | 未开始 |
+| U1 | DesignSystem：Tokens + 组件 | pi | 完成（待验收） |
 | U2 | Gallery 窗口与 `--render-gallery` | pi | 未开始 |
 | U3 | 界面 1–5（菜单栏、工具栏、结果浮窗、截图编辑器、图片预览） | pi | 未开始 |
 | U4 | 界面 6–10（设置、引导、候选窗、模式提示、语音 HUD） | pi | 未开始 |
@@ -72,3 +72,13 @@
 | 与 RoarkTools 基线视觉一致 | 对照截图走查 | 未运行 | |
 | Gallery 可键盘操作 | 手工 | 待人工验证 | |
 | `swift build`、`scripts/test.sh` 通过 | 命令 | 未运行 | |
+
+## U1 / U2 增量验收证据
+
+### U1：DesignSystem
+
+- 完成（待验收）：`App/DesignSystem/Tokens.swift` 和 `Components.swift` 提供浅深主题、字体、间距、圆角、尺寸、阴影与动效常量，以及 Button 四变体、Kbd、Chip、ActionRow、StatusLine、输入框/文本区、Notice、SettingsRow、Toggle、Segmented、Select。
+- 数值来源：参考规格完整阅读；其元信息指定 UI-0.1 表格由 `frontend/src/lib/tokens.css` UI-0.2 覆盖，故采用 UI-0.2 数值（例如窗口圆角 12、强调色浅色 #4f46e5 / 深色 #a5b4fc）。原生选择控件保留系统焦点和禁用行为；Kbd 按 UI-0.2 使用无框淡色文字。SF Symbols 使用系统图标。
+- 参考文件实际位于 `/Users/xuean/Repos/00-Roark/RoarkTools/`（当前 worktree 的 `../RoarkTools` 不存在）；只读。
+- 通过：`swift build`；`scripts/test.sh`（2 个 Swift Testing 测试及旧标识扫描）。
+- 待人工验证：组件各交互态、VoiceOver、真实键盘焦点、与参考设计逐项视觉比对。macOS 14 为编译部署目标，尚未在 macOS 14 真机运行。
