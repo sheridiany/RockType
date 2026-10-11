@@ -31,6 +31,7 @@
 | M3-4 | 结果浮窗窗口与交互、复制并返回、追问、置顶（C12、C13） | pi-surfaces | 完成（待验收） |
 | M3-5 | 设置：操作模板编辑与自定义模板、按功能指定模型（C9、C10、C15 的界面） | pi-surfaces | 完成（待验收） |
 | M3-6 | 集成与验收 | pi-platform / Claude 验收 | 代码集成完成（待验收） |
+| M3-T1 | 修复集成测试异步等待及数组越界，连续 5 次完整测试 | pi-platform | 完成；连续 5 次完整测试通过 |
 
 **接口先行**：pi-xpc 第一个 commit 只提交 `Core/Operations/` 的公开类型（`ContentSnapshot`、`OperationRequest`、`OperationEvent` 流事件、`OperationRunner` 协议、`RecentResults` 接口）与测试桩，在“进度”节登记 hash；pi-platform 与 pi-surfaces 合并该 commit 后开发，用桩实现自测。
 
@@ -161,3 +162,14 @@ scripts/render-gallery.sh
 | 人工功能与设计验收 | 待人工验证 | 跨应用取词、Secure Input/密码框/权限撤销、真实 Apple 语言包与 AI、AXRaise 及失效退化、中文追问/纯键盘/VoiceOver、全屏/多屏；真实 Fn/麦克风/模型识别/ticket 填入与 HUD。 |
 
 已知非阻塞构建提示：Core/Voice/LICENSE.md 未声明为 SPM 资源，沿用现有代码；本次没有修改资源归类。
+
+
+### M3-T1 集成测试时序修复（2026-10-11）
+
+- 定位到 `Tests/SelectionTests/M3IntegrationTests.swift` 的 `toolbarStreamsIntoWindowAndRecentResultsWithFollowUpAndPrivacy`：旧 `settle()` 只调用 30 次 `Task.yield()`，不保证 AsyncStream 的完成事件已消费。若窗口仍为 streaming，生产 `ResultWindowState.ask` 正确地拒绝忙时追问；测试的 `#expect` 失败后仍继续执行 `first.requests[1]`，因此触发数组越界。问题在测试同步与前置条件检查，未修改生产窗口、runner 或权限逻辑。
+- 复现：无注入的专项循环 30 次都通过（各退出 0），与先前全量测试偶发失败相符。随后仅把测试桩的完成事件延迟 25ms，`swift test --filter M3IntegrationTests` 退出 1，出现同一 `.done` 断言失败及 `Index out of range` / signal 5；日志 `.build/m3-delayed-red.log`。延迟只用于测试回归，不用于生产代码。
+- 修复：等待具体可观察状态（流式内容、完成状态及对应会话/最近结果、失败提示），用单调时钟 5 秒截止时间和异步短暂挂起让出执行；超时通过 `#require` 抛出失败，停止测试。所有依赖请求/stream/runner 数组索引的前置条件改为 `#require`。隐私关闭时也等待对应会话完成，避免对本来已空的最近列表提前断言成功。
+- 回归：同一集成路径参数化为原本即时完成及 25ms 延迟完成两种情况。桩 runner 停止时取消待发送任务；迟到事件断言 stream 已终止，不靠等待若干次 yield 来证明“没有副作用”。`swift test --filter M3IntegrationTests` 修复后退出 0，两种参数均通过。
+- 预防：测试必须等待被验证的事件已经消费，必要的前置条件必须失败即停止；本次无需新增生产接口或改变架构。
+- 按 Claude 要求，同一份最终代码连续执行 `scripts/test.sh` **5 次，真实退出码依次为 0、0、0、0、0**。每轮 153 个 Swift Testing 测试（含 M3 两种参数）、个人脚本 9 项检查、既有 Rime/输入法/AppShell 检查及标识扫描全部通过。日志位于忽略目录 `.build/m3-five-runs/run-{1...5}.log`，退出码汇总为 `.build/m3-five-runs/results.txt`。`git diff --check` 退出 0。
+- 未进行真实个人数据操作、安装、输入法注册、App 启动或真实 AI 调用；人工产品验收范围不变。
