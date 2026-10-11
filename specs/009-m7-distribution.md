@@ -35,8 +35,18 @@
 | R-4 | Sparkle 2 集成、appcast 脚本、设置 → 关于 中“检查更新” | pi-surfaces | 未开始 |
 | R-5 | 第三方声明与许可证文件核对 | pi-surfaces | 未开始 |
 | R-6 | 干净账户安装 → 引导 → 卸载 验收 | 用户 + Claude | 未开始 |
+| R-7 | 官网（FR-F5）：`website/` 静态站，只本地构建与测试，不部署 | pi-ui | 未开始 |
 
 **文件所有权**：`Installer/`、`scripts/build-installer.sh`、`scripts/notarize.sh`、`scripts/make-appcast.sh`、`App/Features/Update/`、`App/Features/Uninstall/`、`Package.swift`（仅新增 Sparkle 依赖）、`App/Info.plist`（仅 Sparkle 键）、`THIRD_PARTY_NOTICES.md`、`LICENSES/`、对应测试。设置 → 关于 中按钮接线只改关于分区；`AppDelegate` 如需改动，提供入口由 Claude 集成。
+
+### R-7 官网
+
+- 以 `../RoType/website/` 为参考（只读），沿用其原则：纯静态 HTML/CSS、无 JS 框架、无外部字体与分析脚本、跟随系统浅深色、尊重减少动态效果。
+- 内容改为 RoarkT：一个产品的四个能力（双语输入法与候选翻译、本地语音、划词 AI、截图 OCR），各配图；隐私说明页（本地优先、只有显式 AI 动作发送内容、密钥只在钥匙串）；更新日志页；下载按钮指向占位常量（GitHub Releases，待用户确定仓库）；GPL 源码获取说明。
+- 产品图：用 `scripts/render-gallery.sh` 产出的 Gallery PNG（候选窗、结果浮窗、截图编辑器、语音 HUD、设置），注明“界面示意”；不得伪造实机截图。
+- 视觉风格对齐 D0 Tokens（靛蓝强调色、灰底白卡），不照搬 RoType 的黑白灰。
+- 测试：`Tests/Website/` 下用 Python 标准库（`html.parser`）检查链接、图片存在与 alt、无外部脚本；接入 `scripts/test.sh`。不依赖 playwright。
+- 文件所有权：`website/`、`Tests/Website/`、`scripts/test.sh` 中一行接入。
 
 ## 验收
 
