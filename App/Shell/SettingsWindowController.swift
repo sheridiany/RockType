@@ -10,6 +10,7 @@ final class SettingsWindowController {
     private let connection: ShellConnectionModel
     private let sections: ShellSettingsSections
     var exportDiagnostics: () -> Void = {}
+    var clearCurrentContent: () -> Void = {}
 
     init(store: SettingsStore, login: LoginItemController, connection: ShellConnectionModel,
          sections: ShellSettingsSections) {
@@ -32,7 +33,7 @@ final class SettingsWindowController {
             window.isReleasedWhenClosed = false
             window.contentMinSize = NSSize(width: Tokens.Size.settingsWidth, height: Tokens.Size.settingsHeight)
             window.contentView = NSHostingView(rootView: SettingsRoot(store: store, login: login, connection: connection,
-                                                                     sections: sections, export: exportDiagnostics))
+                                                                     sections: sections, export: exportDiagnostics, clear: clearCurrentContent))
             window.center()
             self.window = window
         }
@@ -47,6 +48,7 @@ private struct SettingsRoot: View {
     let connection: ShellConnectionModel
     let sections: ShellSettingsSections
     let export: () -> Void
+    let clear: () -> Void
     private var persistenceMessage: String {
         if let error = store.persistenceError { return error }
         if case .recovered = store.loadStatus { return "设置文件损坏，已保留副本并恢复默认值。修改自动保存。" }
@@ -54,7 +56,9 @@ private struct SettingsRoot: View {
     }
     var body: some View {
         ShellSettingsView(settings: $store.settings, login: login, connection: connection, sections: sections,
-                          persistenceMessage: persistenceMessage, exportDiagnostics: export)
+                          persistenceMessage: persistenceMessage, exportDiagnostics: export,
+                          inputMethodSyncMessage: store.inputMethodSyncMessage, retryInputMethodSync: { store.flush() },
+                          clearCurrentContent: clear)
             .preferredColorScheme(store.settings.general.appearance == .system ? nil :
                 store.settings.general.appearance == .dark ? .dark : .light)
     }

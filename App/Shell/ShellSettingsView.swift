@@ -9,9 +9,13 @@ struct ShellSettingsView: View {
     let sections: ShellSettingsSections
     let persistenceMessage: String
     let exportDiagnostics: () -> Void
+    var inputMethodSyncMessage: String? = nil
+    var retryInputMethodSync: () -> Void = {}
+    @FocusState private var focusedSection: SettingsSection?
+    @State private var keyboardNavigation = false
+    var clearCurrentContent: () -> Void = {}
     @State var section: SettingsSection = .general
     @State private var language = LanguagePackModel()
-    @State private var templateID = "translate"
     @Environment(\.colorScheme) private var scheme
     private var p: Tokens.Palette { Tokens.palette(scheme) }
 
@@ -30,7 +34,16 @@ struct ShellSettingsView: View {
                             .foregroundStyle(section == item ? p.accent : p.secondary)
                             .background(section == item ? p.selected : .clear,
                                         in: RoundedRectangle(cornerRadius: Tokens.Radius.control))
-                    }.buttonStyle(.plain).accessibilityAddTraits(section == item ? .isSelected : [])
+                    }.buttonStyle(.plain)
+                        .focused($focusedSection, equals: item)
+                        .focusEffectDisabled()
+                        .overlay {
+                            RoundedRectangle(cornerRadius: Tokens.Radius.control)
+                                .stroke(keyboardNavigation && focusedSection == item ? p.focus : .clear,
+                                        lineWidth: Tokens.Size.focusRing)
+                                .allowsHitTesting(false)
+                        }
+                        .accessibilityAddTraits(section == item ? .isSelected : [])
                 }
                 Spacer()
             }.padding(Tokens.Space.md).frame(width: Tokens.U4.sidebarWidth)
@@ -49,6 +62,13 @@ struct ShellSettingsView: View {
         }.font(Tokens.Typography.font()).foregroundStyle(p.foreground).tint(p.accent)
             .frame(minWidth: Tokens.Size.settingsWidth, minHeight: Tokens.Size.settingsHeight)
             .background(p.background)
+            .background(SettingsSidebarInteraction { keyboard in
+                keyboardNavigation = keyboard
+                if !keyboard { focusedSection = nil }
+            })
+            .onChange(of: focusedSection) { _, focused in
+                if keyboardNavigation, let focused { section = focused }
+            }
     }
 
     @ViewBuilder private var content: some View {
@@ -60,7 +80,7 @@ struct ShellSettingsView: View {
         case .selection: selection
         case .screenshot: screenshot
         case .ai: ShellConnectionView(model: connection, settings: $settings.ai)
-        case .templates: templates
+        case .templates: sections.templatesPane(settings: $settings, showAIConnection: { section = .ai })
         case .shortcuts: sections.shortcutsPane()
         case .permissions: sections.permissionsPane()
         case .privacy: privacy
@@ -114,7 +134,8 @@ struct ShellSettingsView: View {
     }
     private var input: some View {
         Group {
-            Notice(text: "当前只保存偏好，尚未同步到输入法进程。")
+            Notice(text: inputMethodSyncMessage ?? "保存后自动同步到输入法。Rime 配置更改将在当前组词结束后重新部署；默认方案在空闲时应用，仍可从系统输入菜单选择全拼或双拼。")
+            if inputMethodSyncMessage != nil { Button("重试同步", action: retryInputMethodSync) }
             U4Card {
                 Picker("默认方案", selection: $settings.input.scheme) {
                     Text("全拼").tag(InputSettings.Scheme.pinyin)
@@ -147,7 +168,7 @@ struct ShellSettingsView: View {
                 toggle("候选翻译允许使用 AI", $settings.translation.allowCandidateAI)
             }
             U4Card { LanguagePackStepView(model: language) }
-            Notice(text: "动态离线翻译需 macOS 26；候选静态词条按原文精确匹配。划词与截图翻译即将推出。")
+            Notice(text: "动态离线翻译需 macOS 26；候选静态词条按原文精确匹配。候选 AI、指定目标语言以及划词与截图翻译即将推出；当前候选始终使用离线中英互译。")
         }
     }
     private var voice: some View {
@@ -205,54 +226,11 @@ struct ShellSettingsView: View {
             }
         }
     }
-    private var templates: some View {
-        Group {
-            Notice(text: "模板执行即将推出；编辑内容已保存。")
-            HStack {
-                Picker("操作模板", selection: $templateID) {
-                    ForEach(settings.templates) { Text($0.name).tag($0.id) }
-                }
-                Button("新增") {
-                    let item = OperationTemplate(name: "自定义", icon: "sparkles", prompt: "")
-                    settings.templates.append(item)
-                    settings.selection.toolbarActions.append(item.id)
-                    templateID = item.id
-                }
-            }
-            if let index = settings.templates.firstIndex(where: { $0.id == templateID }) {
-                U4Card {
-                    field("名称", $settings.templates[index].name)
-                    field("图标（SF Symbols）", $settings.templates[index].icon)
-                    field("模型（空为默认）", optional($settings.templates[index].model))
-                    Picker("适用输入", selection: $settings.templates[index].input) {
-                        Text("文字").tag(OperationTemplate.Input.text); Text("图片").tag(OperationTemplate.Input.image)
-                    }
-                    Picker("输出形式", selection: $settings.templates[index].output) {
-                        Text("原文对照").tag(OperationTemplate.Output.comparison)
-                        Text("纯文本").tag(OperationTemplate.Output.text)
-                        Text("Markdown").tag(OperationTemplate.Output.markdown)
-                    }
-                    Text("提示词").font(Tokens.Typography.font(weight: .medium))
-                    TextEditor(text: $settings.templates[index].prompt)
-                        .frame(minHeight: Tokens.Space.xxl * 4).accessibilityLabel("提示词")
-                    if let original = OperationTemplate.defaults.first(where: { $0.id == templateID }) {
-                        Button("恢复默认提示词") { settings.templates[index].prompt = original.prompt }
-                    } else {
-                        Button("删除模板") {
-                            settings.templates.remove(at: index)
-                            settings.selection.toolbarActions.removeAll { $0 == templateID }
-                            settings.selection.disabledActions.removeAll { $0 == templateID }
-                            templateID = settings.templates.first?.id ?? ""
-                        }
-                    }
-                }
-            }
-        }
-    }
     private var privacy: some View {
         U4Card {
             toggle("会话内保留最近结果", $settings.privacy.keepRecentResultsInMemory)
-            Text("最多 10 条，不落盘；退出后清空。结果功能即将推出，当前没有内容历史。")
+            Text("最多 10 条，不落盘；退出或关闭此开关后清空最近结果。")
+            Button("清除当前内容", action: clearCurrentContent)
             U4Rule()
             Text("密码框 / Secure Input：不取词、不翻译、不调用 AI、不填入语音、不写缓存。")
             Text("密钥仅存系统钥匙串。诊断仅含动作类型、状态、耗时与脱敏错误。")

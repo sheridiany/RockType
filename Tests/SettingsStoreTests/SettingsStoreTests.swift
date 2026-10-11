@@ -16,13 +16,13 @@ import RoarkTCore
     store.settings.general.showBeijingTime = true
     #expect(observed.value == 1)
     #expect(store.settings.general.showBeijingTime)
-    // The 250 ms save is throttled on the main actor; poll rather than racing a fixed sleep.
-    var persisted = false
-    for _ in 0..<40 where !persisted {
-        try await Task.sleep(for: .milliseconds(50))
-        persisted = (try? persistence.load().settings.general.showBeijingTime) == true
+    // Rendering tests also occupy MainActor. Wait for persistence with a bounded deadline,
+    // rather than assuming both tasks begin their sleep in the same scheduling slice.
+    let deadline = ContinuousClock.now + .seconds(3)
+    while try !persistence.load().settings.general.showBeijingTime, ContinuousClock.now < deadline {
+        try await Task.sleep(for: .milliseconds(20))
     }
-    #expect(persisted)
+    #expect(try persistence.load().settings.general.showBeijingTime)
     store.settings.general.launchAtLogin = true
     store.flush()
     #expect(store.persistenceError == nil)

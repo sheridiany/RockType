@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import RoarkTCore
 
 private final class MenuPanel: NSPanel {
     override var canBecomeKey: Bool { true }
@@ -72,6 +73,9 @@ struct ShellMenuBarPanel: View {
     let clock: MenuBarClock
     let showClock: Bool
     let aiStatus: String
+    var recent: [OperationResult] = []
+    var reopen: (OperationResult) -> Void = { _ in }
+    var clear: () -> Void = {}
     let showSettings: () -> Void
     let quit: () -> Void
     @Environment(\.colorScheme) private var scheme
@@ -95,9 +99,26 @@ struct ShellMenuBarPanel: View {
                 Text("本地 · " + clock.localTime)
             }.font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(p.secondary)
             HStack { Text("最近结果"); Spacer(); Chip(text: aiStatus) }
-            Text("本次运行暂无结果。划词与 AI 功能即将推出，结果仅在内存中保留。")
-                .font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(p.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            if recent.isEmpty {
+                Text("本次运行暂无结果。完成划词操作后，结果仅在内存中保留。")
+                    .font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(p.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Tokens.Space.xs) {
+                        ForEach(recent) { result in
+                            Button { reopen(result) } label: {
+                                VStack(alignment: .leading, spacing: Tokens.Space.xs) {
+                                    Text(result.text).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+                                    Text(result.engine).font(Tokens.Typography.font(Tokens.Typography.caption))
+                                        .foregroundStyle(p.secondary)
+                                }
+                            }.buttonStyle(DesignButtonStyle(variant: .ghost))
+                        }
+                    }
+                }.frame(height: min(CGFloat(recent.count) * 66, 264))
+            }
+            Button("清除当前内容", action: clear).buttonStyle(DesignButtonStyle(variant: .ghost))
             HStack { Label("截图", systemImage: "viewfinder"); Spacer(); Chip(text: "即将推出"); Kbd("⌃1") }
                 .padding(Tokens.Space.md).background(p.card, in: RoundedRectangle(cornerRadius: Tokens.Radius.card))
             U4Rule()

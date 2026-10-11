@@ -7,7 +7,6 @@ import RoarkTCore
     var entries: [(Shortcut, @MainActor () -> Void)] = []
     func handler(_ shortcut: Shortcut) -> (@MainActor () -> Void)? { entries.first { $0.0 == shortcut }?.1 }
     func register(_ shortcut: Shortcut, handler: @escaping @MainActor () -> Void) throws { entries.append((shortcut, handler)) }
-    func startFn(handler: @escaping @MainActor () -> Void) throws {}
     func stop() { entries.removeAll() }
 }
 
@@ -55,4 +54,88 @@ import RoarkTCore
         #expect(OnboardingWindowController.launchAction(arguments: ["--gallery", "--show-settings"], completed: completed) == .none)
         #expect(OnboardingWindowController.launchAction(arguments: ["--render-gallery", "/tmp/gallery", "--show-settings"], completed: completed) == .none)
     }
+}
+
+@MainActor @Test func selectionHotkeysForwardAndRejectStaleOrProtectedEvents() throws {
+    let registrar = ShellRegistrar()
+    var settings = ShortcutSettings()
+    var allowed = true
+    var received: [ShortcutAction] = []
+    var placeholders: [HotkeyCenter.Action] = []
+    let center = HotkeyCenter(read: { settings }, write: { settings = $0 }, showSettings: {},
+        comingSoon: { placeholders.append($0) }, selection: { received.append($0) },
+        registrar: registrar, allowed: { allowed }, trusted: { true })
+    center.start()
+    defer { center.stop() }
+    let translateShortcut = try #require(Shortcut.defaults[.translateSelection])
+    let translate = try #require(registrar.handler(translateShortcut))
+    let summarizeShortcut = try #require(Shortcut.defaults[.summarizeSelection])
+    let summarize = try #require(registrar.handler(summarizeShortcut))
+    translate(); summarize()
+    #expect(received == [.translateSelection, .summarizeSelection])
+    #expect(center.notice == nil && placeholders.isEmpty)
+    allowed = false; translate(); summarize()
+    #expect(received.count == 2)
+    allowed = true
+    center.beginRecording(.translateSelection); translate()
+    #expect(received.count == 2)
+    center.cancelRecording()
+    let replacement = Shortcut(key: "u", modifiers: [.control, .option])
+    center.set(replacement, for: .translateSelection)
+    translate()
+    #expect(received.count == 2)
+    let replacedHandler = try #require(registrar.handler(replacement))
+    replacedHandler()
+    #expect(received.last == .translateSelection && received.count == 3)
+    let screenshot = try #require(Shortcut.defaults[.screenshot])
+    let screenshotHandler = try #require(registrar.handler(screenshot))
+    var screenshots = 0
+    center.screenshotAction = { screenshots += 1 }
+    screenshotHandler()
+    // M4: screenshot starts the real capture instead of a placeholder notice.
+    #expect(screenshots == 1 && placeholders.isEmpty)
+    center.stop(); summarize()
+    #expect(received.count == 3)
+}
+
+@MainActor @Test func voiceListenerOwnershipFollowsRecordingPermissionsAndConflicts() {
+    let registrar = ShellRegistrar()
+    var settings = ShortcutSettings()
+    var trusted = true
+    var monitorAvailable = true
+    var transitions: [Bool] = []
+    let center = HotkeyCenter(read: { settings }, write: { settings = $0 }, showSettings: {},
+        registrar: registrar, allowed: { true }, trusted: { trusted }, voiceListening: {
+            transitions.append($0); return !$0 || monitorAvailable
+        })
+    center.start()
+    #expect(transitions == [true])
+    #expect(registrar.entries.count == 3) // Fn is never registered by HotkeyCenter.
+    center.beginRecording(.screenshot)
+    #expect(transitions == [true, false] && center.statuses[.voiceHoldToTalk] == .recording)
+    trusted = false; center.refreshPermissions()
+    trusted = true; center.refreshPermissions()
+    #expect(transitions == [true, false]) // Regrant cannot resume while recording.
+    center.cancelRecording()
+    #expect(transitions == [true, false, true])
+    trusted = false; center.refreshPermissions()
+    #expect(transitions.last == false && center.statuses[.voiceHoldToTalk] == .needsAccessibility)
+    trusted = true; center.refreshPermissions()
+    #expect(transitions.suffix(2) == [false, true])
+    center.set(Shortcut(key: nil, modifiers: .function), for: .screenshot)
+    #expect(center.statuses[.voiceHoldToTalk] == .conflict && transitions.last == false)
+    center.restoreDefault(for: .screenshot)
+    #expect(center.statuses[.voiceHoldToTalk] == .registered && transitions.last == true)
+    center.set(nil, for: .voiceHoldToTalk)
+    #expect(center.statuses[.voiceHoldToTalk] == .unassigned && transitions.last == false)
+    monitorAvailable = false
+    center.restoreDefault(for: .voiceHoldToTalk)
+    #expect(center.statuses[.voiceHoldToTalk] == .unavailable)
+    monitorAvailable = true; center.retry()
+    #expect(center.statuses[.voiceHoldToTalk] == .registered)
+    center.stop()
+    #expect(transitions.last == false)
+    let count = transitions.count
+    trusted = false; center.refreshPermissions(); center.cancelRecording()
+    #expect(transitions.count == count)
 }

@@ -29,6 +29,14 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Helpers" "$app/Contents/Resources"
 cp "$repo_dir/App/Info.plist" "$app/Contents/Info.plist"
 cp "$bin_dir/RoarkTApp" "$app/Contents/MacOS/RoarkT"
 cp "$bin_dir/RoarkTTranslationService" "$app/Contents/Helpers/RoarkTTranslationService"
+# Sparkle (SPEC-009 R-4) is a dynamic SPM framework; embed it and sign it before the app.
+if [[ -d "$bin_dir/Sparkle.framework" ]]; then
+  mkdir -p "$app/Contents/Frameworks"
+  ditto "$bin_dir/Sparkle.framework" "$app/Contents/Frameworks/Sparkle.framework"
+  install_name_tool -add_rpath @executable_path/../Frameworks "$app/Contents/MacOS/RoarkT"
+  codesign --force --deep --options runtime --timestamp=none --sign "$identity" \
+    "$app/Contents/Frameworks/Sparkle.framework"
+fi
 xcrun actool "$repo_dir/Assets/AppIcon.icon" --compile "$app/Contents/Resources" --app-icon AppIcon \
   --platform macosx --minimum-deployment-target 14.0 \
   --output-partial-info-plist "$repo_dir/.build/appicon-partial.plist" > /dev/null
