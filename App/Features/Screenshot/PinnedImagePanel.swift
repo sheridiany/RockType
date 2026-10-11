@@ -52,7 +52,7 @@ struct PinnedImageHistory {
     mutating func clear() { entries.removeAll() }
 }
 
-enum PinnedImageAction { case save, ocr, copyText, translate }
+enum PinnedImageAction { case save, ocr, copyText, translate, translateImage, barcodes }
 
 /// Owns the escape hatch as long as any pin or recent image exists.
 @MainActor final class PinnedImageController: NSObject, NSWindowDelegate {
@@ -292,6 +292,8 @@ private final class PinnedImagePanel: NSPanel {
         add("识别文字…", #selector(recognizeText))
         add("复制 OCR 文字    ⇧C", #selector(copyRecognizedText))
         add("翻译…（先核对识别文字）", #selector(translateText))
+        add("覆盖式图片翻译…", #selector(translatePicture))
+        add("识别二维码 / 条码…", #selector(recognizeCodes))
         menu.addItem(.separator())
         add("锁定位置与大小", #selector(toggleLock), checked: locked)
         add("鼠标穿透（从菜单栏“贴图”退出）", #selector(togglePassthrough), checked: window?.ignoresMouseEvents == true)
@@ -321,6 +323,8 @@ private final class PinnedImagePanel: NSPanel {
     @objc private func savePicture() { action(.save) }
     @objc private func recognizeText() { action(.ocr) }
     @objc private func copyRecognizedText() { action(.copyText) }
+    @objc private func translatePicture() { action(.translateImage) }
+    @objc private func recognizeCodes() { action(.barcodes) }
     @objc private func translateText() { action(.translate) }
     @objc private func closePicture() { window?.close() }
     @objc private func restoreRecent() { _ = controller?.restoreLast() }

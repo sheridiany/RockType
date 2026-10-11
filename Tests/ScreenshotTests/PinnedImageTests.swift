@@ -134,11 +134,11 @@ extension PinnedImageTests {
         let event = try XCTUnwrap(NSEvent.mouseEvent(with: .rightMouseDown, location: .zero, modifierFlags: [],
             timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
         let menu = try XCTUnwrap(view.menu(for: event))
-        for title in ["另存为…", "识别文字…", "翻译…（先核对识别文字）"] {
+        for title in ["另存为…", "识别文字…", "翻译…（先核对识别文字）", "覆盖式图片翻译…", "识别二维码 / 条码…"] {
             let item = try XCTUnwrap(menu.items.first { $0.title == title })
             XCTAssertTrue(NSApplication.shared.sendAction(try XCTUnwrap(item.action), to: item.target, from: item))
         }
-        XCTAssertEqual(actions, [.save, .ocr, .translate])
+        XCTAssertEqual(actions, [.save, .ocr, .translate, .translateImage, .barcodes])
         let opacity = try XCTUnwrap(menu.items.first { $0.submenu != nil }?.submenu?.items.first { $0.tag == 40 })
         XCTAssertTrue(NSApplication.shared.sendAction(try XCTUnwrap(opacity.action), to: opacity.target, from: opacity))
         XCTAssertEqual(panel.alphaValue, 0.4)

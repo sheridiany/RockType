@@ -54,6 +54,7 @@
 | R2-UI | 菜单栏面板、结果窗口、划词工具栏等剩余界面视觉统一；设计系统 token 清理 | pi-ui | 实现与测试/构建通过；键盘/VoiceOver 待人工验收，见 [证据](evidence/014-R2-UI.md) |
 | R2-ARCH | 架构整理：`App/Mock`、`App/Gallery` 移出正式 App 目标（或仅 DEBUG）；`App/Surfaces` 与 `App/Features` 职责划分（视图 vs 控制器）；死代码清理；`docs/architecture.md` 同步；不改行为 | pi-ime | 第一阶段完成：全仓审计、IME/语音等价整理与架构同步；测试/构建通过；Gallery/Mock 隔离留后续，见 [证据](evidence/014-R2-ARCH.md) |
 | R3-UI | 截图设置覆盖、完整快捷键速查、关于页版本/更新/许可证、菜单栏新功能入口 | pi-ui | 实现、测试/构建与离屏检查通过；待人工验收，见 [证据](evidence/014-R3-UI.md) |
+| R3-SURF | 覆盖式图片翻译（整图批量路由、译图切换/复制/保存/贴图）、本机二维码/条码识别与链接确认、贴图共用入口；[证据](evidence/014-R3-SURF.md) | pi-surfaces | 已实现，测试/构建通过；待人工验收 |
 
 ## 规则
 
