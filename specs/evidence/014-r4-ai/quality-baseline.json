@@ -1,0 +1,442 @@
+[
+  {
+    "category" : "code",
+    "id" : 1,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "英语"
+  },
+  {
+    "category" : "code",
+    "id" : 2,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "英语"
+  },
+  {
+    "category" : "code",
+    "id" : 3,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "英语"
+  },
+  {
+    "category" : "code",
+    "id" : 4,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "英语"
+  },
+  {
+    "category" : "code",
+    "id" : 5,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "英语"
+  },
+  {
+    "category" : "code",
+    "id" : 6,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "简体中文"
+  },
+  {
+    "category" : "code",
+    "id" : 7,
+    "score" : {
+      "fidelity" : 4,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "\"flags\" is translated as 参数 (arguments) rather than 选项 or 标志, which is the usual CLI term; minor terminology imprecision."
+    },
+    "target" : "简体中文"
+  },
+  {
+    "category" : "code",
+    "id" : 8,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "简体中文"
+  },
+  {
+    "category" : "code",
+    "id" : 9,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "简体中文"
+  },
+  {
+    "category" : "code",
+    "id" : 10,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "简体中文"
+  },
+  {
+    "category" : "terms",
+    "id" : 11,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "英语"
+  },
+  {
+    "category" : "terms",
+    "id" : 12,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "英语"
+  },
+  {
+    "category" : "terms",
+    "id" : 13,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "英语"
+  },
+  {
+    "category" : "terms",
+    "id" : 14,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "英语"
+  },
+  {
+    "category" : "terms",
+    "id" : 15,
+    "score" : {
+      "fidelity" : 4,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "'需要权衡' (requires a trade-off) is rendered as 'involve a trade-off', which drops the sense that the trade-off must be balanced."
+    },
+    "target" : "英语"
+  },
+  {
+    "category" : "terms",
+    "id" : 16,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "简体中文"
+  },
+  {
+    "category" : "terms",
+    "id" : 17,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "简体中文"
+  },
+  {
+    "category" : "terms",
+    "id" : 18,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "简体中文"
+  },
+  {
+    "category" : "terms",
+    "id" : 19,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "简体中文"
+  },
+  {
+    "category" : "terms",
+    "id" : 20,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "简体中文"
+  },
+  {
+    "category" : "markdown",
+    "id" : 21,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "英语"
+  },
+  {
+    "category" : "markdown",
+    "id" : 22,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "英语"
+  },
+  {
+    "category" : "markdown",
+    "id" : 23,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "英语"
+  },
+  {
+    "category" : "markdown",
+    "id" : 24,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "英语"
+  },
+  {
+    "category" : "markdown",
+    "id" : 25,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "英语"
+  },
+  {
+    "category" : "markdown",
+    "id" : 26,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "简体中文"
+  },
+  {
+    "category" : "markdown",
+    "id" : 27,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "简体中文"
+  },
+  {
+    "category" : "markdown",
+    "id" : 28,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "简体中文"
+  },
+  {
+    "category" : "markdown",
+    "id" : 29,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "简体中文"
+  },
+  {
+    "category" : "markdown",
+    "id" : 30,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "简体中文"
+  },
+  {
+    "category" : "long",
+    "id" : 31,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 4,
+      "format" : 5,
+      "issue" : "'Although ... since ...' pairs two connectives, so the contrast with 但 is awkward; 'but' or restructuring would read more naturally."
+    },
+    "target" : "英语"
+  },
+  {
+    "category" : "long",
+    "id" : 32,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "英语"
+  },
+  {
+    "category" : "long",
+    "id" : 33,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "英语"
+  },
+  {
+    "category" : "long",
+    "id" : 34,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "英语"
+  },
+  {
+    "category" : "long",
+    "id" : 35,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "英语"
+  },
+  {
+    "category" : "long",
+    "id" : 36,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "简体中文"
+  },
+  {
+    "category" : "long",
+    "id" : 37,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "简体中文"
+  },
+  {
+    "category" : "long",
+    "id" : 38,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "简体中文"
+  },
+  {
+    "category" : "long",
+    "id" : 39,
+    "score" : {
+      "fidelity" : 5,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "none"
+    },
+    "target" : "简体中文"
+  },
+  {
+    "category" : "long",
+    "id" : 40,
+    "score" : {
+      "fidelity" : 3,
+      "fluency" : 5,
+      "format" : 5,
+      "issue" : "'第三次表格' means 'third occurrence of a table'; the source's 'third table' should be '第三张表格' or '第三个表'."
+    },
+    "target" : "简体中文"
+  }
+]
