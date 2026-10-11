@@ -13,9 +13,38 @@ final class ShellConnectionModel {
     private(set) var results = ["未验证", "未验证", "未验证", "未验证"]
     @ObservationIgnored private let keychain = Keychain()
     @ObservationIgnored private var task: Task<Void, Never>?
+    @ObservationIgnored private var secureInputWatch: Task<Void, Never>?
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var configuration = AIConnectionSettings()
-    @ObservationIgnored var runTests: ((AIConnectionSettings, String) async -> [String])?
+    @ObservationIgnored var runTests: (AIConnectionSettings, String) async -> [String] = { settings, secret in
+        do {
+            let result = try await AIConnectionTester(client: AIClient(connection: settings)).run(apiKey: secret)
+            return [result.text, result.streaming, result.image, result.cancellation].map(ShellConnectionModel.label)
+        } catch { return Array(repeating: "未验证", count: 4) }
+    }
+
+    nonisolated private static func label(_ status: AIConnectionTestResult.Status) -> String {
+        switch status {
+        case .available: return "可用"
+        case .unverified: return "未验证"
+        case .unavailable(let error):
+            let reason: String
+            switch error {
+            case .configuration: reason = "检查地址与模型"
+            case .network: reason = "网络异常"
+            case .unauthorized: reason = "检查密钥与权限"
+            case .modelNotFound: reason = "模型不存在"
+            case .rateLimited: reason = "限流，请稍后重试"
+            case .server: reason = "服务异常"
+            case .decoding: reason = "响应格式不兼容"
+            case .timeout: reason = "请求超时"
+            case .cancelled: reason = "请求已取消"
+            case .http(let code): reason = "HTTP \(code)"
+            case .responseTooLarge: reason = "响应过大"
+            }
+            return "不可用 · " + reason
+        }
+    }
 
     func refresh(_ settings: AIConnectionSettings) {
         if configuration != settings {
@@ -24,7 +53,12 @@ final class ShellConnectionModel {
             configuration = settings
         }
         do {
-            hasKey = try keychain.exists(account: settings.id)
+            let present = try keychain.exists(account: settings.id)
+            if hasKey != present {
+                cancel()
+                results = Array(repeating: "未验证", count: 4)
+            }
+            hasKey = present
             configured = hasKey && !settings.baseURL.isEmpty && !settings.defaultModel.isEmpty
             if !testing { message = hasKey ? "密钥已存入系统钥匙串" : "尚未设置密钥" }
         } catch {
@@ -59,7 +93,11 @@ final class ShellConnectionModel {
 
     func test() {
         cancel()
-        guard let runTests else { message = "连接测试等待集成。"; return }
+        guard !SecureInput.isSecureInputActive() else {
+            message = "安全输入已开启，暂不发送连接测试。"
+            return
+        }
+        let runTests = runTests
         do {
             guard let secret = try keychain.get(account: configuration.id), configured else {
                 message = "请先填写连接地址、模型并设置密钥。"; return
@@ -69,10 +107,29 @@ final class ShellConnectionModel {
             message = "正在发送合成测试内容，不会发送选中文字或用户文件。"
             let current = generation
             let config = configuration
+            secureInputWatch = Task { [weak self] in
+                while !Task.isCancelled {
+                    do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
+                    guard let self else { return }
+                    if SecureInput.isSecureInputActive() {
+                        self.cancel()
+                        self.message = "安全输入已开启，连接测试已取消。"
+                        return
+                    }
+                }
+            }
             task = Task { [weak self] in
+                let started = Date()
+                try? await DiagnosticLog.shared.record(.init(action: .aiConnectionTest, status: .started))
                 let result = await runTests(config, secret)
                 guard let self, !Task.isCancelled, self.generation == current else { return }
+                try? await DiagnosticLog.shared.record(.init(action: .aiConnectionTest,
+                    status: result.contains(where: { $0.hasPrefix("不可用") }) ? .failed : .succeeded,
+                    duration: Date().timeIntervalSince(started)))
+                guard !Task.isCancelled, self.generation == current else { return }
                 self.results = result
+                self.secureInputWatch?.cancel()
+                self.secureInputWatch = nil
                 self.testing = false
                 self.message = "连接测试完成；结果仅对本次连接配置有效。"
                 self.task = nil
@@ -82,9 +139,12 @@ final class ShellConnectionModel {
 
     func cancel() {
         generation += 1
+        secureInputWatch?.cancel()
+        secureInputWatch = nil
         task?.cancel()
         task = nil
         if testing {
+            Task { try? await DiagnosticLog.shared.record(.init(action: .aiConnectionTest, status: .cancelled)) }
             results = Array(repeating: "未验证", count: 4)
             message = "已取消连接测试。"
         }

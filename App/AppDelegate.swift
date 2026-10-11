@@ -11,7 +11,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let login = LoginItemController()
     private let connection = ShellConnectionModel()
     private let panel = MenuBarPanelController()
-    private lazy var settingsWindow = SettingsWindowController(store: store, login: login, connection: connection)
+    private let diagnostics = DiagnosticExportController()
+    private lazy var settingsWindow: SettingsWindowController = {
+        let window = SettingsWindowController(store: store, login: login, connection: connection)
+        window.exportDiagnostics = { [weak self] in self?.diagnostics.export() }
+        return window
+    }()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -31,6 +36,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.settings.general.launchAtLogin = login.enabled
         connection.refresh(store.settings.ai)
         refreshStatus()
+        Task {
+            try? await DiagnosticLog.shared.record(.init(action: .settingsLoad,
+                status: store.persistenceError == nil ? .succeeded : .failed,
+                failure: store.persistenceError == nil ? nil : .storage))
+        }
         if CommandLine.arguments.contains("--gallery") { gallery.show() }
         if CommandLine.arguments.contains("--show-settings") { showSettings() }
     }
@@ -138,7 +148,9 @@ private struct LiveMenuRoot: View {
     let quit: () -> Void
     var body: some View {
         ShellMenuBarPanel(clock: clock, showClock: store.settings.general.showBeijingTime,
-                          aiStatus: connection.configured ? "AI 已配置 · 待验证" : "AI 未配置",
+                          aiStatus: connection.testing ? "AI 测试中" :
+                            connection.results.prefix(2).allSatisfy({ $0 == "可用" }) ? "AI 文字/流式可用" :
+                            connection.configured ? "AI 已配置 · 待验证" : "AI 未配置",
                           showSettings: showSettings, quit: quit)
             .preferredColorScheme(store.settings.general.appearance == .system ? nil :
                 store.settings.general.appearance == .dark ? .dark : .light)

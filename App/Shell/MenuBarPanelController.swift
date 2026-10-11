@@ -1,9 +1,14 @@
 import AppKit
 import SwiftUI
 
+private final class MenuPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
+}
+
 @MainActor
 final class MenuBarPanelController {
-    private let panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
+    private let panel = MenuPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
                                 backing: .buffered, defer: false)
     private var localMonitor: Any?
     private var globalMonitor: Any?
@@ -31,7 +36,7 @@ final class MenuBarPanelController {
         let x = max(visible.minX, min(anchor.maxX - size.width, visible.maxX - size.width))
         let y = max(visible.minY, min(anchor.minY - size.height, visible.maxY - size.height))
         panel.setFrame(NSRect(origin: NSPoint(x: x, y: y), size: size), display: true)
-        panel.orderFrontRegardless()
+        panel.makeKeyAndOrderFront(nil)
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown]) { [weak self] event in
             let consumed = MainActor.assumeIsolated {
                 guard let self else { return false }

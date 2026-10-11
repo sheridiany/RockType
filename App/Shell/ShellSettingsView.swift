@@ -9,7 +9,7 @@ struct ShellSettingsView: View {
     let sections: any ShellSettingsSections
     let persistenceMessage: String
     let exportDiagnostics: () -> Void
-    @State private var section: SettingsSection = .general
+    @State var section: SettingsSection = .general
     @State private var templateID = "translate"
     @Environment(\.colorScheme) private var scheme
     private var p: Tokens.Palette { Tokens.palette(scheme) }

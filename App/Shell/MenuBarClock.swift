@@ -12,7 +12,8 @@ final class MenuBarClock {
 
     init() {
         refresh()
-        timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+        let nextMinute = Date(timeIntervalSince1970: (floor(Date().timeIntervalSince1970 / 60) + 1) * 60)
+        timer = Timer(fire: nextMinute, interval: 60, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refresh() }
         }
         if let timer { RunLoop.main.add(timer, forMode: .common) }

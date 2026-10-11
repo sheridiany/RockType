@@ -1,6 +1,7 @@
 import AppKit
 import Observation
 import ServiceManagement
+import RoarkTCore
 
 @MainActor @Observable
 final class LoginItemController {
@@ -33,6 +34,11 @@ final class LoginItemController {
         } catch {
             refresh()
             message = "开机启动设置未完成，请检查系统登录项后重试。"
+        }
+        let succeeded = enabled == requested && !requiresApproval
+        Task {
+            try? await DiagnosticLog.shared.record(.init(action: .launchAtLogin,
+                status: succeeded ? .succeeded : .unavailable))
         }
         return enabled
     }
