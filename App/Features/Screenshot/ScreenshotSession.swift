@@ -50,7 +50,7 @@ import RoarkTPlatform
             remember: rememberImageConfirmation, send: sendVisual)
         self.translation = ScreenshotTranslation(runner: translationRunner ?? DefaultOperationRunner(
             offline: TextTranslationXPCClient(), apiKey: { try Keychain().get(account: settings().ai.id) ?? "" },
-            isAllowed: allowed), allowed: allowed)
+            isAllowed: allowed, providerKey: { try Keychain().get(account: $0) ?? "" }), allowed: allowed)
         self.image = image; self.origin = origin; self.settings = settings; self.verified = verified
         self.ocrLanguages = settings().screenshot.ocrLanguages
         self.allowed = allowed; self.recognize = recognize

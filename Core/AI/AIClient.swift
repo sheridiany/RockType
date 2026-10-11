@@ -9,11 +9,25 @@ public enum AIClientError: Error, Equatable, Sendable {
 public struct AIClient: Sendable {
     public let connection: AIConnectionSettings
     private let session: URLSession
+    private let requestAllowed: @Sendable () async -> Bool
     public let timeout: TimeInterval
     private static let limit = 2 * 1024 * 1024
 
-    public init(connection: AIConnectionSettings, session: URLSession = AIClient.makeSession(), timeout: TimeInterval = 90) {
+    public init(connection: AIConnectionSettings, session: URLSession = AIClient.makeSession(), timeout: TimeInterval = 90,
+                requestAllowed: @escaping @Sendable () async -> Bool = { true }) {
         self.connection = connection; self.session = session; self.timeout = timeout
+        self.requestAllowed = requestAllowed
+    }
+
+    func withConnection(_ connection: AIConnectionSettings) -> AIClient {
+        AIClient(connection: connection, session: session, timeout: timeout, requestAllowed: requestAllowed)
+    }
+
+    func requiring(_ permission: @escaping @Sendable () async -> Bool) -> AIClient {
+        AIClient(connection: connection, session: session, timeout: timeout, requestAllowed: {
+            guard await requestAllowed() else { return false }
+            return await permission()
+        })
     }
 
     public static func makeSession() -> URLSession {
@@ -128,6 +142,8 @@ public struct AIClient: Sendable {
     /// Never replay a partial answer, an authentication failure or an ambiguous network failure.
     private func open(_ request: URLRequest) async throws -> (URLSession.AsyncBytes, URLResponse) {
         for attempt in 0...1 {
+            try Task.checkCancellation()
+            guard await requestAllowed() else { throw AIClientError.cancelled }
             try Task.checkCancellation()
             let pair = try await session.bytes(for: request, delegate: NoAIRedirects())
             guard attempt == 0, let response = pair.1 as? HTTPURLResponse,

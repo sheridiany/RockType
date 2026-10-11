@@ -28,6 +28,8 @@ final class ResultWindowState {
     @ObservationIgnored private let completed: @MainActor (OperationResult) -> Void
     @ObservationIgnored private let feedback: @MainActor (String) -> Void
     @ObservationIgnored private var task: Task<Void, Never>?
+    @ObservationIgnored private var buffered = ""
+    @ObservationIgnored private var flushTask: Task<Void, Never>?
     @ObservationIgnored private var revision: UInt64 = 0
 
     init(runner: any OperationRunner, readable: @escaping @MainActor () -> Bool,
@@ -78,6 +80,7 @@ final class ResultWindowState {
     }
 
     func cancel() {
+        flush()
         revision &+= 1
         task?.cancel(); task = nil; runner.cancel()
         if isBusy { phase = .cancelled; notice = "已停止，保留已生成的部分结果。" }
@@ -90,7 +93,8 @@ final class ResultWindowState {
 
     private func execute(_ request: OperationRequest) {
         cancel()
-        self.request = request; currentQuestion = request.question; history = request.session.turns
+        self.request = request; session = request.session
+        currentQuestion = request.question; history = request.session.turns
         answer = ""; engine = ""; notice = nil
         guard readable() else { phase = .failed; notice = "当前输入受保护或无法检查，未发送请求。"; return }
         phase = .connecting
@@ -109,26 +113,46 @@ final class ResultWindowState {
                 case .thinking: if self.answer.isEmpty { self.phase = .thinking }
                 case .engine(let engine): self.engine = engine
                 case .delta(let delta):
-                    if !delta.isEmpty { self.answer += delta; self.phase = .streaming }
+                    if !delta.isEmpty { self.enqueue(delta); self.phase = .streaming }
                 case .completed(let result):
                     guard result.session.id == request.session.id,
                           result.session.snapshot == request.session.snapshot,
                           result.templateID == request.template.id else {
+                        self.flush()
                         self.phase = .failed; self.notice = "结果与当前操作不匹配，请重试。"; return
                     }
+                    self.flush()
                     self.answer = result.text; self.engine = result.engine
                     self.session = result.session; self.phase = .done
                     self.completed(result)
                     return
                 case .failed(let failure):
+                    self.flush()
                     self.phase = .failed; self.notice = Self.message(failure); return
                 case .cancelled:
+                    self.flush()
                     self.phase = .cancelled; self.notice = "已停止，保留已生成的部分结果。"; return
                 }
             }
             guard let self, !Task.isCancelled, self.revision == revision, self.isBusy else { return }
+            self.flush()
             self.phase = .failed; self.notice = "连接已结束，结果不完整，请重试。"
         }
+    }
+
+    private func enqueue(_ delta: String) {
+        if answer.isEmpty, buffered.isEmpty { answer = delta; return }
+        buffered += delta
+        guard flushTask == nil else { return }
+        flushTask = Task { [weak self] in
+            do { try await Task.sleep(for: .milliseconds(33)) } catch { return }
+            self?.flush()
+        }
+    }
+    private func flush() {
+        flushTask?.cancel(); flushTask = nil
+        if readable() { answer += buffered }
+        buffered = ""
     }
 
     private static func message(_ error: OperationFailure) -> String {

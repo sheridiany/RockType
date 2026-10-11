@@ -13,6 +13,10 @@ struct ScreenshotVisualAIConfirmation: View {
                     .font(.system(size: 15, weight: .semibold))
                 Text("将发送上方图片和下方文字至 \(request.connection.name.isEmpty ? "当前 AI 连接" : request.connection.name)（\(URL(string: request.connection.baseURL)?.host ?? "已配置端点")），模型：\(request.model)。")
                     .font(.system(size: 12)).foregroundStyle(p.secondary).fixedSize(horizontal: false, vertical: true)
+                if request.fallbackImageCapabilityVerified, let fallback = request.connection.fallbackModel {
+                    Text("当前模型暂不可用且尚未输出正文时，可改用同一服务商已验证的备用模型：\(fallback)。")
+                        .font(.system(size: 12)).foregroundStyle(p.secondary).fixedSize(horizontal: false, vertical: true)
+                }
                 ScrollView {
                     Text(request.text.isEmpty ? "（无识别文字，仅发送图片）" : request.text)
                         .font(.system(size: 13, design: .monospaced)).textSelection(.enabled)

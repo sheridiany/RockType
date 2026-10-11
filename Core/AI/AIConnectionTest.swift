@@ -5,6 +5,7 @@ public struct AIConnectionTestResult: Equatable, Sendable {
     public var text: Status = .unverified
     public var streaming: Status = .unverified
     public var image: Status = .unverified
+    public var fallbackImage: Status = .unverified
     public var cancellation: Status = .unverified
     /// Wall time to a complete text answer, including any bounded retry.
     public var textLatency: TimeInterval? = nil
@@ -30,6 +31,19 @@ public struct AIConnectionTester: Sendable {
             result.image = await probe {
                 _ = try await client.complete(text: "Describe this test image.", apiKey: apiKey,
                                               model: client.connection.visionModel, imageDataURL: Self.testImage)
+            }
+        }
+        try Task.checkCancellation()
+        if let fallback = AIProviderRouting.nonempty(client.connection.fallbackModel) {
+            if fallback == (client.connection.visionModel ?? client.connection.defaultModel) {
+                result.fallbackImage = result.image
+            } else {
+                var probeConnection = client.connection
+                probeConnection.visionModel = fallback
+                result.fallbackImage = await probe {
+                    _ = try await client.withConnection(probeConnection).complete(text: "Describe this test image.", apiKey: apiKey,
+                        model: fallback, imageDataURL: Self.testImage)
+                }
             }
         }
         try Task.checkCancellation()

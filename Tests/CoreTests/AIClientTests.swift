@@ -298,3 +298,20 @@ func retryDoesNotIgnoreServerRequestedDelay(header: String) async throws {
     await #expect(throws: AIClientError.rateLimited) { try await client.complete(text: "Probe", apiKey: "synthetic-key") }
     #expect(AIStub.count(host) == 1)
 }
+
+private actor RequestPermission {
+    var checks = 0
+    func allowFirstOnly() -> Bool { checks += 1; return checks == 1 }
+}
+@Test func transportRechecksPermissionBeforeRetryAndBeforeFirstRequest() async throws {
+    let (base, host, session) = makeClient(.init(status: 503))
+    defer { session.invalidateAndCancel(); AIStub.remove(host) }
+    let blocked = AIClient(connection: base.connection, session: session, requestAllowed: { false })
+    await #expect(throws: AIClientError.cancelled) { try await blocked.complete(text: "Synthetic", apiKey: "synthetic") }
+    #expect(AIStub.count(host) == 0)
+    let permission = RequestPermission()
+    let changes = AIClient(connection: base.connection, session: session, requestAllowed: { await permission.allowFirstOnly() })
+    await #expect(throws: AIClientError.cancelled) { try await changes.complete(text: "Synthetic", apiKey: "synthetic") }
+    #expect(AIStub.count(host) == 1)
+    #expect(await permission.checks == 2)
+}

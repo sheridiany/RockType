@@ -88,7 +88,7 @@ struct ShellSettingsView: View {
         case .voice: voice
         case .selection: selection
         case .screenshot: screenshot
-        case .ai: ShellConnectionView(model: connection, settings: $settings.ai)
+        case .ai: AIProviderSettingsView(model: connection, settings: $settings)
         case .templates: sections.templatesPane(settings: $settings, showAIConnection: { section = .ai })
         case .shortcuts: sections.shortcutsPane(settings: $settings)
         case .permissions: sections.permissionsPane()
@@ -220,6 +220,7 @@ struct ShellSettingsView: View {
     }
     private var selection: some View {
         Group {
+            Notice(text: "松开鼠标后显示工具栏；快捷键立即处理选区。关闭跟随后会记住结果窗口位置，置顶窗口可并行保留。")
             DesignSectionTitle(title: "工具栏与结果窗口")
             DesignCard {
                 settingsPicker("出现方式", selection: $settings.selection.trigger) {
@@ -262,6 +263,8 @@ struct ShellSettingsView: View {
                         Spacer()
                         Button { settings.selection.toolbarActions.swapAt(index, index - 1) } label: { Image(systemName: "arrow.up") }
                             .disabled(index == 0).accessibilityLabel("上移" + (settings.templates.first(where: { $0.id == id })?.name ?? id))
+                        Button { settings.selection.toolbarActions.swapAt(index, index + 1) } label: { Image(systemName: "arrow.down") }
+                            .disabled(index == settings.selection.toolbarActions.count - 1).accessibilityLabel("下移" + (settings.templates.first(where: { $0.id == id })?.name ?? id))
                         SettingsToggle(title: "启用" + (settings.templates.first(where: { $0.id == id })?.name ?? (id == "search" ? "搜索" : id)), isOn: Binding(get: { !settings.selection.disabledActions.contains(id) }, set: {
                             settings.selection.disabledActions.removeAll { $0 == id }
                             if !$0 { settings.selection.disabledActions.append(id) }

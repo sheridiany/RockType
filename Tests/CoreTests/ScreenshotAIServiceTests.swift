@@ -63,3 +63,31 @@ import Testing
     for _ in 0..<100 where !AIStub.wasStopped(host) { try await Task.sleep(for: .milliseconds(5)) }
     #expect(AIStub.wasStopped(host))
 }
+
+@MainActor @Test func imageFallbackNeedsExplicitConfigurationAndSeparateCapability() async throws {
+    let (base, host, session) = makeClient(.init(status: 503), images: true)
+    defer { session.invalidateAndCancel(); AIStub.remove(host) }
+    var connection = base.connection; connection.fallbackModel = "synthetic-vision-backup"
+    let client = AIClient(connection: connection, session: session)
+    let service = ScreenshotAIService(client: client, recognize: { _ in "Synthetic OCR" }, isAllowed: { true })
+    await #expect(throws: AIClientError.server) {
+        try await service.run(action: .explain, png: Data([0]), model: connection.defaultModel,
+            imageCapabilityVerified: true, apiKey: "synthetic", fallbackImageCapabilityVerified: false)
+    }
+    #expect(AIStub.count(host) == 2) // transport retry only, no unverified fallback
+    let models = ScreenshotModels()
+    let sse = Data("data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Synthetic image answer\"}}]}\n\ndata: [DONE]\n\n".utf8)
+    let result = try await service.run(action: .explain, png: Data([0]), model: connection.defaultModel,
+        imageCapabilityVerified: true, apiKey: "synthetic", fallbackImageCapabilityVerified: true,
+        onModel: { model in
+            await models.add(model)
+            if model == "synthetic-vision-backup" { AIStub.install(.init(chunks: [sse]), host: host) }
+        })
+    #expect(result == "Synthetic image answer")
+    #expect(await models.values == ["test-model", "synthetic-vision-backup"])
+    #expect(AIStub.count(host) == 5)
+}
+private actor ScreenshotModels {
+    var values: [String] = []
+    func add(_ model: String) { values.append(model) }
+}

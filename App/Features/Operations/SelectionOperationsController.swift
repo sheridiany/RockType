@@ -6,6 +6,7 @@ import RoarkTPlatform
 @MainActor final class SelectionOperationsController {
     let environment: OperationsEnvironment
     private(set) var window: ResultWindowController?
+    private(set) var windows: [ResultWindowController] = []
     private let settings: @MainActor () -> AppSettings
     private let aiConfigured: @MainActor () -> Bool
     private let notice: @MainActor (String) -> Void
@@ -33,13 +34,13 @@ import RoarkTPlatform
         if !aiConfigured() { current.translation.engine = .offlineFirst }
         let request = OperationRequest(session: request.session, template: request.template,
             settings: current, question: request.question, maximumInputBytes: request.maximumInputBytes)
-        replaceWindow().show(request, source: source, toolbarRect: toolbarRect)
+        replaceWindow()?.show(request, source: source, toolbarRect: toolbarRect)
     }
 
     func presentCompleted(_ result: OperationResult, template: OperationTemplate) {
         guard readable() else { return }
         if settings().privacy.keepRecentResultsInMemory { environment.recent.add(result) }
-        replaceWindow().show(result, template: template, initialRetryUnavailable:
+        replaceWindow()?.show(result, template: template, initialRetryUnavailable:
             ScreenshotSession.imageTemplate(forID: result.templateID) != nil
                 ? "追问仅基于文字解释。原图未保留在对话中；重新解释图片请从图片预览确认发送。" : nil)
     }
@@ -51,7 +52,7 @@ import RoarkTPlatform
         let template = settings().templates.first { $0.id == result.templateID }
             ?? ScreenshotSession.imageTemplate(forID: result.templateID)
             ?? OperationTemplate(id: result.templateID, name: "最近结果", icon: "text.bubble", prompt: "")
-        replaceWindow().show(result, template: template, initialRetryUnavailable:
+        replaceWindow()?.show(result, template: template, initialRetryUnavailable:
             ScreenshotSession.imageTemplate(forID: result.templateID) != nil
                 ? "追问仅基于文字解释。原图未保留在对话中；重新解释图片请从图片预览确认发送。" : nil)
     }
@@ -66,22 +67,33 @@ import RoarkTPlatform
 
     func settingsChanged() {
         if !settings().privacy.keepRecentResultsInMemory { environment.recent.clear() }
-        window?.applySettings()
+        windows.forEach { $0.applySettings() }
     }
 
     func clearCurrentContent() {
-        window?.stop(); window = nil
+        windows.forEach { $0.stop() }; windows.removeAll(); window = nil
         environment.clearCurrentContent()
     }
     func stop() { clearCurrentContent() }
 
-    private func replaceWindow() -> ResultWindowController {
-        window?.stop()
+    private func replaceWindow() -> ResultWindowController? {
+        windows.removeAll { controller in
+            if !controller.isVisible { controller.stop(); return true }
+            return false
+        }
+        if let window, !window.state.pinned {
+            window.stop(); windows.removeAll { $0 === window }
+        }
+        guard windows.count < 4 else {
+            notice("已有 4 个置顶结果窗口，请先关闭一个再开始新操作。")
+            return nil
+        }
         let controller = ResultWindowController(runner: makeRunner(), settings: settings, feedback: notice,
             completed: { [weak self] result in
                 guard let self, self.readable(), self.settings().privacy.keepRecentResultsInMemory else { return }
                 self.environment.recent.add(result)
             }, readable: readable, aiConfigured: aiConfigured)
+        windows.append(controller)
         window = controller
         return controller
     }

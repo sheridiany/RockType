@@ -14,6 +14,8 @@ public final class DefaultOperationRunner: OperationRunner {
     public typealias AIStream = @Sendable (AIConnectionSettings, String, String, String,
         @escaping @Sendable (String) async -> Void) async throws -> String
     private let key: () throws -> String
+    private let providerKey: ((String) throws -> String)?
+    private var receivedOutput = false
     private let isAllowed: () -> Bool
     private let offline: (any TextTranslationClient)?
     private let recent: (any RecentResults)?
@@ -28,9 +30,9 @@ public final class DefaultOperationRunner: OperationRunner {
     /// key should fetch the current connection's credential from Keychain on demand.
     public init(offline: (any TextTranslationClient)? = nil, recent: (any RecentResults)? = nil,
                 apiKey: @escaping () throws -> String, isAllowed: @escaping () -> Bool,
-                streamAI: AIStream? = nil) {
+                streamAI: AIStream? = nil, providerKey: ((String) throws -> String)? = nil) {
         self.offline = offline; self.recent = recent; self.key = apiKey
-        self.isAllowed = isAllowed; self.streamAI = streamAI
+        self.isAllowed = isAllowed; self.streamAI = streamAI; self.providerKey = providerKey
     }
 
     public func start() {}
@@ -47,6 +49,7 @@ public final class DefaultOperationRunner: OperationRunner {
     public func run(_ request: OperationRequest) -> AsyncStream<OperationEvent> {
         cancel()
         generation &+= 1
+        receivedOutput = false
         let current = generation
         let (events, sink) = AsyncStream<OperationEvent>.makeStream()
         continuation = sink
@@ -96,10 +99,8 @@ public final class DefaultOperationRunner: OperationRunner {
                 throw OperationFailure.inputTooLong(limit: max(0, request.maximumInputBytes))
             }
             let isTranslation = request.template.id == "translate"
-            let model = request.template.model ?? (isTranslation ? request.settings.translation.model : request.settings.selection.assistantModel)
-                ?? request.settings.ai.defaultModel
             var text: String?
-            var engine = model
+            var engine = ""
             // Follow-ups always use AI with completed conversation context.
             if isTranslation, request.question == nil, request.settings.translation.engine == .offlineFirst,
                let offline {
@@ -119,19 +120,24 @@ public final class DefaultOperationRunner: OperationRunner {
             }
             if text == nil {
                 try check(current)
+                let route = try AIProviderRouting.resolve(request.settings,
+                    task: request.question == nil && isTranslation ? .translation : .assistant,
+                    modelOverride: request.template.model)
                 let credential: String
-                do { credential = try key() } catch { throw AIClientError.configuration }
+                do { credential = try providerKey?(route.connection.id) ?? key() }
+                catch { throw AIClientError.configuration }
                 try check(current)
-                continuation?.yield(.engine(model))
-                if let streamAI {
-                    text = try await streamAI(request.settings.ai, prompt, credential, model) { [weak self] delta in
-                        await self?.receive(delta, generation: current)
-                    }
-                } else {
-                    text = try await AIClient(connection: request.settings.ai).stream(text: prompt, apiKey: credential,
-                        model: model, onThinking: { [weak self] in await self?.thinking(generation: current) }) { [weak self] delta in
-                            await self?.receive(delta, generation: current)
-                        }
+                engine = Self.engineLabel(route.connection, model: route.model)
+                continuation?.yield(.engine(engine))
+                do {
+                    text = try await send(route.connection, prompt: prompt, credential: credential, model: route.model, current: current)
+                } catch {
+                    try check(current)
+                    guard let fallback = AIProviderRouting.fallback(for: route.connection, primary: route.model,
+                        error: error, hasVisibleOutput: receivedOutput) else { throw error }
+                    engine = Self.engineLabel(route.connection, model: fallback) + " · 备用模型"
+                    continuation?.yield(.engine(engine))
+                    text = try await send(route.connection, prompt: prompt, credential: credential, model: fallback, current: current)
                 }
             }
             try check(current)
@@ -139,7 +145,7 @@ public final class DefaultOperationRunner: OperationRunner {
             guard !answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 throw OperationFailure.unavailable
             }
-            let turn = OperationTurn(question: request.question ?? request.template.prompt, answer: answer)
+            let turn = OperationTurn(question: request.question ?? "", answer: answer)
             let session = OperationSession(id: request.session.id, snapshot: request.session.snapshot,
                 turns: request.session.turns + [turn])
             let result = OperationResult(session: session, templateID: request.template.id, text: answer, engine: engine)
@@ -157,6 +163,31 @@ public final class DefaultOperationRunner: OperationRunner {
         }
     }
 
+    private static func engineLabel(_ connection: AIConnectionSettings, model: String) -> String {
+        let name = connection.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? model : name + " · " + model
+    }
+
+    private func send(_ connection: AIConnectionSettings, prompt: String, credential: String,
+                      model: String, current: UInt64) async throws -> String {
+        try check(current)
+        if let streamAI {
+            return try await streamAI(connection, prompt, credential, model) { [weak self] delta in
+                await self?.receive(delta, generation: current)
+            }
+        }
+        return try await AIClient(connection: connection, requestAllowed: { [weak self] in
+            await self?.allowedForTransport(current) ?? false
+        }).stream(text: prompt, apiKey: credential,
+            model: model, onThinking: { [weak self] in await self?.thinking(generation: current) }) { [weak self] delta in
+                await self?.receive(delta, generation: current)
+            }
+    }
+
+    private func allowedForTransport(_ current: UInt64) -> Bool {
+        current == generation && continuation != nil && isAllowed()
+    }
+
     private func thinking(generation current: UInt64) {
         guard generation == current, continuation != nil else { return }
         guard isAllowed() else { rejectProtected(); return }
@@ -166,7 +197,7 @@ public final class DefaultOperationRunner: OperationRunner {
     private func receive(_ delta: String, generation current: UInt64) {
         guard generation == current, continuation != nil else { return }
         guard isAllowed() else { rejectProtected(); return }
-        continuation?.yield(.delta(delta))
+        if !delta.isEmpty { receivedOutput = true; continuation?.yield(.delta(delta)) }
     }
 
     private func finish(_ event: OperationEvent) {

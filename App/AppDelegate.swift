@@ -31,7 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.panel.close(); self?.settingsWindow.show(section: .ai)
         }
         coordinator.imageCapabilityVerified = { [weak self] config, model in
-            guard let self, self.store.settings.ai == config else { return false }
+            guard let self else { return false }
             return self.connection.imageCapabilityVerified(connection: config, model: model)
         }
         coordinator.performText = { [weak self] request in
@@ -45,14 +45,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let operationsEnvironment = OperationsEnvironment()
     private lazy var operations = SelectionOperationsController(
         environment: operationsEnvironment, settings: { [unowned self] in self.store.settings },
-        aiConfigured: { [unowned self] in self.connection.configured },
+        aiConfigured: { [unowned self] in AIProviderAvailability.configured(self.store.settings) },
         notice: { [weak self] in self?.noticeController.show(message: $0) })
     private lazy var selectionController = SelectionController(
         settings: { [unowned self] in self.store.settings },
         perform: { [weak self] request, source, rect in self?.operations.perform(request, source: source, toolbarRect: rect) },
         search: { [weak self] in self?.operations.search($0, settings: $1) },
         notice: { [weak self] in self?.noticeController.show(message: $0) },
-        aiConfigured: { [unowned self] in self.connection.configured })
+        aiConfigured: { [unowned self] in AIProviderAvailability.configured(self.store.settings) })
     private lazy var hotkeys = HotkeyCenter(
         read: { [unowned self] in self.store.settings.shortcuts },
         write: { [unowned self] in self.store.settings.shortcuts = $0 },

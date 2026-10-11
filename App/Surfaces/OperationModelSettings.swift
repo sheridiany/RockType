@@ -10,7 +10,7 @@ struct OperationModelSettings: View {
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
             DesignCard {
                 Text("按功能指定模型").font(Tokens.Typography.font(weight: .medium))
-                Text("所有模型使用同一个 AI 服务商连接。留空时使用连接的默认模型；模板单独指定的模型优先。")
+                Text("这里设置跟随默认服务商时使用的模型；按任务指定服务商后以 AI 连接页中的任务配置为准。模板模型优先。")
                     .font(Tokens.Typography.font(Tokens.Typography.meta))
                 OperationModelField(title: "翻译", model: $settings.translation.model,
                                     inherited: settings.ai.defaultModel, connection: settings.ai)
