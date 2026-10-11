@@ -140,6 +140,7 @@ final class RoarkTTranslationClient: @unchecked Sendable {
   private var cacheExpiry: DispatchWorkItem?
   private var idleDisconnect: DispatchWorkItem?
   private var connection: NSXPCConnection?
+  private var connectionToken = UUID()
   private var nextControllerReport: TimeInterval = 0
   private var pending: [String: Pending] = [:]
 
@@ -325,11 +326,13 @@ final class RoarkTTranslationClient: @unchecked Sendable {
       "anchor apple generic and certificate leaf[subject.OU] = \"\(ROARKT_TEAM_ID)\" and identifier \"\(ROARKT_TRANSLATION_SERVICE_NAME)\""
     )
     connection.remoteObjectInterface = NSXPCInterface(with: RoarkTTranslationXPCProtocol.self)
+    let token = UUID()
+    connectionToken = token
     connection.interruptionHandler = { [weak self] in
-      DispatchQueue.main.async { self?.connectionInterrupted(connection) }
+      DispatchQueue.main.async { self?.connectionInterrupted(token) }
     }
     connection.invalidationHandler = { [weak self] in
-      DispatchQueue.main.async { self?.connectionInvalidated(connection) }
+      DispatchQueue.main.async { self?.connectionInvalidated(token) }
     }
     connection.resume()
     self.connection = connection
@@ -342,14 +345,14 @@ final class RoarkTTranslationClient: @unchecked Sendable {
     return connection.remoteObjectProxyWithErrorHandler { _ in } as? RoarkTTranslationXPCProtocol
   }
 
-  private func connectionInterrupted(_ interrupted: NSXPCConnection) {
-    guard connection === interrupted else { return }
+  private func connectionInterrupted(_ token: UUID) {
+    guard connection != nil, connectionToken == token else { return }
     connection = nil
     failAllPending(with: CandidateTranslationFailure.serviceUnavailable)
   }
 
-  private func connectionInvalidated(_ invalidated: NSXPCConnection) {
-    guard connection === invalidated else { return }
+  private func connectionInvalidated(_ token: UUID) {
+    guard connection != nil, connectionToken == token else { return }
     connection = nil
     failAllPending(with: CandidateTranslationFailure.serviceUnavailable)
   }

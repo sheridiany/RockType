@@ -524,7 +524,7 @@ private extension SquirrelPanel {
 
     statusTimer?.invalidate()
     statusTimer = Timer.scheduledTimer(withTimeInterval: SquirrelTheme.showStatusDuration, repeats: false) { _ in
-      self.hide()
+      MainActor.assumeIsolated { self.hide() }
     }
   }
 

@@ -8,6 +8,7 @@
 import UserNotifications
 import AppKit
 
+@MainActor
 final class SquirrelApplicationDelegate: NSObject, NSApplicationDelegate {
   static let notificationIdentifier = "SquirrelNotification"
 
@@ -15,6 +16,7 @@ final class SquirrelApplicationDelegate: NSObject, NSApplicationDelegate {
   var config: SquirrelConfig?
   var panel: SquirrelPanel?
   var enableNotifications = false
+  private let voiceServer = RoarkTVoiceServer()
 
   func applicationWillFinishLaunching(_ notification: Notification) {
     panel = SquirrelPanel(position: .zero)
@@ -24,7 +26,6 @@ final class SquirrelApplicationDelegate: NSObject, NSApplicationDelegate {
   func applicationWillTerminate(_ notification: Notification) {
     // swiftlint:disable:next notification_center_detachment
     NotificationCenter.default.removeObserver(self)
-    DistributedNotificationCenter.default().removeObserver(self)
     panel?.hide()
   }
 
@@ -49,8 +50,8 @@ final class SquirrelApplicationDelegate: NSObject, NSApplicationDelegate {
   }
 
   static func showMessage(msgText: String?) {
-    let center = UNUserNotificationCenter.current()
-    center.getNotificationSettings { settings in
+    let identifier = notificationIdentifier
+    UNUserNotificationCenter.current().getNotificationSettings { settings in
       if (settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional) && settings.alertSetting == .enabled {
         let content = UNMutableNotificationContent()
         content.title = NSLocalizedString("Squirrel", comment: "")
@@ -58,8 +59,8 @@ final class SquirrelApplicationDelegate: NSObject, NSApplicationDelegate {
           content.subtitle = msgText
         }
         content.interruptionLevel = .active
-        let request = UNNotificationRequest(identifier: Self.notificationIdentifier, content: content, trigger: nil)
-        center.add(request) { error in
+        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request) { error in
           if let error = error {
             print("User notification request error: \(error.localizedDescription)")
           }
@@ -166,12 +167,15 @@ final class SquirrelApplicationDelegate: NSObject, NSApplicationDelegate {
   // Input Menu.
   func addObservers() {
     let center = NSWorkspace.shared.notificationCenter
-    center.addObserver(forName: NSWorkspace.willPowerOffNotification, object: nil, queue: nil, using: workspaceWillPowerOff)
+    center.addObserver(forName: NSWorkspace.willPowerOffNotification, object: nil, queue: .main) { [weak self] _ in
+      MainActor.assumeIsolated { self?.shutdownRime() }
+    }
 
-    let notifCenter = DistributedNotificationCenter.default()
-    notifCenter.addObserver(forName: .init("SquirrelReloadNotification"), object: nil, queue: nil, using: rimeNeedsReload)
-    notifCenter.addObserver(forName: .init("SquirrelSyncNotification"), object: nil, queue: nil, using: rimeNeedsSync)
   }
+
+  func inputControllerDidActivate(_ controller: SquirrelInputController) { voiceServer.activate(controller) }
+  func inputControllerDidHandleKeyDown(_: SquirrelInputController) { voiceServer.handledInput() }
+  func inputControllerDidDeactivate(_ controller: SquirrelInputController) { voiceServer.deactivate(controller) }
 
   func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
     print("Squirrel is quitting.")
@@ -186,6 +190,13 @@ private func notificationHandler(contextObject: UnsafeMutableRawPointer?, sessio
 
   let messageType = messageTypeC.map { String(cString: $0) }
   let messageValue = messageValueC.map { String(cString: $0) }
+  DispatchQueue.main.async {
+    handleRimeNotification(delegate: delegate, sessionId: sessionId, messageType: messageType, messageValue: messageValue)
+  }
+}
+
+@MainActor
+private func handleRimeNotification(delegate: SquirrelApplicationDelegate, sessionId: RimeSessionId, messageType: String?, messageValue: String?) {
   if messageType == "deploy" {
     switch messageValue {
     case "start":
@@ -200,7 +211,7 @@ private func notificationHandler(contextObject: UnsafeMutableRawPointer?, sessio
     return
   }
   // off
-  if !delegate.enableNotifications {
+  if !delegate.enableNotifications || !delegate.rimeAPI.find_session(sessionId) {
     return
   }
 
@@ -236,21 +247,6 @@ private extension SquirrelApplicationDelegate {
   func shutdownRime() {
     config?.close()
     rimeAPI.finalize()
-  }
-
-  func workspaceWillPowerOff(_: Notification) {
-    print("Finalizing before logging out.")
-    self.shutdownRime()
-  }
-
-  func rimeNeedsReload(_: Notification) {
-    print("Reloading rime on demand.")
-    self.deploy()
-  }
-
-  func rimeNeedsSync(_: Notification) {
-    print("Sync rime on demand.")
-    self.syncUserData()
   }
 
   func createDirIfNotExist(path: URL) {

@@ -62,7 +62,7 @@ final class RoarkTInputModePanel: NSPanel {
     badge.ascii = ascii
     setFrameOrigin(NSPoint(x: originX, y: originY))
     orderFrontRegardless()
-    dismissal = Timer.scheduledTimer(withTimeInterval: 1.1, repeats: false) { [weak self] _ in self?.hide() }
+    dismissal = Timer.scheduledTimer(withTimeInterval: 1.1, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.hide() } }
   }
 
   func hide() {

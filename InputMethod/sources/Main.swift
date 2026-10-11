@@ -45,9 +45,6 @@ struct SquirrelApp {
           }
           runningSquirrels.filter { !$0.isTerminated }.forEach { $0.forceTerminate() }
           return true
-        case "--reload":
-          DistributedNotificationCenter.default().postNotificationName(.init("SquirrelReloadNotification"), object: nil)
-          return true
         case "--register-input-source", "--install":
           guard installer.register() else { Foundation.exit(EXIT_FAILURE) }
           return true
@@ -89,9 +86,6 @@ struct SquirrelApp {
           rimeAPI.setup(&builderTraits)
           rimeAPI.deployer_initialize(nil)
           _ = rimeAPI.deploy()
-          return true
-        case "--sync":
-          DistributedNotificationCenter.default().postNotificationName(.init("SquirrelSyncNotification"), object: nil)
           return true
         case "--preview-candidates":
           guard args.count >= 3 else { Foundation.exit(EXIT_FAILURE) }
@@ -153,8 +147,6 @@ struct SquirrelApp {
 Supported arguments:
 Perform actions:
   --quit                     quit all Squirrel process
-  --reload                   deploy
-  --sync                     sync user data
   --build                    build all schemas in current directory
 Install Squirrel:
   --install, --register-input-source    register input source

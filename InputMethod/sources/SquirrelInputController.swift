@@ -8,8 +8,12 @@
 import Carbon
 import InputMethodKit
 
-final class SquirrelInputController: IMKInputController {
-  private static let keyRollOver = 50
+// IMK callbacks predate Swift concurrency and are synchronous on the main run loop.
+// Each override asserts that boundary before touching actor-owned state. The local
+// unsafe bindings only bridge ObjC arguments within the same synchronous call.
+@MainActor
+final class SquirrelInputController: IMKInputController, @unchecked Sendable {
+  nonisolated private static let keyRollOver = 50
 
   private weak var client: IMKTextInput?
   private let rimeAPI: RimeApi_stdbool = rime_get_api_stdbool().pointee
@@ -40,108 +44,118 @@ final class SquirrelInputController: IMKInputController {
   // IMK invokes this controller on the main run loop; assert that boundary.
   private lazy var inputModePanel = MainActor.assumeIsolated { RoarkTInputModePanel() }
 
+  var voiceClient: IMKTextInput? {
+    guard preedit.isEmpty, !IsSecureEventInputEnabled() else { return nil }
+    return client
+  }
+
   // swiftlint:disable:next cyclomatic_complexity
   override func handle(_ event: NSEvent!, client sender: Any!) -> Bool {
-    guard let event = event else { return false }
-    let modifiers = event.modifierFlags
-    let changes = lastModifiers.symmetricDifference(modifiers)
+    nonisolated(unsafe) let event = event
+    nonisolated(unsafe) let sender = sender
+    return MainActor.assumeIsolated {
+      guard let event = event else { return false }
+      let modifiers = event.modifierFlags
+      let changes = lastModifiers.symmetricDifference(modifiers)
 
-    // Return true to indicate the the key input was received and dealt with.
-    // Key processing will not continue in that case.  In other words the
-    // system will not deliver a key down event to the application.
-    // Returning false means the original key down will be passed on to the client.
-    var handled = false
-    if session == 0 || !rimeAPI.find_session(session) {
-      createSession()
-      if session == 0 {
-        return false
-      }
-    }
-
-    self.client ?= sender as? IMKTextInput
-    if let app = client?.bundleIdentifier(), currentApp != app {
-      currentApp = app
-      updateAppOptions()
-    }
-
-    switch event.type {
-    case .flagsChanged:
-      if lastModifiers == modifiers {
-        handled = true
-        break
-      }
-      var rimeModifiers: UInt32 = SquirrelKeycode.osxModifiersToRime(modifiers: modifiers)
-      if changes.contains(.capsLock) {
-        let rimeKeycode = SquirrelKeycode.modifierKeycode(modifier: .capsLock, keycode: event.keyCode)
-        // NOTE: rime assumes XK_Caps_Lock to be sent before modifier changes,
-        // while NSFlagsChanged event has the flag changed already.
-        // so it is necessary to revert kLockMask.
-        rimeModifiers ^= kLockMask.rawValue
-        _ = processKey(rimeKeycode, modifiers: rimeModifiers)
-      }
-
-      // Need to process release before modifier down. Because
-      // sometimes release event is delayed to next modifier keydown.
-      var buffer = [(keycode: UInt32, modifier: UInt32)]()
-      for flag in [NSEvent.ModifierFlags.shift, .control, .option, .command] where changes.contains(flag) {
-        let rimeKeycode = SquirrelKeycode.modifierKeycode(modifier: flag, keycode: event.keyCode)
-        if modifiers.contains(flag) { // New modifier
-          buffer.append((keycode: rimeKeycode, modifier: rimeModifiers))
-        } else { // Release
-          buffer.insert((keycode: rimeKeycode, modifier: rimeModifiers | kReleaseMask.rawValue), at: 0)
-        }
-      }
-      for (keycode, modifier) in buffer {
-        _ = processKey(keycode, modifiers: modifier)
-      }
-
-      lastModifiers = modifiers
-      rimeUpdate()
-
-    case .keyDown:
-      translationClient.noteInputActivity()
-      inputModePanel.hide()
-      // ignore Command+X hotkeys.
-      if modifiers.contains(.command) {
-        break
-      }
-
-      let keyCode = event.keyCode
-      if keyCode == 48, modifiers.isDisjoint(with: [.control, .option, .command, .shift]),
-         candidateTranslation.interceptsTab {
-        if !event.isARepeat { performTranslationAction() }
-        handled = true // Never submit a stale result or move app focus while loading.
-        break
-      }
-      var keyChars = event.charactersIgnoringModifiers
-      let capitalModifiers = modifiers.isSubset(of: [.shift, .capsLock])
-      if let code = keyChars?.first,
-         (capitalModifiers && !code.isLetter) || (!capitalModifiers && !code.isASCII) {
-        keyChars = event.characters
-      }
-
-      // translate osx keyevents to rime keyevents
-      if let char = keyChars?.first {
-        let rimeKeycode = SquirrelKeycode.osxKeycodeToRime(keycode: keyCode, keychar: char,
-                                                           shift: modifiers.contains(.shift),
-                                                           caps: modifiers.contains(.capsLock))
-        if rimeKeycode != 0 {
-          let rimeModifiers = SquirrelKeycode.osxModifiersToRime(modifiers: modifiers)
-          handled = processKey(rimeKeycode, modifiers: rimeModifiers)
-          rimeUpdate()
+      // Return true to indicate the the key input was received and dealt with.
+      // Key processing will not continue in that case.  In other words the
+      // system will not deliver a key down event to the application.
+      // Returning false means the original key down will be passed on to the client.
+      var handled = false
+      if session == 0 || !rimeAPI.find_session(session) {
+        createSession()
+        if session == 0 {
+          return false
         }
       }
 
-    default:
-      break
-    }
+      self.client ?= sender as? IMKTextInput
+      if let app = client?.bundleIdentifier(), currentApp != app {
+        currentApp = app
+        updateAppOptions()
+      }
 
-    // Reaching this controller proves the native IMK input path is active,
-    // even when Rime intentionally passes digits or punctuation through.
-    if event.type == .keyDown, !IsSecureEventInputEnabled() {
-      translationClient.recordControllerInput()
+      switch event.type {
+      case .flagsChanged:
+        if lastModifiers == modifiers {
+          handled = true
+          break
+        }
+        var rimeModifiers: UInt32 = SquirrelKeycode.osxModifiersToRime(modifiers: modifiers)
+        if changes.contains(.capsLock) {
+          let rimeKeycode = SquirrelKeycode.modifierKeycode(modifier: .capsLock, keycode: event.keyCode)
+          // NOTE: rime assumes XK_Caps_Lock to be sent before modifier changes,
+          // while NSFlagsChanged event has the flag changed already.
+          // so it is necessary to revert kLockMask.
+          rimeModifiers ^= kLockMask.rawValue
+          _ = processKey(rimeKeycode, modifiers: rimeModifiers)
+        }
+
+        // Need to process release before modifier down. Because
+        // sometimes release event is delayed to next modifier keydown.
+        var buffer = [(keycode: UInt32, modifier: UInt32)]()
+        for flag in [NSEvent.ModifierFlags.shift, .control, .option, .command] where changes.contains(flag) {
+          let rimeKeycode = SquirrelKeycode.modifierKeycode(modifier: flag, keycode: event.keyCode)
+          if modifiers.contains(flag) { // New modifier
+            buffer.append((keycode: rimeKeycode, modifier: rimeModifiers))
+          } else { // Release
+            buffer.insert((keycode: rimeKeycode, modifier: rimeModifiers | kReleaseMask.rawValue), at: 0)
+          }
+        }
+        for (keycode, modifier) in buffer {
+          _ = processKey(keycode, modifiers: modifier)
+        }
+
+        lastModifiers = modifiers
+        rimeUpdate()
+
+      case .keyDown:
+        translationClient.noteInputActivity()
+        inputModePanel.hide()
+        // ignore Command+X hotkeys.
+        if modifiers.contains(.command) {
+          break
+        }
+
+        let keyCode = event.keyCode
+        if keyCode == 48, modifiers.isDisjoint(with: [.control, .option, .command, .shift]),
+           candidateTranslation.interceptsTab {
+          if !event.isARepeat { performTranslationAction() }
+          handled = true // Never submit a stale result or move app focus while loading.
+          break
+        }
+        var keyChars = event.charactersIgnoringModifiers
+        let capitalModifiers = modifiers.isSubset(of: [.shift, .capsLock])
+        if let code = keyChars?.first,
+           (capitalModifiers && !code.isLetter) || (!capitalModifiers && !code.isASCII) {
+          keyChars = event.characters
+        }
+
+        // translate osx keyevents to rime keyevents
+        if let char = keyChars?.first {
+          let rimeKeycode = SquirrelKeycode.osxKeycodeToRime(keycode: keyCode, keychar: char,
+                                                             shift: modifiers.contains(.shift),
+                                                             caps: modifiers.contains(.capsLock))
+          if rimeKeycode != 0 {
+            let rimeModifiers = SquirrelKeycode.osxModifiersToRime(modifiers: modifiers)
+            handled = processKey(rimeKeycode, modifiers: rimeModifiers)
+            rimeUpdate()
+          }
+        }
+
+      default:
+        break
+      }
+
+      // Reaching this controller proves the native IMK input path is active,
+      // even when Rime intentionally passes digits or punctuation through.
+      if event.type == .keyDown, !IsSecureEventInputEnabled() {
+        translationClient.recordControllerInput()
+        NSApp.squirrelAppDelegate.inputControllerDidHandleKeyDown(self)
+      }
+      return handled
     }
-    return handled
   }
 
   func highlightCandidate(_ index: Int) {
@@ -214,108 +228,135 @@ final class SquirrelInputController: IMKInputController {
   }
 
   override func setValue(_ value: Any!, forTag tag: Int, client sender: Any!) {
-    super.setValue(value, forTag: tag, client: sender)
-    guard tag == Int(kTextServiceInputModePropertyTag), let identifier = value as? String else { return }
-    let schema: String
-    switch identifier {
-    case "com.roarkist.inputmethod.RoarkT.pinyin": schema = "roarkt"
-    case "com.roarkist.inputmethod.RoarkT.flypy": schema = "roarkt_flypy"
-    default: return
-    }
-    selectedSchema = schema
-    if session != 0 {
-      cancelDynamicTranslation()
-      _ = rimeAPI.select_schema(session, schema)
-      rimeUpdate()
+    nonisolated(unsafe) let value = value
+    nonisolated(unsafe) let sender = sender
+    return MainActor.assumeIsolated {
+      super.setValue(value, forTag: tag, client: sender)
+      guard tag == Int(kTextServiceInputModePropertyTag), let identifier = value as? String else { return }
+      let schema: String
+      switch identifier {
+      case "com.roarkist.inputmethod.RoarkT.pinyin": schema = "roarkt"
+      case "com.roarkist.inputmethod.RoarkT.flypy": schema = "roarkt_flypy"
+      default: return
+      }
+      selectedSchema = schema
+      if session != 0 {
+        cancelDynamicTranslation()
+        _ = rimeAPI.select_schema(session, schema)
+        rimeUpdate()
+      }
     }
   }
 
   override func recognizedEvents(_ sender: Any!) -> Int {
-    return Int(NSEvent.EventTypeMask.Element(arrayLiteral: .keyDown, .flagsChanged).rawValue)
+    return MainActor.assumeIsolated {
+      return Int(NSEvent.EventTypeMask.Element(arrayLiteral: .keyDown, .flagsChanged).rawValue)
+    }
   }
 
   override func activateServer(_ sender: Any!) {
-    cancelDynamicTranslation() // Activation starts a new presentation/composition boundary.
-    self.client ?= sender as? IMKTextInput
-    var keyboardLayout = NSApp.squirrelAppDelegate.config?.getString("keyboard_layout") ?? ""
-    if keyboardLayout == "last" || keyboardLayout == "" {
-      keyboardLayout = ""
-    } else if keyboardLayout == "default" {
-      keyboardLayout = "com.apple.keylayout.ABC"
-    } else if !keyboardLayout.hasPrefix("com.apple.keylayout.") {
-      keyboardLayout = "com.apple.keylayout.\(keyboardLayout)"
+    nonisolated(unsafe) let sender = sender
+    return MainActor.assumeIsolated {
+      cancelDynamicTranslation() // Activation starts a new presentation/composition boundary.
+      self.client ?= sender as? IMKTextInput
+      var keyboardLayout = NSApp.squirrelAppDelegate.config?.getString("keyboard_layout") ?? ""
+      if keyboardLayout == "last" || keyboardLayout == "" {
+        keyboardLayout = ""
+      } else if keyboardLayout == "default" {
+        keyboardLayout = "com.apple.keylayout.ABC"
+      } else if !keyboardLayout.hasPrefix("com.apple.keylayout.") {
+        keyboardLayout = "com.apple.keylayout.\(keyboardLayout)"
+      }
+      if keyboardLayout != "" {
+        client?.overrideKeyboard(withKeyboardNamed: keyboardLayout)
+      }
+      translationClient.activate()
+      preedit = ""
+      lastModifiers = NSEvent.modifierFlags
+      if let app = client?.bundleIdentifier(), currentApp != app {
+        currentApp = app
+        updateAppOptions()
+      }
+      NSApp.squirrelAppDelegate.inputControllerDidActivate(self)
+      inputModePanel.activate(client: client, ascii: rimeAPI.get_option(session, "ascii_mode"))
     }
-    if keyboardLayout != "" {
-      client?.overrideKeyboard(withKeyboardNamed: keyboardLayout)
-    }
-    translationClient.activate()
-    preedit = ""
-    lastModifiers = NSEvent.modifierFlags
-    if let app = client?.bundleIdentifier(), currentApp != app {
-      currentApp = app
-      updateAppOptions()
-    }
-    inputModePanel.activate(client: client, ascii: rimeAPI.get_option(session, "ascii_mode"))
   }
 
   override init!(server: IMKServer!, delegate: Any!, client: Any!) {
-    self.client = client as? IMKTextInput
     super.init(server: server, delegate: delegate, client: client)
-    createSession()
+    nonisolated(unsafe) let client = client
+    MainActor.assumeIsolated {
+      self.client = client as? IMKTextInput
+      createSession()
+    }
   }
 
   override func deactivateServer(_ sender: Any!) {
-    inputModePanel.deactivate()
-    cancelDynamicTranslation()
-    hidePalettes()
-    commitComposition(sender)
-    translationClient.deactivate()
-    client = nil
+    nonisolated(unsafe) let sender = sender
+    return MainActor.assumeIsolated {
+      NSApp.squirrelAppDelegate.inputControllerDidDeactivate(self)
+      inputModePanel.deactivate()
+      cancelDynamicTranslation()
+      hidePalettes()
+      commitComposition(sender)
+      translationClient.deactivate()
+      client = nil
+    }
   }
 
   override func hidePalettes() {
-    inputModePanel.hide()
-    NSApp.squirrelAppDelegate.panel?.hide()
-    super.hidePalettes()
+    return MainActor.assumeIsolated {
+      inputModePanel.hide()
+      NSApp.squirrelAppDelegate.panel?.hide()
+      super.hidePalettes()
+    }
   }
 
   // End the input session and send its current buffer to the client.
   override func commitComposition(_ sender: Any!) {
-    cancelDynamicTranslation()
-    self.client ?= sender as? IMKTextInput
-    //  commit raw input
-    if session != 0 {
-      if let input = rimeAPI.get_input(session) {
-        commit(string: String(cString: input))
-        rimeAPI.clear_composition(session)
+    nonisolated(unsafe) let sender = sender
+    return MainActor.assumeIsolated {
+      cancelDynamicTranslation()
+      self.client ?= sender as? IMKTextInput
+      //  commit raw input
+      if session != 0 {
+        if let input = rimeAPI.get_input(session) {
+          commit(string: String(cString: input))
+          rimeAPI.clear_composition(session)
+        }
       }
     }
   }
 
   override func menu() -> NSMenu! {
-    let deploy = NSMenuItem(title: NSLocalizedString("Deploy", comment: "Menu item"), action: #selector(deploy), keyEquivalent: "`")
-    deploy.target = self
-    deploy.keyEquivalentModifierMask = [.control, .option]
-    let sync = NSMenuItem(title: NSLocalizedString("Sync user data", comment: "Menu item"), action: #selector(syncUserData), keyEquivalent: "")
-    sync.target = self
-    let logDir = NSMenuItem(title: NSLocalizedString("Logs...", comment: "Menu item"), action: #selector(openLogFolder), keyEquivalent: "")
-    logDir.target = self
-    let setting = NSMenuItem(title: NSLocalizedString("Settings...", comment: "Menu item"), action: #selector(openRimeFolder), keyEquivalent: "")
-    setting.target = self
-    let roarkTSettings = NSMenuItem(title: "打开RoarkT设置…", action: #selector(openRoarkTSettings), keyEquivalent: "")
-    roarkTSettings.target = self
-    roarkTSettings.isEnabled = NSWorkspace.shared.urlForApplication(withBundleIdentifier: ROARKT_APP_BUNDLE_ID) != nil
+    // IMK synchronously consumes the menu on this same main-thread call.
+    nonisolated(unsafe) var result: NSMenu?
+    MainActor.assumeIsolated {
+      let deploy = NSMenuItem(title: NSLocalizedString("Deploy", comment: "Menu item"), action: #selector(deploy), keyEquivalent: "`")
+      deploy.target = self
+      deploy.keyEquivalentModifierMask = [.control, .option]
+      let sync = NSMenuItem(title: NSLocalizedString("Sync user data", comment: "Menu item"), action: #selector(syncUserData), keyEquivalent: "")
+      sync.target = self
+      let logDir = NSMenuItem(title: NSLocalizedString("Logs...", comment: "Menu item"), action: #selector(openLogFolder), keyEquivalent: "")
+      logDir.target = self
+      let setting = NSMenuItem(title: NSLocalizedString("Settings...", comment: "Menu item"), action: #selector(openRimeFolder), keyEquivalent: "")
+      setting.target = self
+      let roarkTSettings = NSMenuItem(title: "打开RoarkT设置…", action: #selector(openRoarkTSettings), keyEquivalent: "")
+      roarkTSettings.target = self
+      roarkTSettings.isEnabled = NSWorkspace.shared.urlForApplication(withBundleIdentifier: ROARKT_APP_BUNDLE_ID) != nil
 
-    let menu = NSMenu()
-    menu.autoenablesItems = false
-    menu.addItem(deploy)
-    menu.addItem(sync)
-    menu.addItem(logDir)
-    menu.addItem(setting)
-    menu.addItem(.separator())
-    menu.addItem(roarkTSettings)
+      let menu = NSMenu()
+      menu.autoenablesItems = false
+      menu.addItem(deploy)
+      menu.addItem(sync)
+      menu.addItem(logDir)
+      menu.addItem(setting)
+      menu.addItem(.separator())
+      menu.addItem(roarkTSettings)
 
-    return menu
+      result = menu
+    }
+    return result
   }
 
   @objc func deploy() {
@@ -342,14 +383,14 @@ final class SquirrelInputController: IMKInputController {
     NSWorkspace.shared.openApplication(at: appURL, configuration: configuration)
   }
 
-  deinit {
+  isolated deinit {
     translationClient.invalidate()
     destroySession()
   }
 }
 
 private extension SquirrelInputController {
-  func onChordTimer(_: Timer) {
+  func onChordTimer() {
     // chord release triggered by timer
     var processedKeys = false
     if chordKeyCount > 0 && session != 0 {
@@ -386,7 +427,9 @@ private extension SquirrelInputController {
     if let duration = NSApp.squirrelAppDelegate.config?.getDouble("chord_duration"), duration > 0 {
       chordDuration = duration
     }
-    chordTimer = Timer.scheduledTimer(withTimeInterval: chordDuration, repeats: false, block: onChordTimer)
+    chordTimer = Timer.scheduledTimer(withTimeInterval: chordDuration, repeats: false) { [weak self] _ in
+      MainActor.assumeIsolated { self?.onChordTimer() }
+    }
   }
 
   func clearChord() {

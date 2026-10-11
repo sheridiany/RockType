@@ -6,7 +6,7 @@
 - `sources/` 中的候选翻译客户端只引用 `Shared/XPCProtocol/include` 的协议头；本地 `DynamicTranslationProtocol.swift` 是输入法独立编译的请求校验值类型（原授权见 `LICENSE.translation.txt`），不链接 Core。
 - `scripts/package-rime.sh` 将根目录 `Rime/` 的方案、Lua 与八股文模型打包到 `Contents/SharedSupport`；运行时不迁移、覆盖或备份其他方案的用户文件。
 - librime / plum / Sparkle 为固定提交的子模块。`lib/`、`bin/` 为 Apple Silicon 预编译依赖；`data/plum/` 保留上游词库与约 40 MB 的八股文模型。词库中的人名、艺术名词不代表产品标识。
-- 语音 worker 与填入端点留在 M5；M0 不启动语音或旧设置 helper，不申请麦克风权限。
+- M0 通过共享协议注册语音填入端点，仅接受主 App 的签名身份与一次性 ticket；语音 worker/录音 UI 留在 M5，不启动旧设置 helper，不申请麦克风权限。
 
 以下为上游说明与署名。
 

@@ -7,7 +7,8 @@
 
 import AppKit
 
-private class SquirrelLayoutDelegate: NSObject, NSTextLayoutManagerDelegate {
+@MainActor
+private class SquirrelLayoutDelegate: NSObject, @preconcurrency NSTextLayoutManagerDelegate {
   func textLayoutManager(_ textLayoutManager: NSTextLayoutManager, shouldBreakLineBefore location: any NSTextLocation, hyphenating: Bool) -> Bool {
     let index = textLayoutManager.offset(from: textLayoutManager.documentRange.location, to: location)
     if let attributes = textLayoutManager.textContainer?.textView?.textContentStorage?.attributedString?.attributes(at: index, effectiveRange: nil),
