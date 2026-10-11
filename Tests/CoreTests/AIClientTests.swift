@@ -197,3 +197,14 @@ func aiTransportFailuresAreClassified(code: URLError.Code, expected: AIClientErr
     }
     #expect(AIStub.request(host) == nil)
 }
+
+@Test func endpointPolicyAllowsHTTPOnlyOnLoopback() {
+    func allowed(_ text: String) -> Bool { URLComponents(string: text).map(AIClient.isAllowedEndpoint) ?? false }
+    #expect(allowed("https://api.example.com/v1"))
+    #expect(allowed("http://127.0.0.1:3425/v1"))
+    #expect(allowed("http://localhost:8080/v1"))
+    #expect(allowed("http://[::1]:3425/v1"))
+    #expect(!allowed("http://api.example.com/v1"))
+    #expect(!allowed("http://192.168.1.5/v1"))
+    #expect(!allowed("ftp://127.0.0.1/v1"))
+}
