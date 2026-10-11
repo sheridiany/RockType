@@ -98,7 +98,8 @@ struct LiveResultWindowView: View {
             .frame(maxWidth: .infinity, alignment: .trailing)
     }
     private var captureMethod: String {
-        switch controller.state.session?.snapshot.method {
+        if controller.state.request?.template.id == ScreenshotSession.imageTemplate.id { return "图片理解" }
+        return switch controller.state.session?.snapshot.method {
         case .accessibility: "直接读取"
         case .copyFallback: "复制回退"
         case .paste: "粘贴"

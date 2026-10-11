@@ -15,14 +15,14 @@ import RoarkTPlatform
     var notice: String?
     var confirmingImage = false
     var onClose: () -> Void = {}
-    var onResult: () -> Void = {}
+    var performText: (OperationRequest) -> Void = { _ in }
+    var imageCompleted: (OperationResult, OperationTemplate) -> Void = { _, _ in }
     var configureVision: () -> Void = {}
     @ObservationIgnored private let settings: () -> AppSettings
     @ObservationIgnored private let verified: (AIConnectionSettings, String) -> Bool
     @ObservationIgnored private let allowed: () -> Bool
     @ObservationIgnored private let recognize: (Data) async throws -> String
     @ObservationIgnored private let sendImage: (AIConnectionSettings, String, Data) async throws -> String
-    @ObservationIgnored private let runner: any OperationRunner
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var protection: Task<Void, Never>?
     @ObservationIgnored private var generation = 0
@@ -33,7 +33,6 @@ import RoarkTPlatform
 
     init(image: CGImage, origin: String, settings: @escaping () -> AppSettings,
          verified: @escaping (AIConnectionSettings, String) -> Bool,
-         runner: any OperationRunner,
          allowed: @escaping () -> Bool = { SecureInput.status() == .allowed },
          recognize: @escaping (Data) async throws -> String = { try await OCR().recognize($0).text },
          sendImage: @escaping (AIConnectionSettings, String, Data) async throws -> String = { connection, model, data in
@@ -42,11 +41,10 @@ import RoarkTPlatform
                  model: model, imageDataURL: "data:image/png;base64," + data.base64EncodedString())
          }) {
         self.image = image; self.origin = origin; self.settings = settings; self.verified = verified
-        self.runner = runner; self.allowed = allowed; self.recognize = recognize; self.sendImage = sendImage
+        self.allowed = allowed; self.recognize = recognize; self.sendImage = sendImage
     }
     func start() {
         guard protection == nil, !closed else { return }
-        runner.start()
         protection = Task { [weak self] in
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
@@ -56,12 +54,12 @@ import RoarkTPlatform
         }
     }
     func cancel() {
-        generation += 1; task?.cancel(); task = nil; runner.cancel(); busy = false
+        generation += 1; task?.cancel(); task = nil; busy = false
         confirmingImage = false; pendingConnection = nil; pendingModel = nil
     }
     func close() {
         guard !closed else { return }
-        closed = true; cancel(); runner.stop(); protection?.cancel(); protection = nil
+        closed = true; cancel(); protection?.cancel(); protection = nil
         savePanel?.cancel(nil); savePanel = nil
         image = nil; text = ""; result = ""; notice = nil; onClose()
     }
@@ -119,26 +117,10 @@ import RoarkTPlatform
         guard let template = config.templates.first(where: { $0.id == templateID && $0.input == .text }) else {
             notice = "操作模板不可用，请在设置中恢复。"; return
         }
-        cancel(); let current = generation; result = ""; engine = ""; busy = true; notice = nil
+        cancel(); notice = nil
         let snapshot = ContentSnapshot(text: text, source: .init(pid: ProcessInfo.processInfo.processIdentifier,
             applicationName: "截图 OCR"), method: .screenshotOCR)
-        let events = runner.run(OperationRequest(session: OperationSession(snapshot: snapshot), template: template, settings: config))
-        onResult()
-        task = Task { [weak self] in
-            guard let self else { return }
-            for await event in events {
-                guard !Task.isCancelled, self.check(current) else { return }
-                switch event {
-                case .started: break
-                case .engine(let value): self.engine = value
-                case .delta(let value): self.result += value
-                case .completed(let value): self.result = value.text; self.engine = value.engine; self.busy = false
-                case .cancelled: self.busy = false; self.notice = "已取消"
-                case .failed(let failure): self.busy = false; self.notice = Self.message(failure)
-                }
-            }
-            if self.check(current) { self.busy = false }
-        }
+        performText(OperationRequest(session: OperationSession(snapshot: snapshot), template: template, settings: config))
     }
     var visionModel: String? {
         let connection = settings().ai
@@ -156,20 +138,38 @@ import RoarkTPlatform
             confirmingImage = false; notice = "连接或模型已变化，请重新预览并确认。"; return
         }
         cancel(); let current = generation; busy = true; result = ""; engine = model; notice = nil
-        onResult()
         task = Task { [weak self] in
             guard let self else { return }
             do {
+                // Confirmation and task execution can be separated by a settings/key change.
+                guard self.check(current), connection == self.settings().ai, model == self.visionModel else {
+                    self.busy = false
+                    self.notice = "连接、模型或密钥测试状态已变化，请重新预览并确认。"
+                    return
+                }
                 let answer = try await self.sendImage(connection, model, data)
                 guard !Task.isCancelled, self.check(current) else { return }
                 self.result = answer; self.busy = false
-                if answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { self.notice = "模型未返回内容，请重试。" }
+                if answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    self.notice = "模型未返回内容，请重试。"
+                } else {
+                    // History retains the explanation, never image bytes. Follow-ups use completed text only.
+                    let template = Self.imageTemplate
+                    let snapshot = ContentSnapshot(text: "图片理解：追问基于已完成的文字解释，原图不保留在对话中。",
+                        source: .init(pid: ProcessInfo.processInfo.processIdentifier, applicationName: self.origin), method: .screenshotOCR)
+                    let session = OperationSession(snapshot: snapshot,
+                        turns: [OperationTurn(question: "请用中文解释这张图片。", answer: answer)])
+                    self.imageCompleted(OperationResult(session: session, templateID: template.id, text: answer, engine: model), template)
+                }
             } catch {
                 guard !Task.isCancelled, self.check(current) else { return }
                 self.busy = false; self.notice = Self.message(.ai(error as? AIClientError ?? .network))
             }
         }
     }
+    static let imageTemplate = OperationTemplate(id: "screenshot-image-explanation", name: "图片理解", icon: "photo",
+        prompt: "请根据已完成的图片文字解释回答问题。你无法查看原图；需要图片细节时请说明并请用户重新打开图片。")
+
     private static func message(_ failure: OperationFailure) -> String {
         switch failure {
         case .inputTooLong(let limit): "文字超出输入预算（\(limit) 字节），请缩短后重试。"
@@ -182,5 +182,5 @@ import RoarkTPlatform
         default: "操作失败，请检查连接后重试。"
         }
     }
-    isolated deinit { task?.cancel(); protection?.cancel(); runner.stop() }
+    isolated deinit { task?.cancel(); protection?.cancel() }
 }

@@ -15,6 +15,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let permissions = PermissionCenter()
     private let comingSoon = ComingSoonController()
     private lazy var voice = VoiceInputController(store: store)
+    private lazy var screenshot: ScreenshotCoordinator = {
+        let coordinator = ScreenshotCoordinator()
+        coordinator.readSettings = { [unowned self] in self.store.settings }
+        coordinator.onNotice = { [weak self] in self?.comingSoon.show(message: $0) }
+        coordinator.onPermissionRequired = { [weak self] in
+            self?.panel.close(); self?.settingsWindow.show(section: .permissions)
+        }
+        coordinator.configureVision = { [weak self] in
+            self?.panel.close(); self?.settingsWindow.show(section: .ai)
+        }
+        coordinator.imageCapabilityVerified = { [weak self] config, model in
+            guard let self, self.store.settings.ai == config else { return false }
+            return self.connection.imageCapabilityVerified(connection: config, model: model)
+        }
+        coordinator.performText = { [weak self] request in
+            self?.operations.perform(request, source: nil, toolbarRect: nil)
+        }
+        coordinator.imageCompleted = { [weak self] result, template in
+            self?.operations.presentCompleted(result, template: template)
+        }
+        return coordinator
+    }()
     private let operationsEnvironment = OperationsEnvironment()
     private lazy var operations = SelectionOperationsController(
         environment: operationsEnvironment, settings: { [unowned self] in self.store.settings },
@@ -84,6 +106,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         permissions.start()
         operationsEnvironment.start()
         selectionController.start()
+        screenshot.start()
+        hotkeys.screenshotAction = { [weak self] in self?.captureScreenshot() }
         hotkeys.start()
         onboarding.applicationDidFinishLaunching()
     }
@@ -98,6 +122,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         connection.cancel()
         hotkeys.stop()
         voice.stop()
+        screenshot.stop()
         selectionController.stop()
         operations.stop()
         operationsEnvironment.stop()
@@ -140,7 +165,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             clock.refresh()
             connection.refresh(store.settings.ai)
             panel.toggle(from: button) {
-                LiveMenuRoot(store: store, clock: clock, connection: connection, recent: operationsEnvironment.recent,
+                LiveMenuRoot(screenshot: screenshot, capture: { [weak self] in self?.captureScreenshot() }, store: store, clock: clock, connection: connection, recent: operationsEnvironment.recent,
                              reopen: { [weak self] result in self?.panel.close(); self?.operations.reopen(result) },
                              clear: { [weak self] in self?.clearCurrentContent() },
                              showSettings: { [weak self] in self?.showSettings() },
@@ -150,16 +175,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func clearCurrentContent() {
+        screenshot.cancel()
+        screenshot.closePreview()
         selectionController.dismiss()
         operations.clearCurrentContent()
         comingSoon.show(message: "当前内容已清除。")
     }
+
+    @objc private func captureScreenshot() { panel.close(); screenshot.capture() }
 
     @objc func showSettings() { panel.close(); settingsWindow.show() }
     @objc private func showGallery() { panel.close(); gallery.show() }
 
     private func makeMenu() -> NSMenu {
         let menu = NSMenu()
+        menu.addItem(withTitle: "截图", action: #selector(captureScreenshot), keyEquivalent: "").target = self
         menu.addItem(withTitle: "设置…", action: #selector(showSettings), keyEquivalent: ",").target = self
         #if DEBUG
         menu.addItem(withTitle: "设计面板…", action: #selector(showGallery), keyEquivalent: "").target = self
@@ -201,6 +231,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 private struct LiveMenuRoot: View {
+    let screenshot: ScreenshotCoordinator
+    let capture: () -> Void
     let store: SettingsStore
     let clock: MenuBarClock
     let connection: ShellConnectionModel
@@ -214,7 +246,7 @@ private struct LiveMenuRoot: View {
                           aiStatus: connection.testing ? "AI 测试中" :
                             connection.results.prefix(2).allSatisfy({ $0 == "可用" }) ? "AI 文字/流式可用" :
                             connection.configured ? "AI 已配置 · 待验证" : "AI 未配置",
-                          recent: recent.results, reopen: reopen, clear: clear,
+                          recent: recent.results, reopen: reopen, clear: clear, screenshot: screenshot, capture: capture,
                           showSettings: showSettings, quit: quit)
             .preferredColorScheme(store.settings.general.appearance == .system ? nil :
                 store.settings.general.appearance == .dark ? .dark : .light)

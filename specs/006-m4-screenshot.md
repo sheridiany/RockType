@@ -26,12 +26,13 @@
 
 | # | 任务 | 执行 | 状态 |
 | --- | --- | --- | --- |
-| D-1 | 捕获、遮罩窗口、选区与调整、Esc 取消、⌃1 接入 | pi-xpc | 已实现，待集成与人工验收 |
+| D-1 | 捕获、遮罩窗口、选区与调整、Esc 取消、⌃1 接入 | pi-xpc | 代码已集成，待人工验收 |
 | D-2 | 标注工具与原始分辨率合成、撤销 | pi-xpc | 已实现，待人工验收 |
-| D-3 | 完成/保存、OCR、翻译、图片理解 | pi-xpc | 已实现，待集成与人工验收 |
-| D-4 | 剪贴板图片与拖入图片入口 | pi-xpc | 已实现，待菜单栏集成与人工验收 |
+| D-3 | 完成/保存、OCR、翻译、图片理解 | pi-xpc | 代码已集成，待人工验收 |
+| D-4 | 剪贴板图片与拖入图片入口 | pi-xpc | 菜单栏已集成，待人工验收 |
 | D-3a | 截图 OCR 独立取词方式与显示 | pi-xpc | 已完成，自动化通过 |
-| D-5 | 验收 | Claude + 用户 | 未开始 |
+| D-4a | 主 App 接线、能力门禁、统一结果与最近结果 | pi-platform | 代码集成完成，自动化通过；待人工验收 |
+| D-5 | 验收 | Claude + 用户 | 自动化与启动冒烟通过，待人工功能及设计验收 |
 
 **文件所有权**：`App/Features/Screenshot/`、`App/Surfaces/` 中截图编辑器与图片预览视图（只做接线需要的最小调整，保持 Gallery 可渲染）、`App/Shell/Hotkeys/` 中截图动作一处、`Platform/` 补充（捕获）、对应 `Tests/`。`AppDelegate` 接线由 Claude 集成（提供 `start()`/`stop()`）。
 
@@ -63,7 +64,7 @@
 
 - D-4：显式剪贴板读取复用 `Clipboard.readPNG()`；提供菜单栏可嵌入的 `ScreenshotImportControls`（按钮与拖入区域），图片/文件拖放共用预览流程。后台解码、EXIF 方向校正、40 MB / 6400 万像素限制、迟到导入丢弃。最终检查补充捕获等待期全局 Esc、关闭时清空本功能最近内容、翻转画布正确显示与小屏滚动预览。最终三条验收命令均通过。
 
-### Claude 集成清单（未修改 AppDelegate 或菜单栏所有权文件）
+### Claude 集成清单（已由 pi-platform 接线，见下方 M4 集成证据）
 
 1. AppDelegate 持有一个 `ScreenshotCoordinator`，启动/退出调用 `start()` / `stop()`；清除当前内容时调用 `cancel()` 和 `closePreview()`。
 2. `hotkeys.screenshotAction = { [weak screenshot] in screenshot?.capture() }`；菜单栏截图也调用 `capture()`。快捷键设置中的“截图即将推出”文案仍在范围外的 `ShortcutRecorder.swift`，请集成时移除截图占位。
@@ -82,5 +83,38 @@
 ## 问题
 
 - 请 Claude 确认外部图片导入的 40 MB / 6400 万像素上限；当前超限明确提示，不缩小或静默截断。
-- 已按 Claude 决定新增 `ContentSnapshot.CaptureMethod.screenshotOCR`，截图编辑后文字的翻译/总结使用此类型；通用结果浮窗显示“截图 OCR”。本次仅补充枚举显示分支，截图结果并入通用浮窗的接线等待后续通知。
-- 图片理解走现有 AIClient 的非流式图片接口；OCR 文字操作走既有 OperationRunner 流式接口。运行态结果浮窗使用相同 Tokens，尚未与并行开发的通用结果窗口控制器合并；如需共用控制器，由 Claude 集成。
+- 已按 Claude 决定新增 `ContentSnapshot.CaptureMethod.screenshotOCR`，截图编辑后文字的翻译/总结使用此类型；通用结果浮窗显示“截图 OCR”。原 D-3a 仅补充枚举显示分支；本轮 M4 集成已接入通用浮窗。
+- 图片理解走现有 AIClient 的非流式图片接口；OCR 文字操作走既有 OperationRunner 流式接口。本轮 M4 集成已删除截图独立结果窗，改用通用结果窗口与共享最近结果。图片请求仍为非流式，执行状态与取消留在图片预览，完成后显示通用结果窗。
+
+### M4 集成步骤一（pi-platform，2026-10-11）
+
+- AppDelegate 持有截图协调器，接 start/stop、快捷键与菜单截图、图片导入、清除内容、权限说明与 AI 设置定位。图片测试门禁刷新当前连接，核对测试模型及钥匙串密钥 SHA-256 摘要；配置、密钥、读取权限变化使既有测试失效。摘要仅在内存，不记录密钥。
+- 删除截图独立结果窗与独立 OperationsEnvironment。OCR 翻译/总结交给共享 SelectionOperationsController；图片解释期间在预览显示状态和取消，成功后进入通用 ResultWindow / RecentResults。关闭预览不清除共享历史；隐私开关与清除当前内容继续由共享控制器处理。
+- 图片不进入最近结果，追问只使用已完成的文字解释，界面原文说明此限制；最近结果重开保持相同模板与保守的“仅复制”来源行为。
+- `scripts/test.sh` 退出 0：35 XCTest + 124 Swift Testing，以及 Rime、快捷键、权限与标识扫描通过。新增测试覆盖配置/模型/密钥变化、测试期间换密钥、钥匙串读取失败、OCR 修正文本、统一浮窗、图片解释追问、重开、动态隐私与清除。日志 `/tmp/roarkt-m4-tests.log`。
+- 完整构建、Gallery、主 App 启动冒烟尚未运行；真实屏幕录制权限、快捷键、多屏、拖放、剪贴板、真实端点、焦点/键盘与设计验收待人工验证。
+
+### M4 集成步骤二（2026-10-11）
+
+- 按 Claude 新通知，在提交步骤一后将 main 合入当前 agent/platform（`849396c`）；仅带入本机环境规则及 Sparkle 打包修复，没有操作主仓库、安装脚本、输入法注册或 LaunchAgent。
+- 复查补充图片原始解释的重试门禁：原图未保留在会话时明确要求从预览重新确认发送，文字追问的重试仍走通用逻辑。浮窗显示“图片理解”，并提示追问只基于文字解释。
+- 在异步任务真正发送前再次检查连接、模型和密钥测试状态，防止“确认后、任务开始前”的配置变化；补充关闭预览后迟到图片结果不进入通用浮窗或历史的回归。
+- `scripts/test.sh` 退出 0：37 XCTest + 124 Swift Testing，Rime、快捷键、权限和标识检查通过。日志 `/tmp/roarkt-m4-tests-final.log`。完整构建与启动证据另见最终表。
+
+### M4 最终集成验收证据（2026-10-11）
+
+代码提交：`1493f68`（接线、门禁与共享结果）；`3d2b99e`（发送前再次验证、图片重试限制与回归）。`849396c` 是按 Claude 通知在当前 worktree 合入 main 的规则/构建更新，不是向 main 合并。没有 push，当前分支交由 Claude 合并验收。
+
+| 检查 | 实际退出码 | 结果与范围 |
+| --- | --- | --- |
+| `scripts/test.sh` | 0 | 37 XCTest + 124 Swift Testing；Rime、快捷键、权限与标识检查通过。`/tmp/roarkt-m4-tests-final.log` |
+| `scripts/build.sh`（最终重跑） | 0 | 主 App、翻译服务、语音 worker、输入法及注册工具完整构建签名；脚本内 worker 自检与 XPC 身份检查通过。仅构建输入法，未启动或注册，未加载 LaunchAgent。`/tmp/roarkt-m4-build.log` |
+| `scripts/render-gallery.sh`（最终） | 0 | 208 张 PNG，输出 `dist/gallery/`；导出不代表运行态设计或交互验收。`/tmp/roarkt-m4-gallery.log` |
+| `open -n dist/RoarkT.app`（由路径限定的 Swift 检查器执行） | 0 | 启动新实例并按解析后的本 worktree bundle 路径、PID 排除已有实例；`isFinishedLaunching=true`、`isTerminated=false` 后立即正常 terminate，最终 `isTerminated=true`。检查器退出 0。`/tmp/roarkt-m4-launch.log` |
+| `git diff --check` | 0 | 最终差异无空白错误 |
+
+- 首次完整构建退出 1：原因是补充发送前检查时修改了正在编译的 ScreenshotSession.swift，Swift 拒绝输入文件变动。停止修改后完整重跑退出 0。保留失败日志 `/tmp/roarkt-m4-build-interrupted.log`，不将首次失败冒充通过。
+- 原有 `Core/Voice/LICENSE.md` 未声明资源警告未处理，不影响上述退出码。
+- 人工待验：真实 ⌃1、多屏/缩放/全屏、自身浮窗隐藏、权限首次/拒绝/撤销、图片剪贴板/拖放、断网 OCR、真实 XPC 翻译和视觉端点、修改密钥后的真实能力验证、Secure Input/密码框、复制与来源退化、中文追问、纯键盘、VoiceOver、深浅色及小屏运行态设计。需要安装验证时由 Claude 从 main 执行。
+- Claude 待确认：沿用导入上限 40 MB / 6400 万像素；本轮采用“图片理解后仅以文字解释追问，原图不进入历史”的产品语义。界面已明确提示，初始图片重试要求重新确认发送；若希望每次追问重新发送原图，需要另行定义保留时长与发送确认行为。
+- 当前 worktree 保留给 Claude 验收；没有运行中的任务代理或遗留本 worktree 主 App 冒烟实例。

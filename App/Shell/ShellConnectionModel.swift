@@ -1,4 +1,5 @@
 import AppKit
+import CryptoKit
 import Observation
 import SwiftUI
 import RoarkTCore
@@ -12,6 +13,23 @@ final class ShellConnectionModel {
     private(set) var testing = false
     private(set) var results = ["未验证", "未验证", "未验证", "未验证"]
     @ObservationIgnored private let keychain = Keychain()
+    @ObservationIgnored private var testedKeyDigest: SHA256.Digest?
+    @ObservationIgnored var readKey: (String) throws -> String? = { try Keychain().get(account: $0) }
+    @ObservationIgnored var keyExists: (String) throws -> Bool = { try Keychain().exists(account: $0) }
+
+    /// Refresh before trusting a probe: a key can also be replaced outside this settings view.
+    func imageCapabilityVerified(connection: AIConnectionSettings, model: String) -> Bool {
+        refresh(connection)
+        let testedModel = connection.visionModel ?? (connection.defaultModelSupportsImages ? connection.defaultModel : "")
+        return !testing && configured && testedKeyDigest != nil && results.count == 4
+            && results[2] == "可用" && model == testedModel && !model.isEmpty
+    }
+
+    private func invalidateResults() {
+        cancel()
+        testedKeyDigest = nil
+        results = Array(repeating: "未验证", count: 4)
+    }
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var secureInputWatch: Task<Void, Never>?
     @ObservationIgnored private var generation = 0
@@ -48,20 +66,29 @@ final class ShellConnectionModel {
 
     func refresh(_ settings: AIConnectionSettings) {
         if configuration != settings {
-            cancel()
-            results = Array(repeating: "未验证", count: 4)
+            invalidateResults()
             configuration = settings
         }
         do {
-            let present = try keychain.exists(account: settings.id)
+            let present = try keyExists(settings.id)
             if hasKey != present {
                 cancel()
                 results = Array(repeating: "未验证", count: 4)
+            }
+            if let testedKeyDigest {
+                guard let secret = try readKey(settings.id),
+                      SHA256.hash(data: Data(secret.utf8)) == testedKeyDigest else {
+                    invalidateResults()
+                    hasKey = present
+                    configured = present && !settings.baseURL.isEmpty && !settings.defaultModel.isEmpty
+                    return
+                }
             }
             hasKey = present
             configured = hasKey && !settings.baseURL.isEmpty && !settings.defaultModel.isEmpty
             if !testing { message = hasKey ? "密钥已存入系统钥匙串" : "尚未设置密钥" }
         } catch {
+            invalidateResults()
             hasKey = false
             configured = false
             message = "无法读取钥匙串状态，请检查钥匙串访问权限。"
@@ -73,7 +100,7 @@ final class ShellConnectionModel {
             message = "密钥不能为空。"
             return false
         }
-        cancel()
+        invalidateResults()
         do {
             try keychain.set(secret, account: configuration.id)
             results = Array(repeating: "未验证", count: 4)
@@ -83,7 +110,7 @@ final class ShellConnectionModel {
     }
 
     func deleteKey() {
-        cancel()
+        invalidateResults()
         do {
             try keychain.delete(account: configuration.id)
             results = Array(repeating: "未验证", count: 4)
@@ -92,14 +119,14 @@ final class ShellConnectionModel {
     }
 
     func test() {
-        cancel()
+        invalidateResults()
         guard !SecureInput.isSecureInputActive() else {
             message = "安全输入已开启，暂不发送连接测试。"
             return
         }
         let runTests = runTests
         do {
-            guard let secret = try keychain.get(account: configuration.id), configured else {
+            guard let secret = try readKey(configuration.id), configured else {
                 message = "请先填写连接地址、模型并设置密钥。"; return
             }
             testing = true
@@ -127,6 +154,10 @@ final class ShellConnectionModel {
                     status: result.contains(where: { $0.hasPrefix("不可用") }) ? .failed : .succeeded,
                     duration: Date().timeIntervalSince(started)))
                 guard !Task.isCancelled, self.generation == current else { return }
+                guard result.count == 4,
+                      let currentSecret = try? self.readKey(config.id),
+                      currentSecret == secret else { self.invalidateResults(); return }
+                self.testedKeyDigest = SHA256.hash(data: Data(secret.utf8))
                 self.results = result
                 self.secureInputWatch?.cancel()
                 self.secureInputWatch = nil

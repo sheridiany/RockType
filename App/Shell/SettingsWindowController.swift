@@ -1,9 +1,14 @@
 import AppKit
 import SwiftUI
+import Observation
 import RoarkTCore
+
+@MainActor @Observable
+final class SettingsNavigation { var section: SettingsSection = .general }
 
 @MainActor
 final class SettingsWindowController {
+    private let navigation = SettingsNavigation()
     private var window: NSWindow?
     private let store: SettingsStore
     private let login: LoginItemController
@@ -20,7 +25,8 @@ final class SettingsWindowController {
         self.sections = sections
     }
 
-    func show() {
+    func show(section: SettingsSection? = nil) {
+        if let section { navigation.section = section }
         login.refresh()
         if store.settings.general.launchAtLogin != login.enabled {
             store.settings.general.launchAtLogin = login.enabled
@@ -32,7 +38,7 @@ final class SettingsWindowController {
             window.title = "RoarkT · 设置"
             window.isReleasedWhenClosed = false
             window.contentMinSize = NSSize(width: Tokens.Size.settingsWidth, height: Tokens.Size.settingsHeight)
-            window.contentView = NSHostingView(rootView: SettingsRoot(store: store, login: login, connection: connection,
+            window.contentView = NSHostingView(rootView: SettingsRoot(navigation: navigation, store: store, login: login, connection: connection,
                                                                      sections: sections, export: exportDiagnostics, clear: clearCurrentContent))
             window.center()
             self.window = window
@@ -43,6 +49,7 @@ final class SettingsWindowController {
 }
 
 private struct SettingsRoot: View {
+    @Bindable var navigation: SettingsNavigation
     @Bindable var store: SettingsStore
     let login: LoginItemController
     let connection: ShellConnectionModel
@@ -58,7 +65,7 @@ private struct SettingsRoot: View {
         ShellSettingsView(settings: $store.settings, login: login, connection: connection, sections: sections,
                           persistenceMessage: persistenceMessage, exportDiagnostics: export,
                           inputMethodSyncMessage: store.inputMethodSyncMessage, retryInputMethodSync: { store.flush() },
-                          clearCurrentContent: clear)
+                          clearCurrentContent: clear, section: $navigation.section)
             .preferredColorScheme(store.settings.general.appearance == .system ? nil :
                 store.settings.general.appearance == .dark ? .dark : .light)
     }

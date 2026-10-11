@@ -25,7 +25,8 @@ final class SessionTests: XCTestCase {
         settings.translation.targetLanguage = "fr"
         let runner = RecordingRunner()
         let session = ScreenshotSession(image: try image(), origin: "synthetic", settings: { settings }, verified: { _, _ in false },
-            runner: runner, allowed: { true }, recognize: { _ in "Synthetic OCR" })
+            allowed: { true }, recognize: { _ in "Synthetic OCR" })
+        session.performText = { _ = runner.run($0) }
         session.runOCR()
         for _ in 0..<100 where !session.ocrFinished { await Task.yield() }
         XCTAssertTrue(session.ocrFinished)
@@ -44,7 +45,7 @@ final class SessionTests: XCTestCase {
         settings.ai.defaultModel = "synthetic-vision"; settings.ai.defaultModelSupportsImages = true
         var verified = false, sent = 0
         let session = ScreenshotSession(image: try image(), origin: "synthetic", settings: { settings }, verified: { _, _ in verified },
-            runner: RecordingRunner(), allowed: { true }, sendImage: { _, _, bytes in
+            allowed: { true }, sendImage: { _, _, bytes in
                 XCTAssertNotNil(NSBitmapImageRep(data: bytes)); sent += 1; return "Synthetic reply"
             })
         session.prepareImage(); session.confirmImage()
@@ -61,7 +62,7 @@ final class SessionTests: XCTestCase {
     @MainActor func testCloseDropsLateOCRAndReleasesContent() async throws {
         var completion: CheckedContinuation<String, any Error>?
         let session = ScreenshotSession(image: try image(), origin: "synthetic", settings: { .defaults }, verified: { _, _ in false },
-            runner: RecordingRunner(), allowed: { true }, recognize: { _ in
+            allowed: { true }, recognize: { _ in
                 try await withCheckedThrowingContinuation { completion = $0 }
             })
         session.runOCR()
@@ -74,8 +75,9 @@ final class SessionTests: XCTestCase {
         var calls = 0
         let runner = RecordingRunner()
         let session = ScreenshotSession(image: try image(), origin: "synthetic", settings: { .defaults }, verified: { _, _ in true },
-            runner: runner, allowed: { false }, recognize: { _ in calls += 1; return "" },
+            allowed: { false }, recognize: { _ in calls += 1; return "" },
             sendImage: { _, _, _ in calls += 1; return "" })
+        session.performText = { _ = runner.run($0) }
         session.text = "Synthetic text"
         session.runOCR(); session.runText(templateID: "translate"); session.prepareImage(); session.confirmImage()
         for _ in 0..<10 { await Task.yield() }

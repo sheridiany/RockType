@@ -28,6 +28,7 @@ final class ResultWindowController: NSObject {
     private let aiConfigured: @MainActor () -> Bool
     private var sourceChanged = false
     private var anchor: CGRect?
+    private var initialRetryUnavailable: String?
 
     /// feedback must present an accessible, nonactivating notice after the panel closes.
     /// completed may forward successful results to RecentResults (respect privacy settings).
@@ -77,22 +78,26 @@ final class ResultWindowController: NSObject {
     func show(_ request: OperationRequest, source: OperationSource? = nil, toolbarRect: CGRect? = nil) {
         guard readable() else { feedback("当前输入受保护或无法检查，未打开结果。"); return }
         start(); self.source = source; sourceChanged = false
+        initialRetryUnavailable = nil
         state.show(request); present(snapshot: request.session.snapshot, toolbarRect: toolbarRect)
     }
 
-    func show(_ result: OperationResult, template: OperationTemplate, toolbarRect: CGRect? = nil) {
+    func show(_ result: OperationResult, template: OperationTemplate, toolbarRect: CGRect? = nil,
+              initialRetryUnavailable: String? = nil) {
         guard readable() else { feedback("当前输入受保护或无法检查，未打开结果。"); return }
         start(); source = nil
         // A persisted-in-memory result has no retained AX window identity. Never guess a return target.
         sourceChanged = true
+        self.initialRetryUnavailable = initialRetryUnavailable
         state.show(result, template: template, settings: settings())
+        if let initialRetryUnavailable { state.notice = initialRetryUnavailable }
         present(snapshot: result.session.snapshot, toolbarRect: toolbarRect)
     }
 
     func close() {
         safetyTask?.cancel(); safetyTask = nil
         panel.orderOut(nil); panel.acceptsKeyboard = false
-        state.stop(); source = nil; anchor = nil
+        state.stop(); source = nil; anchor = nil; initialRetryUnavailable = nil
     }
 
     /// Call when settings change. Does not persist content or preferences.
@@ -115,6 +120,10 @@ final class ResultWindowController: NSObject {
         state.ask(settings: settings())
     }
     func retry() {
+        if let initialRetryUnavailable, state.request?.session.turns.isEmpty == true {
+            state.notice = initialRetryUnavailable
+            return
+        }
         var current = settings()
         if !aiConfigured() {
             guard state.request?.template.id == "translate", state.request?.question == nil else {

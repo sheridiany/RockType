@@ -76,6 +76,8 @@ struct ShellMenuBarPanel: View {
     var recent: [OperationResult] = []
     var reopen: (OperationResult) -> Void = { _ in }
     var clear: () -> Void = {}
+    var screenshot: ScreenshotCoordinator?
+    var capture: () -> Void = {}
     let showSettings: () -> Void
     let quit: () -> Void
     @Environment(\.colorScheme) private var scheme
@@ -100,7 +102,7 @@ struct ShellMenuBarPanel: View {
             }.font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(p.secondary)
             HStack { Text("最近结果"); Spacer(); Chip(text: aiStatus) }
             if recent.isEmpty {
-                Text("本次运行暂无结果。完成划词操作后，结果仅在内存中保留。")
+                Text("本次运行暂无结果。完成文字或图片操作后，结果仅在内存中保留。")
                     .font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(p.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
@@ -119,8 +121,10 @@ struct ShellMenuBarPanel: View {
                 }.frame(height: min(CGFloat(recent.count) * 66, 264))
             }
             Button("清除当前内容", action: clear).buttonStyle(DesignButtonStyle(variant: .ghost))
-            HStack { Label("截图", systemImage: "viewfinder"); Spacer(); Chip(text: "即将推出"); Kbd("⌃1") }
-                .padding(Tokens.Space.md).background(p.card, in: RoundedRectangle(cornerRadius: Tokens.Radius.card))
+            Button(action: capture) {
+                HStack { Label("截图", systemImage: "viewfinder"); Spacer(); Text("框选屏幕") }
+            }.buttonStyle(DesignButtonStyle(variant: .secondary))
+            if let screenshot { ScreenshotImportControls(coordinator: screenshot) }
             U4Rule()
             HStack {
                 Spacer()
