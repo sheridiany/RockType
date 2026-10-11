@@ -149,20 +149,7 @@ struct ShellSettingsView: View {
         }
     }
     private var voice: some View {
-        Group {
-            Notice(text: "本地录音、模型下载与识别即将推出。现在可保存偏好；不会开启麦克风或下载模型。")
-            U4Card {
-                Picker("识别模型", selection: $settings.voice.model) {
-                    Text("0.6B · 8bit").tag(VoiceSettings.Model.small)
-                    Text("1.7B · 8bit").tag(VoiceSettings.Model.large)
-                }
-                Text("1.7B 占用更多内存；实际大小、内存和延迟待测量。")
-                    .font(Tokens.Typography.font(Tokens.Typography.caption))
-                toggle("选中输入法时自动准备模型", $settings.voice.automaticallyPrepareModel)
-                toggle("AI 润色语音结果", $settings.voice.polishWithAI).disabled(!connection.configured)
-                if !connection.configured { Text("请先配置 AI 连接，才能启用 AI 润色。") }
-            }
-        }
+        VoiceSettingsPane(settings: $settings.voice, aiConfigured: connection.configured)
     }
     private var selection: some View {
         Group {

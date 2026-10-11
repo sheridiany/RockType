@@ -30,7 +30,7 @@
 | # | 任务 | 执行 | 状态 |
 | --- | --- | --- | --- |
 | V1 | VoiceWorker 迁移、构建脚本、签名、`scripts/build.sh` 集成 | pi-ime | 完成（待验收） |
-| V2 | 模型存储与下载（B2、B3），设置 → 语音 分区接线 | pi-ime | 未开始 |
+| V2 | 模型存储与下载（B2、B3），设置 → 语音 分区接线 | pi-ime | 完成（待验收） |
 | V3 | Fn 按住录音、worker 客户端、HUD 控制、ticket 填入（B1、B4） | pi-ime | 未开始 |
 | V4 | 自动准备（B5）、AI 润色（B6） | pi-ime | 未开始 |
 | V5 | 验收 | Claude + 用户 | 未开始 |
@@ -42,7 +42,7 @@
 | 项 | 方法 | 结果 | 证据 |
 | --- | --- | --- | --- |
 | worker 构建、签名、identifier | 命令 | 通过 | `scripts/build-voice-worker.sh`：Xcode Release、MLX self-test、codesign verify 通过；identifier `com.roarkist.roarkt.voice`，Team `DF7J2VBQD8`。真实 App XPC 启动待验证。 |
-| 下载取消、校验失败不加载 | 单元测试 | 未运行 | |
+| 下载取消、校验失败不加载 | 单元测试 | 通过 | `VoiceDownloadTests` 使用 Swift 本地 HTTP 服务器验证断点、取消不发布、重试、错误 Range、SHA-256 损坏、加载校验门与删除范围；`scripts/test.sh` 69 测试通过。 |
 | ticket：目标变化 / 超时 / Secure Input 拒绝 | 单元测试 + 手工 | 未运行 | |
 | 真实麦克风：中文、中英混说识别并填入 | 手工 | 待人工验证 | |
 | 非录音期间麦克风关闭 | 手工（菜单栏麦克风指示） | 待人工验证 | |
@@ -51,5 +51,7 @@
 ## 进度
 
 - V1：固定版本 MLX 独立包、双向签名 XPC 协议、内存音频、取消退出进程；构建脚本嵌入 XPC helper/Metal 资源、补主 App 麦克风声明与 entitlement。`scripts/test.sh` 通过（66 测试与 Rime 部署）；worker Release 构建、MLX self-test 与签名校验通过。未进行真实模型与权限验收。
+
+- V2：两档固定 revision/大小/SHA-256 清单，分块下载、进度、取消、重试、空间不足提示和按模型删除；统一设置仅替换语音分区。模型切换持久化复用 SettingsStore；大小不能代替加载前哈希校验。真实 GB 下载、磁盘不足、UI 主题/可访问性待人工验证。
 
 ## 问题
