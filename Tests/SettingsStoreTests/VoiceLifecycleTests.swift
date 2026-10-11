@@ -82,8 +82,8 @@ import RoarkTCore
     #expect(h.worker.pending != nil)
     h.worker.resolve("合成测试结果")
     for _ in 0..<20 { await Task.yield() }
-    #expect(h.bridge.texts == ["合成测试结果"])
-    #expect(h.controller.state.result == "合成测试结果")
+    #expect(h.bridge.texts == ["合成测试结果。"])
+    #expect(h.controller.state.result == "合成测试结果。")
     #expect(h.controller.state.phase == .failed)
     h.controller.stop()
 }
@@ -258,5 +258,35 @@ import RoarkTCore
     #expect(h.bridge.texts.isEmpty)
     try await Task.sleep(for: .milliseconds(2200))
     #expect(h.controller.state.phase == .hidden)
+    h.controller.stop()
+}
+
+@MainActor @Test func voiceCleanupSwitchAndPolishFallbackUseSameText() async {
+    for enabled in [true, false] {
+        let h = VoiceHarness()
+        h.settings.cleanUpLocally = enabled
+        h.settings.polishWithAI = true
+        var received = ""
+        h.polish = { text in received = text; return text }
+        await h.begin(); await h.recognize()
+        h.worker.resolve("嗯，合成  测试")
+        for _ in 0..<30 { await Task.yield() }
+        let expected = enabled ? "合成 测试。" : "嗯，合成  测试"
+        #expect(received == expected)
+        #expect(h.bridge.texts == [expected])
+        h.controller.stop()
+    }
+}
+
+@MainActor @Test func voiceFillerOnlyResultDoesNotPolishOrInsert() async {
+    let h = VoiceHarness()
+    var calls = 0
+    h.polish = { text in calls += 1; return text }
+    await h.begin(); await h.recognize()
+    h.worker.resolve("嗯，呃。")
+    for _ in 0..<30 { await Task.yield() }
+    #expect(calls == 0)
+    #expect(h.bridge.texts.isEmpty)
+    #expect(h.controller.state.message == "未检测到有效声音，请重试。")
     h.controller.stop()
 }

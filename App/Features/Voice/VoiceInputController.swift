@@ -215,7 +215,9 @@ import RoarkTPlatform
             do {
                 let text = try await worker.transcribe(audio)
                 guard session == id, !Task.isCancelled, environment.allowed() else { return }
-                let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                let normalized = environment.settings().cleanUpLocally
+                    ? VoiceTextCleaner.clean(text)
+                    : text.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !normalized.isEmpty else {
                     bridge.cancel(target); self.target = nil
                     if !environment.settings().automaticallyPrepareModel || !environment.inputSourceSelected() {
