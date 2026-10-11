@@ -26,13 +26,13 @@
 
 | # | 任务 | 执行 | 状态 |
 | --- | --- | --- | --- |
-| D-1 | 捕获、遮罩窗口、选区与调整、Esc 取消、⌃1 接入 | pi-xpc | 已实现，待集成与人工验收 |
+| D-1 | 捕获、遮罩窗口、选区与调整、Esc 取消、⌃1 接入 | pi-xpc | 代码已集成，待人工验收 |
 | D-2 | 标注工具与原始分辨率合成、撤销 | pi-xpc | 已实现，待人工验收 |
-| D-3 | 完成/保存、OCR、翻译、图片理解 | pi-xpc | 已实现，待集成与人工验收 |
-| D-4 | 剪贴板图片与拖入图片入口 | pi-xpc | 已实现，待菜单栏集成与人工验收 |
+| D-3 | 完成/保存、OCR、翻译、图片理解 | pi-xpc | 代码已集成，待人工验收 |
+| D-4 | 剪贴板图片与拖入图片入口 | pi-xpc | 菜单栏已集成，待人工验收 |
 | D-3a | 截图 OCR 独立取词方式与显示 | pi-xpc | 已完成，自动化通过 |
-| D-4a | 主 App 接线、能力门禁、统一结果与最近结果 | pi-platform | 代码集成完成，待完整验证与人工验收 |
-| D-5 | 验收 | Claude + 用户 | 未开始 |
+| D-4a | 主 App 接线、能力门禁、统一结果与最近结果 | pi-platform | 代码集成完成，自动化通过；待人工验收 |
+| D-5 | 验收 | Claude + 用户 | 自动化与启动冒烟通过，待人工功能及设计验收 |
 
 **文件所有权**：`App/Features/Screenshot/`、`App/Surfaces/` 中截图编辑器与图片预览视图（只做接线需要的最小调整，保持 Gallery 可渲染）、`App/Shell/Hotkeys/` 中截图动作一处、`Platform/` 补充（捕获）、对应 `Tests/`。`AppDelegate` 接线由 Claude 集成（提供 `start()`/`stop()`）。
 
@@ -100,3 +100,21 @@
 - 复查补充图片原始解释的重试门禁：原图未保留在会话时明确要求从预览重新确认发送，文字追问的重试仍走通用逻辑。浮窗显示“图片理解”，并提示追问只基于文字解释。
 - 在异步任务真正发送前再次检查连接、模型和密钥测试状态，防止“确认后、任务开始前”的配置变化；补充关闭预览后迟到图片结果不进入通用浮窗或历史的回归。
 - `scripts/test.sh` 退出 0：37 XCTest + 124 Swift Testing，Rime、快捷键、权限和标识检查通过。日志 `/tmp/roarkt-m4-tests-final.log`。完整构建与启动证据另见最终表。
+
+### M4 最终集成验收证据（2026-10-11）
+
+代码提交：`1493f68`（接线、门禁与共享结果）；`3d2b99e`（发送前再次验证、图片重试限制与回归）。`849396c` 是按 Claude 通知在当前 worktree 合入 main 的规则/构建更新，不是向 main 合并。没有 push，当前分支交由 Claude 合并验收。
+
+| 检查 | 实际退出码 | 结果与范围 |
+| --- | --- | --- |
+| `scripts/test.sh` | 0 | 37 XCTest + 124 Swift Testing；Rime、快捷键、权限与标识检查通过。`/tmp/roarkt-m4-tests-final.log` |
+| `scripts/build.sh`（最终重跑） | 0 | 主 App、翻译服务、语音 worker、输入法及注册工具完整构建签名；脚本内 worker 自检与 XPC 身份检查通过。仅构建输入法，未启动或注册，未加载 LaunchAgent。`/tmp/roarkt-m4-build.log` |
+| `scripts/render-gallery.sh`（最终） | 0 | 208 张 PNG，输出 `dist/gallery/`；导出不代表运行态设计或交互验收。`/tmp/roarkt-m4-gallery.log` |
+| `open -n dist/RoarkT.app`（由路径限定的 Swift 检查器执行） | 0 | 启动新实例并按解析后的本 worktree bundle 路径、PID 排除已有实例；`isFinishedLaunching=true`、`isTerminated=false` 后立即正常 terminate，最终 `isTerminated=true`。检查器退出 0。`/tmp/roarkt-m4-launch.log` |
+| `git diff --check` | 0 | 最终差异无空白错误 |
+
+- 首次完整构建退出 1：原因是补充发送前检查时修改了正在编译的 ScreenshotSession.swift，Swift 拒绝输入文件变动。停止修改后完整重跑退出 0。保留失败日志 `/tmp/roarkt-m4-build-interrupted.log`，不将首次失败冒充通过。
+- 原有 `Core/Voice/LICENSE.md` 未声明资源警告未处理，不影响上述退出码。
+- 人工待验：真实 ⌃1、多屏/缩放/全屏、自身浮窗隐藏、权限首次/拒绝/撤销、图片剪贴板/拖放、断网 OCR、真实 XPC 翻译和视觉端点、修改密钥后的真实能力验证、Secure Input/密码框、复制与来源退化、中文追问、纯键盘、VoiceOver、深浅色及小屏运行态设计。需要安装验证时由 Claude 从 main 执行。
+- Claude 待确认：沿用导入上限 40 MB / 6400 万像素；本轮采用“图片理解后仅以文字解释追问，原图不进入历史”的产品语义。界面已明确提示，初始图片重试要求重新确认发送；若希望每次追问重新发送原图，需要另行定义保留时长与发送确认行为。
+- 当前 worktree 保留给 Claude 验收；没有运行中的任务代理或遗留本 worktree 主 App 冒烟实例。
