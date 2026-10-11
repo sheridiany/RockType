@@ -10,6 +10,15 @@ if [[ -z "$identity" ]]; then
 fi
 [[ -n "$identity" ]] || { print -u2 "No signing identity; set ROARKT_CODESIGN_IDENTITY."; exit 1; }
 
+# Keep build products out of Spotlight/Launchpad: several worktrees build RoarkT.app,
+# and indexed copies would also be candidates when LaunchServices opens the bundle ID.
+dist_store="$repo_dir/.build/dist.noindex"
+mkdir -p "$dist_store"
+if [[ -d "$repo_dir/dist" && ! -L "$repo_dir/dist" ]]; then
+  ditto "$repo_dir/dist" "$dist_store" && rm -rf "$repo_dir/dist"
+fi
+[[ -L "$repo_dir/dist" ]] || ln -s .build/dist.noindex "$repo_dir/dist"
+
 swift build -c release --product RoarkTApp
 swift build -c release --product RoarkTTranslationService
 bin_dir=$(swift build -c release --show-bin-path)
@@ -20,6 +29,9 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Helpers" "$app/Contents/Resources"
 cp "$repo_dir/App/Info.plist" "$app/Contents/Info.plist"
 cp "$bin_dir/RoarkTApp" "$app/Contents/MacOS/RoarkT"
 cp "$bin_dir/RoarkTTranslationService" "$app/Contents/Helpers/RoarkTTranslationService"
+xcrun actool "$repo_dir/Assets/AppIcon.icon" --compile "$app/Contents/Resources" --app-icon AppIcon \
+  --platform macosx --minimum-deployment-target 14.0 \
+  --output-partial-info-plist "$repo_dir/.build/appicon-partial.plist" > /dev/null
 
 codesign --force --options runtime --timestamp=none --sign "$identity" \
   --identifier com.roarkist.roarkt.translation "$app/Contents/Helpers/RoarkTTranslationService"
