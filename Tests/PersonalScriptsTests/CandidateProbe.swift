@@ -27,6 +27,13 @@ for _ in 0..<40 {
     var context = RimeContext_stdbool()
     context.data_size = Int32(MemoryLayout<RimeContext_stdbool>.size - MemoryLayout<Int32>.size)
     guard api.get_context(session, &context) else { exit(3) }
+    if args[6] == "--first" {
+        guard context.menu.num_candidates > 0 else { exit(5) }
+        print(String(cString: context.menu.candidates[0].text))
+        _ = api.free_context(&context)
+        found = true
+        break
+    }
     for i in 0..<Int(context.menu.num_candidates) {
         if String(cString: context.menu.candidates[i].text) == args[6] { found = true }
     }

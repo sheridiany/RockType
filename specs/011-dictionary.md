@@ -39,7 +39,7 @@
 | W-1 | 评测集与评测脚本，先跑出现状基线 | pi-ui | 已完成，基线 162/200（81%） |
 | W-2 | 引入白霜词库并调整两套方案，回归 RimeChecks | pi-ui | 白霜已撤回；采用 C 原主词库/原设置，回归通过 |
 | W-3 | AI / 开发中文词库与英文扩充，评测校准权重 | pi-ui | 已完成 C 校准：日常 78、整句 17、开发 29、AI 57，总计 181/200 |
-| W-4 | 简体空间去重、中英文质量筛选、ICU 学习词迁移及回归测试 | pi-platform | 大小写合并与中文质量回归通过；预览/临时生成完成，词条质量待人工验收 |
+| W-4 | 简体空间去重、中英文质量筛选、ICU 学习词迁移及回归测试 | pi-platform | 附加 translator/显式拼音真实包回归通过；词条质量与 IMK 试打待人工验收 |
 | W-5 | Claude 在本机执行个人层脚本、安装、用户试打 | Claude + 用户 | 未开始 |
 
 **文件所有权**：pi-ui：`Rime/`、`THIRD_PARTY_NOTICES.md`、`LICENSES/`、`scripts/eval-candidates.sh`、`Tests/InputMethodTests/Fixtures/`、评测相关测试；pi-platform：`scripts/personal/`、其测试、`.gitignore` 一行。两人都不改 `InputMethod/sources`（pi-ime 正在恢复 RoType 视觉）。
@@ -284,3 +284,13 @@ A/B 与先前保存结果、重建 C 与新保存结果的三个 `cmp` 均退出
 - 真实来源只读预览及当前 worktree `.build/personal-quality-review-adsPxG` 的 `--apply --offline` 均退出 **0**，两次统计一致：`files=6853 distinct=26731 missing_chinese=27 missing_english=1473`。两次均使用已授权的默认源码目录与安装包 SharedSupport 词库目录；生成目标仅为当前 worktree 的独立临时目录。摘要与退出码位于 `.build/personal-quality-evidence/`。
 - 已对整份生成英文词表检查 casefold 唯一性，通过。默认中英文总上限仍为 1500，中文过滤后英文候选补入，英文截取总数增加不代表重复变多。中文只有 27 条，因此汇报全部中文及前 60 条英文，不补足不存在的条目。
 - 真实词条不写入本规格、README 或 git；只在用户要求的汇报中列出。保留 `.build` 生成结果供验收，未写真实 Rime 目录，未迁移真实 userdb。未宣称逐词质量已通过：通用规则仍可能保留语义上不合适的短词，需用户抽查。
+
+### W-4 紧急修复：附加 translator 与显式拼音
+
+- 真实包回归复现旧实现：个人中文条目没有显式编码，在繁体字表下产生 Encode failure，专项退出 1。先前最小合成词表部署测试不能证明实际主词库的嵌套导入完整性，旧验收不足，不能继续用于该结论。
+- 改为个人独立附加 translator，不再替换或 import 主词典。中文 `script_translator@personal_zh` 支持多音节编码，英文 `table_translator@personal_en`；质量 0.1，个人层禁用 userdb/造句/补全。仅追加 translator、编译依赖及对应命名空间配置。全拼、双拼各自编译个人 prism；空语言词表不挂载。
+- `Core/Settings/RimeSettingsPatch.swift` 的可选引用按方案选择同一个人 patch 的 `pinyin` / `flypy` 节。个人脚本仍不写 custom；安装更新后由设置所有者重新生成引用。主 translator/english 的全部配置与无个人层基线保持一致。
+- 新增显式读音解析：递归主词表、整词优先、逐字拼接，按有效频率（含预置频率及百分比）择读音；缺少简体读音时用 ICU Hans-Hant 字形查表。不能编码则丢弃并输出数量，绝不写空码。合成回归覆盖嵌套/环形导入、词优先、多音字、繁简字形、自定义列顺序、缺失依赖和无法编码。
+- `Tests/PersonalScriptsTests/packaged_checks.py` 经现有 SPM 包装接入 `scripts/test.sh`，必须使用当前 worktree 的 `scripts/build.sh` 产物。无个人层/中英文个人层/仅英文/空个人层均在临时 profile 部署；对照主 table 尺寸和字节、无 Encode failure、全拼/双拼的常用词首选、个人中文和英文实际候选。未写用户目录、未安装/注册/启动输入法。
+- 最终 `scripts/build.sh` **退出 0**；`scripts/test.sh` **退出 0**，个人脚本 20 项检查全部通过。真实包中的中文主 table 为 **13,032,304 字节**，英文主 table 为 **814,612 字节**；四种 profile 对照尺寸和全部字节一致。全拼 `shuju/yonghu/gongsi` 与对应双拼查询首选均与无个人层基线一致；个人中文/英文在两种方案下均查到，无 Encode failure。
+- 证据位于 `.build/personal-deployment-evidence/`：`red.log` / `red.exit` 为故障复现（1），`final-build.log` / `.exit` 为完整构建（0），`verified-tests.log` / `.exit` 为最终全量验证（0）。`git diff --check` 通过。真实 IMK 试打仍待 Claude/用户验收。

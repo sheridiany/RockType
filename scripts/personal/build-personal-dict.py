@@ -14,10 +14,12 @@ from personal_common import build_simplifier, simplify_words, add_rime_directory
 
 from english_prose import EnglishCounts, english_occurrences
 from candidate_quality import chinese_candidates
+from pinyin_readings import encode_words
 
 HEADER = '# 个人词表，由 RockType 生成\n'
 NAMES = ['roarkt_personal.dict.yaml', 'roarkt_personal_en.dict.yaml',
-         'roarkt_personal_en.schema.yaml', 'roarkt_personal.patch.yaml']
+         'roarkt_personal_en.schema.yaml', 'roarkt_personal.schema.yaml',
+         'roarkt_personal_flypy.schema.yaml', 'roarkt_personal.patch.yaml']
 EXCLUDED = {'.git', '.build', 'node_modules', 'roarkt-backups'}
 
 
@@ -50,13 +52,34 @@ def parse_yaml(text):
     return yaml.safe_load(text), node
 
 
-def personal_patch():
-    return (HEADER + 'patch:\n'
-            '  "translator/dictionary": roarkt_personal\n'
-            '  "translator/user_dict": roarkt_zh\n'
-            '  "english/dictionary": roarkt_personal_en\n'
-            '  "english/user_dict": roarkt_en\n'
-            '  "schema/dependencies/@next": roarkt_personal_en\n')
+def personal_patch(has_chinese, has_english):
+    sections = {}
+    for section, prism in [('pinyin', 'roarkt_personal'), ('flypy', 'roarkt_personal_flypy')]:
+        patch = {'engine/translators/+': [], 'schema/dependencies/+': []}
+        if has_chinese:
+            patch['engine/translators/+'].append('script_translator@personal_zh')
+            patch['schema/dependencies/+'].append(prism)
+            patch['personal_zh'] = {'dictionary': 'roarkt_personal', 'prism': prism,
+                                    'enable_user_dict': False, 'enable_sentence': False,
+                                    'enable_completion': False, 'contextual_suggestions': False,
+                                    'initial_quality': 0.1}
+        if has_english:
+            patch['engine/translators/+'].append('table_translator@personal_en')
+            patch['schema/dependencies/+'].append('roarkt_personal_en')
+            patch['personal_en'] = {'dictionary': 'roarkt_personal_en', 'enable_user_dict': False,
+                                    'enable_sentence': False, 'enable_completion': False,
+                                    'initial_quality': 0.1}
+        sections[section] = patch
+    return HEADER + yaml_module().safe_dump(sections, sort_keys=False)
+
+
+def personal_schema(name, factory):
+    return HEADER + yaml_module().safe_dump({
+        'schema': {'schema_id': name, 'name': 'Personal Dictionary', 'version': '1'},
+        'engine': {'translators': ['table_translator' if name.endswith('_en') else 'script_translator']},
+        'speller': {'__include': factory + '.schema:/speller'},
+        'translator': {'dictionary': 'roarkt_personal_en' if name.endswith('_en') else 'roarkt_personal',
+                       'prism': name, 'enable_user_dict': False}}, sort_keys=False)
 
 
 def swift_text(text, comments_only=False):
@@ -212,7 +235,8 @@ def main():
     known = vocabulary(dictionary, 'roarkt_zh') | vocabulary(dictionary, 'roarkt_en')
     counts, contexts, english, files = Counter(), Counter(), EnglishCounts(), 0
     with tempfile.TemporaryDirectory(prefix='roarkt-tokenizer-') as temporary:
-        known = set(simplify_words(build_simplifier(temporary), sorted(known)))
+        converter = build_simplifier(temporary)
+        known = set(simplify_words(converter, sorted(known)))
         known_english = {word.casefold() for word in known if word.isascii()}
         binary = Path(temporary) / 'tokenize'
         run(['xcrun', 'swiftc', Path(__file__).with_name('tokenize.swift'), '-o', binary])
@@ -226,38 +250,31 @@ def main():
             for word, sentence_start in english_occurrences(prose):
                 if word.casefold() not in known_english:
                     english.add(word, sentence_start)
+        filtered = chinese_candidates(counts, contexts, known, args.min_count)
+        codes = encode_words(dictionary, list(filtered),
+                             lambda words: simplify_words(converter, words, traditional=True))
+        unencoded = len(filtered) - len(codes)
+        filtered = {word: count for word, count in filtered.items() if word in codes}
     distinct = len(counts) + len(english.totals)
-    filtered = chinese_candidates(counts, contexts, known, args.min_count)
     filtered.update({word: count for word, count in english.merged().items() if count >= args.min_count})
     selected = list(filtered.items())
     selected.sort(key=lambda pair: (-pair[1], pair[0]))
     selected = selected[:args.limit]
     zh = [(w, c) for w, c in selected if re.fullmatch('[\u3400-\u9fff]+', w)]
     en = [(w, c) for w, c in selected if w.isascii()]
-    print(f'files={files} distinct={distinct} missing_chinese={len(zh)} missing_english={len(en)}')
+    print(f'files={files} distinct={distinct} missing_chinese={len(zh)} missing_english={len(en)} unencoded_chinese={unencoded}')
     if not args.apply:
         return
     changes = {}
-    for name, imported, rows, english in [('roarkt_personal', 'roarkt_zh', zh, False),
-                                          ('roarkt_personal_en', 'roarkt_en', en, True)]:
-        body = HEADER + f'---\nname: {name}\nversion: "1"\nsort: by_weight\nuse_preset_vocabulary: false\nimport_tables:\n  - {imported}\n...\n'
+    for name, rows, is_english in [('roarkt_personal', zh, False), ('roarkt_personal_en', en, True)]:
+        body = HEADER + f'---\nname: {name}\nversion: "2"\nsort: by_weight\nuse_preset_vocabulary: false\n...\n'
         for word, count in rows:
-            body += f'{word}\t{word.lower() if english else ""}\t{min(count, 100)}\n'
+            body += f'{word}\t{word.lower() if is_english else codes[word]}\t{min(count, 100)}\n'
         changes[name + '.dict.yaml'] = body.encode()
-    changes['roarkt_personal_en.schema.yaml'] = (HEADER + '''schema:
-  schema_id: roarkt_personal_en
-  name: Personal English Dictionary
-  version: "1"
-engine:
-  translators:
-    - table_translator
-speller:
-  alphabet: zyxwvutsrqponmlkjihgfedcba
-  delimiter: " '"
-translator:
-  dictionary: roarkt_personal_en
-''').encode()
-    changes['roarkt_personal.patch.yaml'] = personal_patch().encode()
+    for name, factory in [('roarkt_personal', 'roarkt'), ('roarkt_personal_flypy', 'roarkt_flypy'),
+                          ('roarkt_personal_en', 'roarkt_en')]:
+        changes[name + '.schema.yaml'] = personal_schema(name, factory).encode()
+    changes['roarkt_personal.patch.yaml'] = personal_patch(bool(zh), bool(en)).encode()
     with locked(target):
         for name in NAMES:
             p = plain(target / name)

@@ -56,10 +56,11 @@ def build_simplifier(directory):
     return binary
 
 
-def simplify_words(binary, words):
+def simplify_words(binary, words, traditional=False):
     words = list(words)
     require(all(word and '\n' not in word and '\r' not in word for word in words), 'invalid phrase')
-    converted = run([binary], data=('\n'.join(words)).encode()).decode().splitlines()
+    converted = run([binary] + (['--traditional'] if traditional else []),
+                    data=('\n'.join(words)).encode()).decode().splitlines()
     require(len(converted) == len(words), 'conversion row mismatch')
     return converted
 

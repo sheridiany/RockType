@@ -21,6 +21,8 @@ spec.loader.exec_module(personal)
 from personal_common import Refusal, digest
 from candidate_quality import NUMBER, chinese_candidates
 from english_prose import EnglishCounts, english_occurrences
+from packaged_checks import PackagedPersonalTests
+from pinyin_checks import PinyinTests
 
 
 def invoke(script, args, env=None):
@@ -95,7 +97,7 @@ class PersonalTests(unittest.TestCase):
         (self.dicts / 'luna_pinyin.dict.yaml').write_text(
             '---\nname: luna_pinyin\nimport_tables: [nested]\n...\n數據\tshu ju\n')
         (self.dicts / 'nested.dict.yaml').write_text(
-            '---\nname: nested\nimport_tables: [luna_pinyin]\n...\n應當\tying dang\n')
+            '---\nname: nested\nimport_tables: [luna_pinyin]\n...\n應當\tying dang\n火\thuo\n星\txing\n')
         (self.dicts / 'roarkt_ai.dict.yaml').write_text(
             '---\nname: roarkt_ai\nimport_tables: [nested]\n...\n軟件\truan jian\n')
         (self.dicts / 'essay.txt').write_text('公司\t100\n管理\t90\n')
@@ -212,6 +214,19 @@ Tildebird
         for word in ['第五十七', '第十二章', '第一百零四', '和平台', '类型化']:
             self.assertNotIn(word, chinese)
 
+    def test_unencodable_chinese_is_counted_and_not_mounted(self):
+        path = self.dicts / 'roarkt_zh.dict.yaml'
+        path.write_text(path.read_text().replace('星\txing\t100\n', ''))
+        result = invoke('build-personal-dict.py', self.args + ['--apply', '--offline'])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('unencoded_chinese=1', result.stdout)
+        self.assertIn('missing_chinese=0', result.stdout)
+        self.assertNotIn('火星', (self.target / 'roarkt_personal.dict.yaml').read_text())
+        import yaml
+        patch = yaml.safe_load((self.target / 'roarkt_personal.patch.yaml').read_text())
+        self.assertNotIn('personal_zh', patch['pinyin'])
+        self.assertEqual(patch['pinyin']['engine/translators/+'], ['table_translator@personal_en'])
+
     def test_source_lexer(self):
         text = personal.swift_text('let CodeToken = 0\n/* outer /* inner */ tail */\nlet a = #"raw word"#\nlet b = """multi\nline"""\nlet c = "skip \\(SecretCode)"')
         self.assertIn('inner', text)
@@ -271,10 +286,10 @@ Tildebird
         for scheme in ['roarkt', 'roarkt_flypy']:
             import yaml
             deployed = yaml.safe_load((build / (scheme + '.schema.yaml')).read_text())
-            self.assertEqual(deployed['translator']['dictionary'], 'roarkt_personal')
-            self.assertEqual(deployed['translator']['user_dict'], 'roarkt_zh')
-            self.assertEqual(deployed['english']['dictionary'], 'roarkt_personal_en')
-            self.assertEqual(deployed['english']['user_dict'], 'roarkt_en')
+            self.assertEqual(deployed['translator']['dictionary'], 'roarkt_zh')
+            self.assertEqual(deployed['personal_zh']['dictionary'], 'roarkt_personal')
+            self.assertEqual(deployed['english']['dictionary'], 'roarkt_en')
+            self.assertEqual(deployed['personal_en']['dictionary'], 'roarkt_personal_en')
         self.assertTrue((build / 'roarkt_personal.table.bin').is_file())
         self.assertTrue((build / 'roarkt_personal_en.table.bin').is_file())
         probe = self.base / 'probe'
