@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import XCTest
 @testable import RoarkTApp
 
@@ -62,5 +63,44 @@ extension CanvasTests {
         XCTAssertEqual(CaptureGeometry.restored(CGRect(x: 350, y: 250, width: 200, height: 200), bounds: bounds),
             CGRect(x: 350, y: 250, width: 50, height: 50))
         XCTAssertEqual(CaptureGeometry.restored(CGRect(x: 500, y: 400, width: 100, height: 100), bounds: bounds), .zero)
+    }
+}
+
+extension CanvasTests {
+    @MainActor func testPinReceivesAnnotatedCropAndBlocksProtectedOutput() throws {
+        let context = try XCTUnwrap(CGContext(data: nil, width: 800, height: 600, bitsPerComponent: 8,
+            bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.setFillColor(NSColor.white.cgColor); context.fill(CGRect(x: 0, y: 0, width: 800, height: 600))
+        let canvas = CaptureCanvas(frame: CGRect(x: 0, y: 0, width: 400, height: 300),
+            image: try XCTUnwrap(context.makeImage()))
+        canvas.allowed = { true }
+        canvas.restore(CGRect(x: 20, y: 30, width: 100, height: 80))
+        let toolbar = try XCTUnwrap(canvas.subviews.compactMap { $0 as? NSHostingView<CaptureToolbar> }.first)
+        toolbar.rootView.select(.rectangle)
+        func mouse(_ type: NSEvent.EventType, _ point: CGPoint) throws -> NSEvent {
+            try XCTUnwrap(NSEvent.mouseEvent(with: type, location: canvas.convert(point, to: nil), modifierFlags: [],
+                timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+        }
+        canvas.mouseDown(with: try mouse(.leftMouseDown, CGPoint(x: 30, y: 40)))
+        canvas.mouseDragged(with: try mouse(.leftMouseDragged, CGPoint(x: 80, y: 70)))
+        canvas.mouseUp(with: try mouse(.leftMouseUp, CGPoint(x: 80, y: 70)))
+        var output: CGImage?
+        canvas.onPin = { output = $0 }
+        let key = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+            timestamp: 0, windowNumber: 0, context: nil, characters: "p", charactersIgnoringModifiers: "p",
+            isARepeat: false, keyCode: 35))
+        canvas.keyDown(with: key)
+        let image = try XCTUnwrap(output)
+        XCTAssertEqual(image.width, 200); XCTAssertEqual(image.height, 160)
+        let color = try XCTUnwrap(NSBitmapImageRep(cgImage: image).colorAt(x: 20, y: 30)?.usingColorSpace(.deviceRGB))
+        XCTAssertGreaterThan(color.redComponent, color.greenComponent)
+        output = nil; canvas.allowed = { false }
+        canvas.keyDown(with: key)
+        XCTAssertNil(output)
+    }
+    func testPinUsesGlobalAppKitPointsOnNegativeOriginScreen() {
+        XCTAssertEqual(CaptureGeometry.globalScreenRect(CGRect(x: 20, y: 30, width: 100, height: 80),
+            screen: CGRect(x: -1440, y: -200, width: 1440, height: 900)),
+            CGRect(x: -1420, y: 590, width: 100, height: 80))
     }
 }

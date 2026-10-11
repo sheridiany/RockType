@@ -12,10 +12,11 @@ import os
     var onPreview: (CGImage) -> Void = { _ in }
     var onComplete: (CGImage) -> Void = { _ in }
     var onSave: (CGImage) -> Void = { _ in }
+    var onPin: (CGImage) -> Void = { _ in }
     var onRestore: () -> Void = {}
     var allowed: () -> Bool = { SecureInput.status() == .allowed }
     private var notice: String?
-    private enum Output { case copy, save, preview }
+    private enum Output { case copy, save, preview, pin }
     private let windows: [CGRect]
     private var hoveredWindow: CGRect? { didSet { updateSelectionLayers() } }
     private var clickWindow: CGRect?
@@ -53,6 +54,7 @@ import os
         case .copy: onComplete(result)
         case .save: onSave(result)
         case .preview: onPreview(result)
+        case .pin: onPin(result)
         }
     }
     private func updateToolbar() {
@@ -99,7 +101,7 @@ import os
         labelLayer.backgroundColor = NSColor.black.withAlphaComponent(0.7).cgColor
         for overlay in [maskLayer, borderLayer, handlesLayer, labelLayer] { layer?.addSublayer(overlay) }
         updateSelectionLayers()
-        setAccessibilityLabel("截图：拖动框选，单击选窗口，方向键微调，↩ 或 ⌘C 复制，⇧↩ 保存并复制路径，R 恢复上次选区，Esc 取消")
+        setAccessibilityLabel("截图：拖动框选，单击选窗口，方向键微调，↩ 或 ⌘C 复制，⇧↩ 保存并复制路径，R 恢复上次选区，P 贴图，Esc 取消")
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override func viewDidMoveToWindow() {
@@ -134,9 +136,9 @@ import os
         let pixels = CaptureGeometry.pixels(visible, image: image, size: bounds.size)
         labelLayer.string = notice ?? (selection.isEmpty
             ? "单击选窗口 · 拖动框选 · R 恢复上次选区 · Esc 取消"
-            : "\(Int(pixels.width)) × \(Int(pixels.height)) · ↩/⌘C 复制 · ⇧↩ 保存路径 · R 恢复 · Esc 取消")
-        labelLayer.frame = CGRect(x: max(8, min(visible.minX, bounds.width - 610)),
-            y: max(8, visible.minY - 25), width: min(610, bounds.width - 16), height: 20)
+            : "\(Int(pixels.width)) × \(Int(pixels.height)) · ↩/⌘C 复制 · ⇧↩ 保存路径 · R 恢复 · P 贴图 · Esc 取消")
+        labelLayer.frame = CGRect(x: max(8, min(visible.minX, bounds.width - 670)),
+            y: max(8, visible.minY - 25), width: min(670, bounds.width - 16), height: 20)
         if let toolbar, !toolbar.isHidden {
             var frame = toolbar.frame
             frame.origin = CGPoint(x: min(max(8, selection.maxX - frame.width), bounds.width - frame.width - 8),
@@ -246,6 +248,9 @@ import os
         let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
         if event.keyCode == 36 || event.keyCode == 76, modifiers.isEmpty || modifiers == .shift {
             complete(modifiers == .shift ? .save : .copy); return
+        }
+        if modifiers.isEmpty, event.charactersIgnoringModifiers?.lowercased() == "p" {
+            complete(.pin); return
         }
         if modifiers.isEmpty, event.charactersIgnoringModifiers?.lowercased() == "r" {
             guard allowed() else { onCancel(); return }

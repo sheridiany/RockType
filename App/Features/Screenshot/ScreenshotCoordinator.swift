@@ -46,7 +46,7 @@ import os
         ScreenCapture.startWarming()
         warmupTask = Task { await OCR.prewarm() }
     }
-    func stop() { running = false; warmupTask?.cancel(); warmupTask = nil; ScreenCapture.stopWarming(); cancel(); closePreview() }
+    func stop() { running = false; warmupTask?.cancel(); warmupTask = nil; ScreenCapture.stopWarming(); cancel(); closePreview(); PinnedImageController.shared.closeAll() }
     func cancel() {
         generation += 1
         importTask?.cancel(); importTask = nil; importProgress?.cancel(); importProgress = nil
@@ -120,6 +120,17 @@ import os
                 self.lastSelection = (displayID, view.selection)
                 do { try ScreenshotOutput.shared.copyPath(url); self.cancel() }
                 catch { view.showNotice("PNG 已保存，但路径复制失败。") }
+            }
+            let screenRect = frame.rect
+            view.onPin = { [weak self, weak view] image in
+                guard let self, let view, self.allowed() else { return }
+                let selection = view.selection
+                let rect = CaptureGeometry.globalScreenRect(selection, screen: screenRect)
+                // Restore hidden windows before giving the new pin keyboard focus.
+                self.cancel()
+                if PinnedImageController.shared.pin(image, at: rect) {
+                    self.lastSelection = (displayID, selection)
+                } else { self.onNotice("无法贴图，请检查安全输入状态和显示器。") }
             }
             view.onRestore = { [weak self, weak view] in
                 guard let self, self.allowed(), let previous = self.lastSelection,

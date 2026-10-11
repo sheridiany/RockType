@@ -25,7 +25,7 @@ struct CaptureToolbar: View {
             Button(action: redo) { Image(systemName: "arrow.uturn.forward") }.disabled(!canRedo).help("重做 ⇧⌘Z")
             Button(action: preview) { Image(systemName: "text.viewfinder") }.help("预览、OCR、翻译、图片理解与保存")
             Button(action: cancel) { Image(systemName: "xmark") }.help("取消 Esc")
-            Button(action: complete) { Image(systemName: "checkmark") }.help("复制图片 ↩ / ⌘C · 保存 PNG 并复制路径 ⇧↩")
+            Button(action: complete) { Image(systemName: "checkmark") }.help("复制图片 ↩ / ⌘C · 保存 PNG 并复制路径 ⇧↩ · P 贴图")
         }
         .buttonStyle(DesignButtonStyle(variant: .ghost))
         .padding(Tokens.Space.sm).background(p.card, in: Capsule())
