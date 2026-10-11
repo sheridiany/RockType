@@ -14,7 +14,108 @@ struct SessionTests {
     }
     precondition(drained, "main queue failed to drain")
   }
+  static func checkInputAI() {
+    let snapshot = RoarkTCandidateSnapshot(rawInput: "yingwenshu", source: "英文书", identity: "7:10:0", scope: "whole")
+    var session = RoarkTCandidateTranslationSession()
+    let ordinary = session.observe(snapshot)!
+    for action in [RoarkTInputAIAction.rewrite, .polish, .translate, .rewrite] {
+      let request = session.beginAI(snapshot)
+      precondition(request.action == action && request.generation > ordinary.generation)
+      precondition(session.isLoading && session.commit == nil && session.interceptsTab)
+      precondition(session.displayText == action.title + " · 思考中…")
+      precondition(!session.receive("old result", for: ordinary))
+      precondition(session.receive("synthetic AI result", for: request))
+      precondition(session.commit?.snapshot == snapshot && session.commit?.text == "synthetic AI result")
+    }
+    let old = session.ticket!
+    session.invalidate() // Esc, input change and focus loss revoke the same ticket authority.
+    precondition(session.commit == nil && !session.receive("late", for: old))
+    let fresh = session.beginAI(snapshot)
+    precondition(fresh.action == .rewrite)
+    let notConfigured = RoarkTInputAIAction.failure(NSError(domain: CandidateTranslationFailure.errorDomain, code: 101))
+    precondition(session.fail(notConfigured.message, for: fresh, retryable: notConfigured.retryable))
+    precondition(session.commit == nil && !session.canRetry && session.displayText.contains("未配置 AI"))
+    let failure = session.beginAI(snapshot)
+    precondition(session.fail("失败", for: failure))
+    let retry = session.retry()!
+    precondition(retry.action == failure.action && retry.generation > failure.generation)
+    let key = Shortcut(key: "tab", modifiers: .option)
+    precondition(RoarkTInputAIAction.matches(keyCode: 48, modifiers: .option, shortcut: key))
+    precondition(!RoarkTInputAIAction.matches(keyCode: 48, modifiers: [.option, .shift], shortcut: key))
+    precondition(!RoarkTInputAIAction.matches(keyCode: 48, modifiers: [], shortcut: key))
+
+    precondition(RoarkTInputAIAction.matches(keyCode: 18, modifiers: [.control, .shift],
+      shortcut: Shortcut(key: "1", modifiers: [.control, .shift])))
+    let transport = AITransport()
+    var secure = false
+    let client = RoarkTTranslationClient(proxyProvider: { transport }, isSecureInputEnabled: { secure })
+    let id = UUID().uuidString
+    var results: [Result<RoarkTTranslationResult, Error>] = []
+    func send(_ generation: Int64, timeout: Double = 30) {
+      client.rewrite(sessionID: id, generation: generation, source: snapshot.source, action: .rewrite,
+                     timeout: timeout) { results.append($0) }
+    }
+    send(1)
+    precondition(transport.ai.count == 1 && results.isEmpty, "explicit request returns without waiting for backend")
+    precondition(transport.ai[0].source == snapshot.source && transport.ai[0].action == "rewrite")
+    send(2)
+    transport.ai[0].reply(1, snapshot.source, "stale", nil)
+    drainReplies()
+    precondition(results.isEmpty, "superseded AI reply is ignored")
+    transport.ai[1].reply(2, "wrong source", "wrong result", nil)
+    drainReplies()
+    precondition(results.count == 1 && (try? results.last!.get()) == nil)
+    send(3)
+    transport.ai[2].reply(3, snapshot.source, "synthetic AI result", nil)
+    drainReplies()
+    precondition((try? results.last!.get().translatedText) == "synthetic AI result")
+    client.translate(sessionID: id, generation: 4, request: snapshot.translationRequest!) { _ in }
+    precondition(transport.translations == 1, "AI result never enters ordinary translation cache")
+    client.cancel(sessionID: id, throughGeneration: 4)
+    secure = true
+    send(5)
+    precondition(transport.ai.count == 3 && (try? results.last!.get()) == nil, "Secure Input sends no AI")
+    secure = false
+    send(6)
+    secure = true
+    transport.ai.last!.reply(6, snapshot.source, "protected late reply", nil)
+    drainReplies()
+    precondition((try? results.last!.get()) == nil, "Secure Input rejects replies in flight")
+    secure = false
+    send(7)
+    client.deactivate()
+    let count = results.count
+    transport.ai.last!.reply(7, snapshot.source, "late focus reply", nil)
+    drainReplies()
+    precondition(results.count == count, "deactivation drops late result")
+    send(8, timeout: 0.1)
+    let deadline = Date().addingTimeInterval(2)
+    while results.count == count && Date() < deadline { _ = RunLoop.current.run(mode: .default, before: deadline) }
+    precondition(results.count == count + 1 && (try? results.last!.get()) == nil, "bounded AI timeout")
+    precondition(transport.cancellations >= 3)
+    client.invalidate()
+    print("input AI actions, snapshots, stale replies, no cache, secure input, cancellation and timeout passed")
+
+    if ProcessInfo.processInfo.environment["ROARKT_MEASURE_DEBOUNCE"] == "1" {
+      var samples: [Double] = []
+      for _ in 0..<20 {
+        let proxy = AITransport()
+        let measured = RoarkTTranslationClient(proxyProvider: { proxy }, isSecureInputEnabled: { false })
+        let start = ProcessInfo.processInfo.systemUptime
+        measured.translateDebounced(sessionID: UUID().uuidString, generation: 1, request: snapshot.translationRequest!) { _ in }
+        let deadline = Date().addingTimeInterval(2)
+        while proxy.translations == 0 && Date() < deadline { _ = RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.001)) }
+        precondition(proxy.translations == 1)
+        samples.append((ProcessInfo.processInfo.systemUptime - start) * 1000)
+        measured.invalidate()
+      }
+      samples.sort()
+      print("candidate-client-ms n=20 median=\(samples[10]) p95=\(samples[18])")
+    }
+  }
+
   static func main() {
+    checkInputAI()
     for identifier in [ROARKT_APP_BUNDLE_ID, ROARKT_TRANSLATION_SERVICE_NAME, Identifiers.inputMethodBundleID] {
       let previous = "anchor apple generic and certificate leaf[subject.OU] = \"\(ROARKT_TEAM_ID)\" and identifier \"\(identifier)\""
       precondition(Identifiers.codeRequirement(for: identifier) == previous,
@@ -552,6 +653,33 @@ private final class TranslationTransport: NSObject, RoarkTTranslationXPCProtocol
     reply?(generation, request["direction"], request["sourceText"], text, error)
     reply = nil
   }
+  func cancel(sessionID: String, throughGeneration: Int64) { cancellations += 1 }
+  func registerDictationEndpoint(_ endpoint: NSXPCListenerEndpoint) {}
+  func dictationEndpoint(reply: @escaping (NSXPCListenerEndpoint?) -> Void) { reply(nil) }
+  func ping(reply: @escaping (String) -> Void) { reply("test") }
+  func recordControllerInput() {}
+  func controllerInputGeneration(reply: @escaping (Int64, Error?) -> Void) { reply(0, nil) }
+}
+
+private final class AITransport: NSObject, RoarkTInputAIXPCProtocol {
+  struct Call {
+    let source: String
+    let action: String
+    let reply: (Int64, String?, String?, Error?) -> Void
+  }
+  var ai: [Call] = []
+  var translations = 0
+  var cancellations = 0
+  func rewriteCandidate(sessionID: String, generation: Int64, text: String, action: String,
+                        withReply reply: @escaping (Int64, String?, String?, Error?) -> Void) {
+    ai.append(Call(source: text, action: action, reply: reply))
+  }
+  func configureAI(config: [String: String], withReply reply: @escaping (Error?) -> Void) { reply(nil) }
+  func translateText(sessionID: String, generation: Int64, text: String, target: String,
+                     withReply reply: @escaping (Int64, String?, Error?) -> Void) { reply(generation, text, nil) }
+  func cancelText(sessionID: String, throughGeneration: Int64) {}
+  func translateCandidate(sessionID: String, generation: Int64, request: [String: String],
+                          withReply reply: @escaping (Int64, String?, String?, String?, Error?) -> Void) { translations += 1 }
   func cancel(sessionID: String, throughGeneration: Int64) { cancellations += 1 }
   func registerDictationEndpoint(_ endpoint: NSXPCListenerEndpoint) {}
   func dictationEndpoint(reply: @escaping (NSXPCListenerEndpoint?) -> Void) { reply(nil) }

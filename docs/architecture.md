@@ -1,6 +1,6 @@
 # RockType 技术架构
 
-需求见 [PRD](prd.md)，决策见 [ADR-0001](adr/0001-swift-merged-product.md)、[ADR-0002](adr/0002-identifiers-license-shortcuts.md)。本文按 2026-10-11 SPEC-014 R2-ARCH 第一阶段的代码现状更新；内部模块及标识符仍使用 RoarkT。后续整理事项见[架构审计](architecture-audit-2026-10.md)，不能将规划接口视为已完成功能。
+需求见 [PRD](prd.md)，决策见 [ADR-0001](adr/0001-swift-merged-product.md)、[ADR-0002](adr/0002-identifiers-license-shortcuts.md)。本文按 2026-10-11 SPEC-014 R3-IME 的代码现状更新；内部模块及标识符仍使用 RoarkT。后续整理事项见[架构审计](architecture-audit-2026-10.md)，不能将规划接口视为已完成功能。
 
 ## 进程与请求路径
 
@@ -15,9 +15,9 @@
 
 当前翻译路由分三个位置实现：
 
-- **候选翻译**：输入法本地精确缓存与技术词保护即时返回；其他请求经输入法 80ms 防抖和服务 120ms 防抖，再调用 macOS 26 Apple Translation。服务不可用时由输入法本地静态词条兜底。缓存为有界、短期、内存缓存；Secure Input 清空。
+- **候选翻译**：输入法本地精确缓存与技术词保护即时返回；其他请求只经输入法 80ms 防抖，服务收到后直接调用 macOS 26 Apple Translation。服务不可用时由输入法本地静态词条兜底。缓存为有界、短期、内存缓存；Secure Input 清空。
 - **划词/截图文字翻译**：App 的 `DefaultOperationRunner` 经 `TextTranslationXPCClient` 先请求 Apple 离线翻译，不可用时按配置在 App 内调用 AI。结果与取消归当前操作会话。服务不是所有 AI/fallback 的统一执行位置。
-- **输入法内显式 AI**：Shared 协议与服务的配置/改写接口已实现；`InputAIController` 生命周期尚未接入 AppDelegate，IMK 触发和上屏 E-3 未完成。状态见 [SPEC-008](../specs/008-m6-input-ai.md)，不能宣称端到端可用。
+- **输入法内显式 AI**：`InputAIController` 已接入 AppDelegate 的 start/stop。启用输入法 AI 后，默认 `⌥Tab` 循环改写/润色/翻译，对已确认前缀与当前高亮候选发送显式请求；AI 与普通翻译共享 session/generation，输入变化、Esc、失焦或保护状态作废，Tab 上屏。AI 不走普通翻译缓存/防抖，部分候选提交保留未转换后缀。自动化结果见 [R3-IME](../specs/evidence/014-R3-IME.md)，真实安装试打仍待人工验证。
 
 macOS 26 专属的无界面 `TranslationSession` 通过 availability 隔离；最低运行系统仍为 macOS 14。旧系统的候选静态词条、App AI 路径与本地 OCR 不依赖该 API。
 
@@ -58,7 +58,7 @@ R4-UI 为 Mock/Gallery、依赖样本的原型视图和全部 Gallery 启动入�
 
 | 接口 | 允许调用方 |
 | --- | --- |
-| `translateCandidate` / `rewriteCandidate` / `cancel` | 输入法 → 翻译服务；rewrite 的 IMK 入口尚待接线 |
+| `translateCandidate` / `rewriteCandidate` / `cancel` | 输入法 → 翻译服务；rewrite 仅显式触发 |
 | `translateText` / `cancelText` / `configureAI` / `ping` | 主 App → 翻译服务 |
 | `recordControllerInput` / `controllerInputGeneration` | 输入法写计数 / 主 App 读计数；不传试打原文 |
 | `registerDictationEndpoint` / `dictationEndpoint` | 输入法登记匿名 listener endpoint / 主 App 发现 |
@@ -108,7 +108,7 @@ Swift 唯一来源为 `Core/Identifiers.swift`；ObjC 镜像为 `Shared/XPCProto
 | 总结选区 | `⌃⌥S` |
 | 中英切换 | 轻按 Shift（输入法内） |
 | 译文上屏 | Tab（输入法内） |
-| 输入法内 AI | 设置/规格默认 `⌥Tab`；IMK 触发实现尚未完成 |
+| 输入法内 AI | `⌥Tab` 循环改写 → 润色 → 翻译；需在设置中启用，可改键 |
 
 ## 构建、测试与发布
 

@@ -82,16 +82,18 @@ final class RoarkTTranslationPanel: NSPanel {
     ])
     shortcutLabel.layer?.borderWidth = 0.5
     shortcutLabel.layer?.cornerRadius = 4
-    shortcutLabel.setAccessibilityLabel(state.canRetry ? "Tab 重试翻译" : "Tab 上屏译文")
+    shortcutLabel.setAccessibilityLabel(ticket.action != nil
+      ? (state.canRetry ? "Tab 重试 AI 请求" : "Tab 上屏 AI 结果")
+      : (state.canRetry ? "Tab 重试翻译" : "Tab 上屏译文"))
     // A pending ticket may retain text from a previous candidate. Never draw it.
-    let text = state.isLoading ? "正在翻译…" : state.displayText
+    let text = state.ticket?.action != nil ? state.displayText : (state.isLoading ? "正在翻译…" : state.displayText)
     let attributes = style.actionAttributes(ready: state.commit != nil, appearance: effectiveAppearance)
     let font = attributes[.font] as? NSFont ?? .systemFont(ofSize: NSFont.systemFontSize)
     action.attributedTitle = NSAttributedString(string: text, attributes: attributes)
     action.isEnabled = state.commit != nil || state.canRetry
     action.toolTip = state.commit?.text ?? state.failure
-    action.setAccessibilityLabel("\(scope)翻译：\(text)")
-    action.setAccessibilityHelp(state.canRetry ? "点击或按 Tab 重试，不会提交旧译文" : "翻译完成后点击译文或按 Tab 上屏")
+    action.setAccessibilityLabel(ticket.action != nil ? text : "\(scope)翻译：\(text)")
+    action.setAccessibilityHelp(state.canRetry ? "点击或按 Tab 重试，不会提交旧结果" : "完成后点击结果或按 Tab 上屏")
     let screen = parent.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? parent.frame
     let width = min(max(parent.frame.width, 300), screen.width)
     let shortcutSize = shortcutLabel.attributedStringValue.size()

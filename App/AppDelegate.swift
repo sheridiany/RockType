@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let diagnostics = DiagnosticExportController()
     private let permissions = PermissionCenter()
     private let noticeController = TransientNoticeController()
+    private lazy var inputAI = InputAIController(store: store)
     private lazy var voice = VoiceInputController(store: store)
     private lazy var screenshot: ScreenshotCoordinator = {
         let coordinator = ScreenshotCoordinator()
@@ -94,6 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 status: store.persistenceError == nil ? .succeeded : .failed,
                 failure: store.persistenceError == nil ? nil : .storage))
         }
+        inputAI.start()
         permissions.start()
         operationsEnvironment.start()
         selectionController.start()
@@ -116,6 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     #if DEBUG
         if CommandLine.arguments.contains("--gallery") { clock.stop(); panel.stop(); return }
     #endif
+        inputAI.stop()
         connection.cancel()
         hotkeys.stop()
         voice.stop()
