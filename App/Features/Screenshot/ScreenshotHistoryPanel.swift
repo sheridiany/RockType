@@ -20,12 +20,12 @@ struct ScreenshotHistoryView: View {
                 Button("关闭", action: close).buttonStyle(DesignButtonStyle(variant: .ghost))
             }
             HStack {
-                TextField("搜索已识别的 OCR 文字", text: $query).textFieldStyle(.roundedBorder)
-                    .accessibilityLabel("搜索截图历史 OCR 文字")
+                TextField("搜索已识别的文字", text: $query).textFieldStyle(.roundedBorder)
+                    .accessibilityLabel("搜索截图历史中的识别文字")
                 Text("\(history.entries.count) 张").font(.system(size: 12)).monospacedDigit()
                 Button("清空历史…") { confirmClear = true }.disabled(history.entries.isEmpty && !history.onDisk)
             }
-            if history.loading || history.syncing { ProgressView(history.loading ? "正在读取历史…" : "正在同步磁盘…").controlSize(.small) }
+            if history.loading || history.syncing { ProgressView(history.loading ? "正在读取历史…" : "正在同步截图历史…").controlSize(.small) }
             if let notice = history.notice {
                 HStack { Text(notice).font(.system(size: 12)).foregroundStyle(p.warn); Button("重试") { history.retryDisk() } }
             }
@@ -63,16 +63,16 @@ struct ScreenshotHistoryView: View {
                     }
                 }
             }
-            Text("大图可能提前淘汰；每张图片的 OCR 搜索缓存最多保留前 64 KB。")
+            Text("图片较大时可能提前移出历史；每张图片最多缓存前 64 KB 的识别文字供搜索。")
                 .font(.system(size: 11)).foregroundStyle(p.secondary)
-            Text(history.onDisk ? "最多 \(history.countLimit) 张 / \(history.days) 天；清空会删除磁盘副本。" : "默认最多 20 张；退出后清空。磁盘保存需在截图设置中开启。")
+            Text(history.onDisk ? "最多 \(history.countLimit) 张，保留 \(history.days) 天；清空会删除磁盘副本。" : "默认最多 20 张；退出后清空。磁盘保存需在截图设置中开启。")
                 .font(.system(size: 11)).foregroundStyle(p.secondary)
         }.padding(20).frame(minWidth: 500, minHeight: 400).modifier(DesignSurface())
             .onExitCommand(perform: close)
             .alert("清空全部截图历史？", isPresented: $confirmClear) {
                 Button("取消", role: .cancel) {}
                 Button("清空", role: .destructive) { history.clear() }
-            } message: { Text("将移除历史中的图片、OCR 缓存和已保存的磁盘副本。已另存到其他位置的文件不受影响。") }
+            } message: { Text("将移除历史中的图片、识别文字缓存和已保存的磁盘副本。已另存到其他位置的文件不受影响。") }
     }
 }
 
@@ -82,7 +82,7 @@ struct ScreenshotHistorySettings: View {
         DesignSectionTitle(title: "截图历史")
         DesignCard {
             Toggle("保存到磁盘", isOn: Binding(get: { settings.historyOnDisk ?? false }, set: { settings.historyOnDisk = $0 }))
-            Text("默认仅保留本次运行最近 20 张及 OCR 缓存。开启后保存在本机 RockType 应用支持目录；关闭此选项会删除磁盘历史。")
+            Text("默认仅保留本次运行最近 20 张截图及识别文字缓存。开启后保存在本机 RockType 应用支持目录；关闭此选项会删除磁盘历史。")
                 .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if settings.historyOnDisk == true {
                 Stepper("最多 \(min(200, max(1, settings.historyDiskCount ?? 20))) 张", value: Binding(get: { min(200, max(1, settings.historyDiskCount ?? 20)) }, set: { settings.historyDiskCount = $0 }), in: 1...200)

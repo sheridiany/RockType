@@ -39,7 +39,7 @@ struct ScreenshotPreviewContent: View {
                             }
                         }
                         if !session.barcodes.codes.isEmpty && session.previewMode != .codes {
-                            Button("已识别 \(session.barcodes.codes.count) 个二维码 / 条码，查看内容…") { session.previewMode = .codes }
+                            Button("已识别 \(session.barcodes.codes.count) 个二维码或条码，查看内容…") { session.previewMode = .codes }
                                 .buttonStyle(.link).font(.system(size: 12))
                         }
                     }
@@ -76,7 +76,7 @@ struct ScreenshotPreviewContent: View {
                 }.font(.system(size: 11)).foregroundStyle(p.secondary)
             }
             Spacer(minLength: 8)
-            Chip(text: "本机 OCR", tone: .ok)
+            Chip(text: "本机文字识别", tone: .ok)
             Button { session.close() } label: { Image(systemName: "xmark") }
                 .buttonStyle(DesignButtonStyle(variant: .ghost)).accessibilityLabel("关闭图片与文字")
         }
@@ -233,7 +233,7 @@ struct ScreenshotPreviewContent: View {
         case .running: "完成后可直接核对和修改。"
         case .empty: "尝试更清晰的图片，或在这里直接输入文字。"
         case .failed: "点击重新识别再试一次，也可直接输入文字。"
-        default: "点击识别文字。OCR 在本机运行，图片不会上传。"
+        default: "点击“识别文字”在本机提取文字，此步骤不会上传图片。"
         }
     }
     private var translationTitle: String {
@@ -255,7 +255,7 @@ struct ScreenshotPreviewContent: View {
                     Text("图片 AI").tag(ScreenshotSession.PreviewMode.visual)
                     Text("文字翻译").tag(ScreenshotSession.PreviewMode.text)
                     Text("覆盖翻译").tag(ScreenshotSession.PreviewMode.overlay)
-                    Text("二维码 / 条码").tag(ScreenshotSession.PreviewMode.codes)
+                    Text("二维码与条码").tag(ScreenshotSession.PreviewMode.codes)
                 }.pickerStyle(.segmented).labelsHidden()
                 Spacer()
             }

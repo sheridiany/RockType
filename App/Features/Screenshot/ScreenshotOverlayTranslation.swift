@@ -22,7 +22,7 @@ import RoarkTPlatform
     }
     func cancel() {
         guard phase == .running else { return }
-        clear(); phase = .cancelled; notice = "覆盖翻译已取消。"
+        clear(); phase = .cancelled; notice = "覆盖式图片翻译已取消。"
     }
     nonisolated static func batchText(_ lines: [OCR.Line]) -> String {
         lines.enumerated().map { "[[RT:\($0.offset)]]\n\($0.element.text)" }.joined(separator: "\n") + "\n[[RT:END]]"
@@ -49,9 +49,9 @@ import RoarkTPlatform
     }
     func run(image source: CGImage, lines: [OCR.Line], settings: AppSettings) {
         clear()
-        guard allowed() else { fail("安全输入已启用，操作已停止。"); return }
+        guard allowed() else { fail("输入保护检查未通过，操作已停止。请检查安全输入状态和辅助功能权限后重试。"); return }
         guard !lines.isEmpty, lines.count <= 200, lines.allSatisfy({ !$0.text.contains("[[RT:") && $0.rect.width > 0 && $0.rect.height > 0 }) else {
-            fail("没有可覆盖的文字区域，或区域过多。请重新识别或缩小选区。"); return
+            fail("没有找到可翻译的文字区域，或区域过多。请重新识别或缩小选区。"); return
         }
         let text = Self.batchText(lines)
         guard text.utf8.count <= 12_000 else { fail("整图文字过多，请缩小选区后重试。"); return }
@@ -65,7 +65,7 @@ import RoarkTPlatform
         task = Task { [weak self] in
             for await event in events {
                 guard let self, current == self.generation, !Task.isCancelled else { return }
-                guard self.allowed() else { self.fail("安全输入已启用，操作已停止。"); return }
+                guard self.allowed() else { self.fail("输入保护检查未通过，操作已停止。请检查安全输入状态和辅助功能权限后重试。"); return }
                 switch event {
                 case .started: break
                 case .thinking: self.thinking = true
@@ -80,13 +80,13 @@ import RoarkTPlatform
                         let worker = Task.detached(priority: .userInitiated) { try ScreenshotTranslatedImageRenderer.render(source, lines: lines, translations: translations) }
                         let output = try await withTaskCancellationHandler { try await worker.value } onCancel: { worker.cancel() }
                         guard current == self.generation, !Task.isCancelled else { return }
-                        guard self.allowed() else { self.fail("安全输入已启用，操作已停止。"); return }
+                        guard self.allowed() else { self.fail("输入保护检查未通过，操作已停止。请检查安全输入状态和辅助功能权限后重试。"); return }
                         self.image = output; self.engine = result.engine; self.phase = .done; self.thinking = false; self.task = nil
                     } catch {
                         guard current == self.generation, !Task.isCancelled else { return }
                         self.fail(error is ScreenshotTranslatedImageRenderer.Failure
                             ? "译文无法完整放入文字框，请缩小翻译范围或改用文字翻译。"
-                            : "译文区域编号不完整，未生成译图。可重试或切换 AI 翻译。")
+                            : "译文未能与原图文字区域完整对应，未生成译图。请重试或切换翻译方式。")
                     }
                     return
                 }

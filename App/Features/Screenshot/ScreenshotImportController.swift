@@ -33,7 +33,7 @@ import UniformTypeIdentifiers
             Task { @MainActor [weak self] in
                 guard let self, current == self.generation, self.allowed() else { return }
                 self.progress = nil
-                guard let data else { self.onNotice("无法读取拖入的图片。"); return }
+                guard let data else { self.onNotice("无法读取拖入的图片，请重新拖入或通过“批量识别…”选择文件。"); return }
                 if type == UTType.fileURL.identifier {
                     guard let url = URL(dataRepresentation: data, relativeTo: nil), url.isFileURL else {
                         self.onNotice("请拖入本机图片文件。"); return

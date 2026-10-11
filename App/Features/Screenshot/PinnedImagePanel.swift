@@ -328,7 +328,7 @@ private final class PinnedImagePanel: NSPanel {
         add("复制图片    ⌘C", #selector(copyPicture))
         add("另存为…", #selector(savePicture))
         add("识别文字…", #selector(recognizeText))
-        add("复制 OCR 文字    ⇧C", #selector(copyRecognizedText))
+        add("识别并复制文字    ⇧C", #selector(copyRecognizedText))
         add("翻译…（先核对识别文字）", #selector(translateText))
         add("覆盖式图片翻译…", #selector(translatePicture))
         add("识别二维码 / 条码…", #selector(recognizeCodes))
