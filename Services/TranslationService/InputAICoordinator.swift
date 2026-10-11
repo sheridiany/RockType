@@ -28,6 +28,7 @@ enum InputAIError: Int, Error {
                        userInfo: [NSLocalizedDescriptionKey: message])
     }
     static func from(_ error: Error) -> Self {
+        if let error = error as? InputAIError { return error }
         if error is CancellationError { return .cancelled }
         switch error as? AIClientError {
         case .configuration: return .invalidRequest
@@ -50,7 +51,7 @@ struct InputAIConfiguration: Sendable {
 
     init(_ values: [String: String]) throws {
         let keys: Set<String> = ["baseURL", "model", "apiKey", "timeout", "rewritePrompt", "polishPrompt", "translatePrompt"]
-        guard Set(values.keys) == keys,
+        guard Set(values.keys).isSuperset(of: keys), Set(values.keys).isSubset(of: keys.union(["fallbackModel"])),
               values.values.allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.utf8.count <= 32_768 }),
               let url = URLComponents(string: values["baseURL"]!), AIClient.isAllowedEndpoint(url),
               url.user == nil, url.password == nil, url.query == nil, url.fragment == nil,
@@ -60,6 +61,7 @@ struct InputAIConfiguration: Sendable {
         }
         var connection = AIConnectionSettings()
         connection.baseURL = values["baseURL"]!; connection.defaultModel = values["model"]!
+        connection.fallbackModel = values["fallbackModel"]
         self.connection = connection; self.apiKey = values["apiKey"]!; self.timeout = timeout
         prompts = ["rewrite": values["rewritePrompt"]!, "polish": values["polishPrompt"]!, "translate": values["translatePrompt"]!]
     }
@@ -95,8 +97,17 @@ final class InputAICoordinator {
     init(isSecure: @escaping () -> Bool = { IsSecureEventInputEnabled() },
          waitForDeadline: @escaping DeadlineWait = { try await Task.sleep(for: $0) },
          complete: @escaping Complete = { config, prompt in
-             try await AIClient(connection: config.connection, timeout: config.timeout)
-                 .complete(text: prompt, apiKey: config.apiKey)
+             let client = AIClient(connection: config.connection, timeout: config.timeout,
+                 requestAllowed: { !IsSecureEventInputEnabled() })
+             guard !IsSecureEventInputEnabled() else { throw InputAIError.secureInput }
+             do { return try await client.complete(text: prompt, apiKey: config.apiKey) }
+             catch {
+                 try Task.checkCancellation()
+                 guard !IsSecureEventInputEnabled() else { throw InputAIError.secureInput }
+                 guard let fallback = AIProviderRouting.fallback(for: config.connection,
+                     primary: config.connection.defaultModel, error: error, hasVisibleOutput: false) else { throw error }
+                 return try await client.complete(text: prompt, apiKey: config.apiKey, model: fallback)
+             }
          }) {
         self.isSecure = isSecure; self.complete = complete; self.waitForDeadline = waitForDeadline
     }
@@ -137,6 +148,7 @@ final class InputAICoordinator {
         let task = Task { [weak self, complete] in
             do {
                 try Task.checkCancellation()
+                guard self?.isSecure() == false else { self?.finish(key, error: .secureInput); return }
                 let result = try await complete(configuration, configuration.prompt(text: text, action: action))
                 try Task.checkCancellation()
                 guard let self, self.pending[key]?.generation == generation else { return }

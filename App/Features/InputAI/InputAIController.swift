@@ -115,20 +115,23 @@ import RoarkTPlatform
     private func configuration() -> [String: String] {
         let settings = store.settings
         let input = settings.input.inputAI ?? InputAISettings()
+        guard let route = try? AIProviderRouting.resolve(settings, task: .inputAI) else { return [:] }
+        let connection = route.connection
         guard input.enabled, input.timeout.isFinite, (0.1...120).contains(input.timeout),
-              let url = URLComponents(string: settings.ai.baseURL), AIClient.isAllowedEndpoint(url),
+              let url = URLComponents(string: connection.baseURL), AIClient.isAllowedEndpoint(url),
               url.user == nil, url.password == nil, url.query == nil, url.fragment == nil,
-              !settings.ai.defaultModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !route.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               let polish = settings.templates.first(where: { $0.id == "polish" && $0.input == .text }),
               let translate = settings.templates.first(where: { $0.id == "translate" && $0.input == .text }),
               !polish.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               !translate.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              let key = try? secret(settings.ai.id), !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let key = try? secret(connection.id), !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               !key.contains("\n"), !key.contains("\r") else { return [:] }
-        let values = ["baseURL": settings.ai.baseURL, "model": settings.ai.defaultModel, "apiKey": key,
+        var values = ["baseURL": connection.baseURL, "model": route.model, "apiKey": key,
                       "timeout": String(input.timeout), "polishPrompt": OperationPrompts.resolved(polish),
                       "rewritePrompt": OperationPrompts.resolved(polish) + "\n请改写措辞与句式，保留原意，仅输出改写结果。",
                       "translatePrompt": OperationPrompts.resolved(translate)]
+        if let fallback = AIProviderRouting.nonempty(connection.fallbackModel) { values["fallbackModel"] = fallback }
         guard values.values.allSatisfy({ $0.utf8.count <= 32_768 }) else { return [:] }
         return values
     }

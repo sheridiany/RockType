@@ -169,3 +169,26 @@ import RoarkTCore
     await awaitInputAI { sink.payloads.last == [:] }
     controller.stop(); store.flush()
 }
+
+@Test @MainActor func inputAIUsesTaskProviderAndItsOwnKeyAndFallback() async {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = configuredStore(directory.appendingPathComponent("settings.json")), sink = ConfigurationSink()
+    var provider = AIConnectionSettings()
+    provider.id = "input-provider"; provider.baseURL = "https://input.invalid/v1"; provider.defaultModel = "input-default"
+    provider.fallbackModel = "input-backup"
+    store.settings.aiProviders = [provider]
+    store.settings.aiTaskRoutes = [AITask.inputAI.rawValue: .init(providerID: provider.id, model: "input-task-model")]
+    var accounts: [String] = []
+    let controller = InputAIController(store: store, transport: sink, secret: { accounts.append($0); return "synthetic-input-key" },
+        beginKeyMonitoring: { true }, endKeyMonitoring: {})
+    controller.start()
+    await awaitInputAI { !sink.payloads.isEmpty }
+    #expect(accounts == ["input-provider"])
+    #expect(sink.payloads.last?["baseURL"] == provider.baseURL)
+    #expect(sink.payloads.last?["model"] == "input-task-model")
+    #expect(sink.payloads.last?["fallbackModel"] == "input-backup")
+    store.settings.aiProviders = []
+    await awaitInputAI { sink.payloads.last == [:] }
+    controller.stop(); store.flush()
+}
