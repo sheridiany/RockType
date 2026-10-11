@@ -12,16 +12,29 @@ private final class Recognition {
     static let shared = Recognition()
     var model: Qwen3ASRModel?
     var busy = false
+    private var loadedDirectory: String?
+    private var loading: (directory: String, task: Task<Bool, Never>)?
 
+    /// Idempotent: an already loaded model returns immediately, and a second request for the
+    /// model being loaded waits for that load instead of failing.
     func prepare(_ directory: String) async -> Bool {
+        if loadedDirectory == directory, model != nil { return true }
+        if let loading, loading.directory == directory { return await loading.task.value }
         guard !busy else { return false }
         busy = true
-        defer { busy = false }
-        model = nil
-        do {
-            model = try await Qwen3ASRModel.fromModelDirectory(URL(fileURLWithPath: directory))
-            return true
-        } catch { return false }
+        model = nil; loadedDirectory = nil
+        let task = Task<Bool, Never> { @MainActor in
+            do {
+                self.model = try await Qwen3ASRModel.fromModelDirectory(URL(fileURLWithPath: directory))
+                self.loadedDirectory = directory
+                return true
+            } catch { return false }
+        }
+        loading = (directory, task)
+        let ready = await task.value
+        loading = nil
+        busy = false
+        return ready
     }
     func transcribe(_ data: Data) -> String? {
         guard !busy, let model, !data.isEmpty, data.count <= 60 * 16_000 * 4,
@@ -38,11 +51,20 @@ private final class Recognition {
 }
 
 private final class Service: NSObject, NSXPCListenerDelegate, VoiceWorkerProtocol {
+    private let lock = NSLock()
+    private var connections = 0
     func listener(_ listener: NSXPCListener, shouldAcceptNewConnection connection: NSXPCConnection) -> Bool {
         connection.setCodeSigningRequirement(Identifiers.codeRequirement(for: Identifiers.appBundleID))
         connection.exportedInterface = NSXPCInterface(with: VoiceWorkerProtocol.self)
         connection.exportedObject = self
-        connection.invalidationHandler = { exit(0) }
+        lock.lock(); connections += 1; lock.unlock()
+        // Exit (releasing model memory) only when the last client connection is gone; one stale
+        // connection closing must not kill a load or transcription running on another.
+        connection.invalidationHandler = { [weak self] in
+            guard let self else { exit(0) }
+            self.lock.lock(); self.connections -= 1; let remaining = self.connections; self.lock.unlock()
+            if remaining <= 0 { exit(0) }
+        }
         connection.resume()
         return true
     }

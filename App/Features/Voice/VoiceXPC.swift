@@ -39,12 +39,27 @@ enum VoiceFailure: Error { case timeout, unavailable, model, empty, permission }
     private var loaded: URL?
     func prepare(directory: URL) async throws {
         if loaded == directory, connection != nil { return }
-        stop()
-        let connection = NSXPCConnection(serviceName: Identifiers.voiceWorkerID)
-        connection.setCodeSigningRequirement(Identifiers.codeRequirement(for: Identifiers.voiceWorkerID))
-        connection.remoteObjectInterface = NSXPCInterface(with: VoiceWorkerProtocol.self)
-        self.connection = connection
-        connection.resume()
+        do { try await load(directory) }
+        catch VoiceFailure.unavailable {
+            // A worker that was just shut down may still be exiting; retry once on a fresh process.
+            stop()
+            try await Task.sleep(for: .milliseconds(400))
+            try await load(directory)
+        }
+    }
+    /// Reuses the live connection: replacing it would close the old one under an in-flight load.
+    private func load(_ directory: URL) async throws {
+        let connection: NSXPCConnection
+        if let existing = self.connection {
+            connection = existing
+        } else {
+            connection = NSXPCConnection(serviceName: Identifiers.voiceWorkerID)
+            connection.setCodeSigningRequirement(Identifiers.codeRequirement(for: Identifiers.voiceWorkerID))
+            connection.remoteObjectInterface = NSXPCInterface(with: VoiceWorkerProtocol.self)
+            self.connection = connection
+            connection.resume()
+        }
+        loaded = nil
         do {
             let gate = VoiceReply<Bool>()
             let ready = try await gate.wait(seconds: 90) { gate in
