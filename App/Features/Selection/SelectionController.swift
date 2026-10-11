@@ -62,7 +62,7 @@ import RoarkTPlatform
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .milliseconds(200)) } catch { return }
                 guard let self, self.running else { return }
-                if self.toolbar.isVisible, self.selection?.isCurrent() != true { self.dismiss() }
+                if self.toolbar.isVisible, !self.allowed() || self.selection?.isCurrent() != true { self.dismiss() }
             }
         }
         if globalMonitor == nil { notice("划词监听不可用，请检查辅助功能权限；仍可使用选区快捷键。") }
@@ -168,7 +168,7 @@ import RoarkTPlatform
                 if action == nil { try await Task.sleep(for: .milliseconds(90)) }
                 let captured = try await self.capture.capture()
                 try Task.checkCancellation()
-                guard self.running, self.generation == requestGeneration, captured.isCurrent(),
+                guard self.running, self.generation == requestGeneration, self.allowed(), captured.isCurrent(),
                       captured.snapshot.source.pid == app.pid,
                       SelectionPolicy.permits(captured.snapshot.source.bundleID, settings: self.settings().selection) else { return }
                 self.pending = nil
