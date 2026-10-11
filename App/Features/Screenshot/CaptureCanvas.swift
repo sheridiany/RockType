@@ -28,9 +28,69 @@ import os
     private var original = CGRect.zero
     private var handle: ScreenshotHandle?
     private var moving = false
-    private var tool: ScreenshotEditorModel.Tool?
+    private var tool: ScreenshotTool?
+    var toolStyles: [String: ScreenshotAnnotationStyle] = [:]
+    var onStyleChange: (ScreenshotTool, ScreenshotAnnotationStyle) -> Void = { _, _ in }
+    private var scrollRemainder: CGFloat = 0
+    private var activeStyle: ScreenshotAnnotationStyle {
+        if let index = selectedAnnotation, history.items.indices.contains(index) {
+            let item = history.items[index]
+            let color = item.color.usingColorSpace(.sRGB) ?? item.color
+            return .init(colorHex: String(format: "%02X%02X%02X", Int((color.redComponent * 255).rounded()),
+                Int((color.greenComponent * 255).rounded()), Int((color.blueComponent * 255).rounded())),
+                width: item.tool == .text ? item.fontSize : item.width)
+        }
+        return (tool ?? .rectangle).style(from: toolStyles)
+    }
+    private func setStyle(_ style: ScreenshotAnnotationStyle) {
+        guard let tool, tool != .eraser else { return }
+        toolStyles[tool.rawValue] = style
+        let sanitized = tool.style(from: toolStyles)
+        toolStyles[tool.rawValue] = sanitized; onStyleChange(tool, sanitized)
+        if let index = selectedAnnotation, history.items.indices.contains(index) {
+            var item = history.items[index]
+            item.color = sanitized.nsColor
+            if item.tool == .text { item.fontSize = sanitized.width } else { item.width = sanitized.width }
+            history.replace(at: index, with: item); updateAnnotations()
+        }
+        updateToolbar()
+    }
+    private func annotation(tool: ScreenshotTool, at point: CGPoint) -> ScreenshotAnnotation {
+        let style = tool.style(from: toolStyles)
+        return ScreenshotAnnotation(tool: tool, points: [point, point], color: style.nsColor,
+                                    width: tool == .text ? 5 : style.width, fontSize: tool == .text ? style.width : 17)
+    }
+    override func scrollWheel(with event: NSEvent) {
+        guard allowed(), textEditor == nil, let tool, tool != .eraser else { return }
+        scrollRemainder += event.scrollingDeltaY / (event.hasPreciseScrollingDeltas ? 12 : 1)
+        let steps = scrollRemainder.rounded(.towardZero)
+        guard steps != 0 else { return }
+        scrollRemainder -= steps
+        var style = activeStyle; style.width += steps; setStyle(style)
+    }
     private var history = ScreenshotAnnotationHistory()
     private var draft: ScreenshotAnnotation?
+    private(set) var selectedAnnotation: Int?
+    private var annotationOriginal: ScreenshotAnnotation?
+    private var annotationHandle: ScreenshotHandle?
+    private var annotationChanged = false
+    var annotations: [ScreenshotAnnotation] { history.items }
+
+    func selectTool(_ value: ScreenshotTool?) {
+        finishTextEditing(); tool = value; selectedAnnotation = nil; scrollRemainder = 0
+        updateAnnotations(); updateToolbar()
+        window?.makeFirstResponder(self)
+    }
+    private func undoAnnotation(redo: Bool = false) {
+        finishTextEditing()
+        if redo { history.redo() } else { history.undo() }
+        selectedAnnotation = nil; updateAnnotations(); updateToolbar()
+    }
+    private func deleteSelectedAnnotation() {
+        guard let index = selectedAnnotation else { return }
+        history.remove(at: index); selectedAnnotation = nil
+        updateAnnotations(); updateToolbar()
+    }
     private let frozenLayer = CALayer()
     private let maskLayer = CAShapeLayer()
     private let borderLayer = CAShapeLayer()
@@ -62,18 +122,19 @@ import os
     }
     private func updateToolbar() {
         guard !selection.isEmpty else { toolbar?.isHidden = true; return }
-        let root = CaptureToolbar(tool: tool, canUndo: history.canUndo, canRedo: history.canRedo,
-            select: { [weak self] in self?.finishTextEditing(); self?.tool = $0; self?.updateToolbar() },
-            undo: { [weak self] in self?.finishTextEditing(); self?.history.undo(); self?.updateAnnotations(); self?.updateToolbar() },
-            redo: { [weak self] in self?.finishTextEditing(); self?.history.redo(); self?.updateAnnotations(); self?.updateToolbar() },
+        let root = CaptureToolbar(tool: tool, style: activeStyle,
+            changeStyle: { [weak self] in self?.setStyle($0) }, canUndo: history.canUndo, canRedo: history.canRedo,
+            select: { [weak self] in self?.selectTool($0) },
+            undo: { [weak self] in self?.undoAnnotation() },
+            redo: { [weak self] in self?.undoAnnotation(redo: true) },
             cancel: { [weak self] in self?.onCancel() }, complete: { [weak self] in self?.complete() }, preview: { [weak self] in self?.complete(.preview) })
         let view: NSHostingView<CaptureToolbar>
         if let toolbar { view = toolbar; view.rootView = root }
         else { view = NSHostingView(rootView: root); addSubview(view); toolbar = view }
         view.isHidden = false
-        let width = min(bounds.width - 16, Tokens.Screenshot.toolbarWidth)
+        let width = min(bounds.width - 16, 660)
         view.frame = CGRect(x: min(max(8, selection.maxX - width), bounds.width - width - 8),
-                            y: min(max(8, selection.maxY + 12), bounds.height - 56), width: width, height: 48)
+                            y: min(max(8, selection.maxY + 12), bounds.height - 102), width: width, height: 94)
 
     }
     @discardableResult func finishTextEditing() -> Bool {
@@ -103,7 +164,7 @@ import os
     }
     private func beginTextEditing(at point: CGPoint, replacing index: Int? = nil) {
         guard allowed() else { onCancel(); return }
-        var annotation = index.map { history.items[$0] } ?? ScreenshotAnnotation(tool: .text, points: [point])
+        var annotation = index.map { history.items[$0] } ?? self.annotation(tool: .text, at: point)
         let origin = annotation.points.first ?? point
         let available = CGSize(width: max(1, selection.maxX - origin.x), height: max(1, selection.maxY - origin.y))
         annotation.textMaxWidth = min(annotation.textMaxWidth ?? available.width, available.width)
@@ -165,8 +226,14 @@ import os
     }
     private func updateAnnotations() {
         annotationView.items = history.items.enumerated().compactMap { index, annotation in
-            index == editingTextIndex ? nil : annotation
-        } + (draft.map { [$0] } ?? [])
+            if index == editingTextIndex { return nil }
+            if index == selectedAnnotation && annotationOriginal != nil { return draft }
+            return annotation
+        } + (annotationOriginal == nil ? (draft.map { [$0] } ?? []) : [])
+        annotationView.selectedBounds = selectedAnnotation.flatMap { index in
+            guard history.items.indices.contains(index) else { return nil }
+            return (annotationOriginal != nil ? draft : history.items[index])?.bounds
+        }
         annotationView.needsDisplay = true
     }
     private func updateSelectionLayers() {
@@ -203,7 +270,7 @@ import os
         if let toolbar, !toolbar.isHidden {
             var frame = toolbar.frame
             frame.origin = CGPoint(x: min(max(8, selection.maxX - frame.width), bounds.width - frame.width - 8),
-                y: min(max(8, selection.maxY + 12), bounds.height - 56))
+                y: min(max(8, selection.maxY + 12), bounds.height - 102))
             toolbar.frame = frame
         }
     }
@@ -227,15 +294,32 @@ import os
     override func mouseEntered(with event: NSEvent) { mouseMoved(with: event) }
     override func mouseExited(with event: NSEvent) { if !dragging { hoveredWindow = nil } }
     override func mouseDown(with event: NSEvent) {
+        guard allowed() else { onCancel(); return }
         finishTextEditing()
         window?.makeKey(); window?.makeFirstResponder(self)
         anchor = convert(event.locationInWindow, from: nil); original = selection
+        annotationOriginal = nil; annotationHandle = nil; annotationChanged = false
         didDrag = false; freeSelecting = false; clickWindow = windows.first { $0.contains(anchor) }
         if selection.contains(anchor) {
-            if let index = textAnnotation(at: anchor) {
-                if event.clickCount >= 2 { beginTextEditing(at: anchor, replacing: index) }
-                return
+            if tool != .eraser, event.clickCount >= 2, let index = textAnnotation(at: anchor) {
+                selectedAnnotation = nil; beginTextEditing(at: anchor, replacing: index); return
             }
+            if let index = selectedAnnotation, history.items.indices.contains(index) {
+                annotationHandle = ScreenshotHandle.allCases.first {
+                    let p = $0.point(in: history.items[index].bounds)
+                    return hypot(p.x - anchor.x, p.y - anchor.y) <= 8
+                }
+            }
+            // Option permits a new overlapping stroke without selecting the annotation underneath.
+            let hit = event.modifierFlags.contains(.option) && tool != nil && tool != .eraser ? nil
+                : annotationHandle != nil ? selectedAnnotation : history.items.indices.reversed().first { history.items[$0].contains(anchor) }
+            if let index = hit {
+                if tool == .eraser { history.remove(at: index); selectedAnnotation = nil; updateAnnotations(); updateToolbar(); return }
+                selectedAnnotation = index; annotationOriginal = history.items[index]; tool = history.items[index].tool
+                draft = history.items[index]; dragging = true; updateAnnotations(); updateToolbar(); return
+            }
+            selectedAnnotation = nil; updateAnnotations()
+            if tool == .eraser { return }
             if tool == .text { beginTextEditing(at: anchor); return }
         }
         dragging = true; lastFrame = nil; frameTotal = 0; frameCount = 0
@@ -243,7 +327,8 @@ import os
         displayLink = displayLink(target: self, selector: #selector(recordFrame(_:)))
         displayLink?.add(to: .main, forMode: .common)
         if let tool, selection.contains(anchor) {
-            draft = ScreenshotAnnotation(tool: tool, points: [anchor, anchor], number: history.items.filter { $0.tool == .number }.count + 1)
+            draft = annotation(tool: tool, at: anchor)
+            draft?.number = (history.items.filter { $0.tool == .number }.map(\.number).max() ?? 0) + 1
             return
         }
         if tool != nil { return }
@@ -258,14 +343,28 @@ import os
         }
     }
     override func mouseDragged(with event: NSEvent) {
+        guard allowed() else { onCancel(); return }
         guard dragging, textEditor == nil else { return }
         let p = convert(event.locationInWindow, from: nil)
         if hypot(p.x - anchor.x, p.y - anchor.y) >= 3 { didDrag = true }
         if freeSelecting && !didDrag { return }
         if freeSelecting { hoveredWindow = nil }
+        if let original = annotationOriginal, selectedAnnotation != nil {
+            let delta = CGSize(width: p.x - anchor.x, height: p.y - anchor.y)
+            if let annotationHandle {
+                draft = original.resized(to: CaptureGeometry.resized(original.bounds, handle: annotationHandle, by: delta, bounds: selection))
+            } else {
+                let target = CaptureGeometry.moved(original.bounds, by: delta, bounds: selection)
+                draft = original.moved(by: CGSize(width: target.minX - original.bounds.minX, height: target.minY - original.bounds.minY))
+            }
+            annotationChanged = didDrag; updateAnnotations(); return
+        }
         if var drawing = draft {
-            let point = CGPoint(x: min(max(selection.minX, p.x), selection.maxX), y: min(max(selection.minY, p.y), selection.maxY))
-            if drawing.tool == .pen { drawing.points.append(point) }
+            var point = CGPoint(x: min(max(selection.minX, p.x), selection.maxX), y: min(max(selection.minY, p.y), selection.maxY))
+            if event.modifierFlags.contains(.shift) {
+                point = ScreenshotAnnotation.constrainedEnd(from: anchor, to: point, tool: drawing.tool, within: selection)
+            }
+            if drawing.tool == .pen || drawing.tool == .highlighter { drawing.points.append(point) }
             else if drawing.tool != .number { drawing.points[drawing.points.count - 1] = point }
             draft = drawing; updateAnnotations(); return
         }
@@ -280,12 +379,21 @@ import os
         freeSelecting = false; clickWindow = nil
         dragging = false; displayLink?.invalidate(); displayLink = nil
         if frameCount > 0 { Self.timing.info("drag_frame_ms \(self.frameTotal * 1000 / Double(self.frameCount), privacy: .public)") }
-        if let draft { history.append(draft); self.draft = nil; updateAnnotations() }
+        if let draft {
+            if annotationOriginal != nil, let index = selectedAnnotation {
+                if annotationChanged { history.replace(at: index, with: draft) }
+            } else if ![ScreenshotTool.rectangle, .ellipse, .mosaic, .arrow, .line].contains(draft.tool)
+                        || draft.points.first != draft.points.last {
+                history.append(draft)
+            }
+            self.draft = nil; annotationOriginal = nil; updateAnnotations()
+        }
         updateToolbar()
     }
     func showNotice(_ message: String) { notice = message; updateSelectionLayers() }
     func restore(_ rect: CGRect) {
         discardTextEditor()
+        selectedAnnotation = nil; annotationOriginal = nil
         tool = nil; draft = nil; history = ScreenshotAnnotationHistory()
         hoveredWindow = nil
         selection = CaptureGeometry.restored(rect, bounds: bounds)
@@ -299,8 +407,7 @@ import os
             complete(); return true
         }
         if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "z" {
-            if event.modifierFlags.contains(.shift) { history.redo() } else { history.undo() }
-            updateAnnotations(); updateToolbar(); return true
+            undoAnnotation(redo: event.modifierFlags.contains(.shift)); return true
         }
         return super.performKeyEquivalent(with: event)
     }
@@ -320,6 +427,12 @@ import os
         if modifiers == .shift, event.charactersIgnoringModifiers?.lowercased() == "c" {
             complete(.ocrCopy); return
         }
+        if modifiers == .shift, let selected = ScreenshotTool.shortcut(keyCode: event.keyCode) {
+            selectTool(selected); return
+        }
+        if modifiers.isEmpty, event.charactersIgnoringModifiers?.lowercased() == "e" { selectTool(.eraser); return }
+        if modifiers.isEmpty, event.charactersIgnoringModifiers?.lowercased() == "v" { selectTool(nil); return }
+        if modifiers.isEmpty, event.keyCode == 51 || event.keyCode == 117 { deleteSelectedAnnotation(); return }
         let step: CGFloat = event.modifierFlags.contains(.shift) ? 10 : 1
         let delta: CGSize
         switch event.keyCode {
@@ -329,7 +442,13 @@ import os
         case 126: delta = CGSize(width: 0, height: -step)
         default: super.keyDown(with: event); return
         }
-        selection = CaptureGeometry.moved(selection, by: delta, bounds: bounds); updateToolbar()
+        if let index = selectedAnnotation, history.items.indices.contains(index) {
+            let item = history.items[index]
+            let target = CaptureGeometry.moved(item.bounds, by: delta, bounds: selection)
+            history.replace(at: index, with: item.moved(by: CGSize(width: target.minX - item.bounds.minX, height: target.minY - item.bounds.minY)))
+            updateAnnotations()
+        } else { selection = CaptureGeometry.moved(selection, by: delta, bounds: bounds) }
+        updateToolbar()
     }
 }
 
@@ -337,6 +456,7 @@ import os
 @MainActor private final class CaptureAnnotationView: NSView {
     let image: CGImage
     var items: [ScreenshotAnnotation] = []
+    var selectedBounds: CGRect?
     override var isFlipped: Bool { true }
     override var isOpaque: Bool { false }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
@@ -346,5 +466,15 @@ import os
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         context.clear(dirtyRect)
         for item in items { ScreenshotCompositor.draw(item, image: image, size: bounds.size, context: context) }
+        if let selectedBounds {
+            context.setStrokeColor(NSColor.controlAccentColor.cgColor); context.setLineWidth(1)
+            context.setLineDash(phase: 0, lengths: [4, 3]); context.stroke(selectedBounds)
+            context.setLineDash(phase: 0, lengths: [])
+            for handle in ScreenshotHandle.allCases {
+                let p = handle.point(in: selectedBounds)
+                let rect = CGRect(x: p.x - 3, y: p.y - 3, width: 6, height: 6)
+                context.setFillColor(NSColor.white.cgColor); context.fill(rect); context.stroke(rect)
+            }
+        }
     }
 }

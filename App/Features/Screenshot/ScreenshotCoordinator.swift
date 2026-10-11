@@ -25,6 +25,11 @@ import os
     var onNotice: (String) -> Void = { _ in }
     var onPermissionRequired: () -> Void = { Permissions.openSettings(for: .screenRecording) }
     var readSettings: () -> AppSettings = { .defaults }
+    var writeAnnotationStyle: (ScreenshotTool, ScreenshotAnnotationStyle) -> Void = { tool, style in
+        var styles = SettingsStore.shared.settings.screenshot.annotationStyles ?? [:]
+        styles[tool.rawValue] = style
+        SettingsStore.shared.settings.screenshot.annotationStyles = styles
+    }
     /// Must validate the exact current connection/model against the settings connection-test result.
     var imageCapabilityVerified: (AIConnectionSettings, String) -> Bool = { _, _ in false }
     var configureVision: () -> Void = {}
@@ -130,6 +135,12 @@ import os
             let displayID = frame.displayID
             canvases[displayID] = view
             view.allowed = allowed
+            view.toolStyles = readSettings().screenshot.annotationStyles ?? [:]
+            view.onStyleChange = { [weak self] tool, style in
+                guard let self else { return }
+                self.writeAnnotationStyle(tool, style)
+                for canvas in self.canvases.values { canvas.toolStyles[tool.rawValue] = style }
+            }
             view.onCancel = { [weak self] in self?.cancel() }
             view.onComplete = { [weak self, weak view] image in
                 guard let self, let view, self.allowed() else { return }

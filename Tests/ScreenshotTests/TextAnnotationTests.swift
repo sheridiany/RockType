@@ -12,7 +12,7 @@ final class TextAnnotationTests: XCTestCase {
         let attributes = export.storage.attributes(at: 0, effectiveRange: nil)
         let editorAttributes = try XCTUnwrap(editor.textStorage).attributes(at: 0, effectiveRange: nil)
         XCTAssertEqual(editor.font, attributes[.font] as? NSFont)
-        XCTAssertEqual(editor.font?.pointSize, 24)
+        XCTAssertEqual(editor.font?.pointSize, 17)
         XCTAssertEqual(editor.typingAttributes[.foregroundColor] as? NSColor, attributes[.foregroundColor] as? NSColor)
         XCTAssertEqual(editorAttributes[.font] as? NSFont, attributes[.font] as? NSFont)
         XCTAssertEqual(editorAttributes[.foregroundColor] as? NSColor, annotation.color)

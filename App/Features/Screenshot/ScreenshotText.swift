@@ -5,8 +5,9 @@ enum ScreenshotText {
     static func attributes(for annotation: ScreenshotAnnotation) -> [NSAttributedString.Key: Any] {
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineBreakMode = .byWordWrapping
-        return [.font: NSFont.systemFont(ofSize: max(16, annotation.width * 6)),
-                .foregroundColor: annotation.color, .paragraphStyle: paragraph]
+        return [.font: NSFont.systemFont(ofSize: annotation.fontSize),
+                .foregroundColor: annotation.color, .paragraphStyle: paragraph,
+                .strokeColor: NSColor.white, .strokeWidth: -3]
     }
 
     static func isEmpty(_ text: String) -> Bool {
