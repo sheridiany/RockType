@@ -43,7 +43,7 @@ struct AIProviderSettingsView: View {
                     set: { settings.ai.fallbackModel = AIProviderRouting.nonempty($0) }))
                     .textFieldStyle(.roundedBorder)
             }
-            Text("仅在没有生成正文且出现临时故障时，使用你填写的同一服务商备用模型。可填写 claude/claude-haiku-5-5；不会自动添加或跨服务商发送。图片仍需单独验证能力。")
+            Text("仅在未生成正文且遇到临时故障时，尝试同一服务商的备用模型。请填写该服务商支持的模型名称；图片能力需单独验证。")
                 .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(.secondary)
             if AIProviderRouting.nonempty(settings.ai.fallbackModel) != nil {
                 Text("备用图片能力：" + model.fallbackImageResult).font(.caption).foregroundStyle(.secondary)

@@ -135,6 +135,41 @@ final class ScreenshotHistoryTests: XCTestCase {
         history.remove(id); coordinator.openImage(try image(), origin: "synthetic", historyID: id)
         coordinator.session?.text = "late"; XCTAssertTrue(history.entries.isEmpty)
     }
+    @MainActor func testHistoryPreviewRetainsCustomTextAndImageActions() throws {
+        let folder = temporary()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let history = ScreenshotHistory(disk: ScreenshotHistoryDisk(folder: folder), allowed: { true }, recognize: { _, _ in "" })
+        var settings = AppSettings.defaults
+        settings.ai.visionModel = "synthetic-vision"
+        var text = OperationTemplate(name: "Synthetic text", icon: "sparkles", prompt: "Synthetic text instruction")
+        text.showInScreenshot = true
+        var visual = OperationTemplate(name: "Synthetic image", icon: "photo", prompt: "Synthetic image instruction", input: .image, model: "synthetic-vision")
+        visual.showInScreenshot = true
+        settings.templates += [text, visual]
+        let coordinator = ScreenshotCoordinator(allowed: { true }, history: history, presentPreview: { _ in })
+        coordinator.readSettings = { settings }
+        coordinator.imageCapabilityVerified = { _, model in model == "synthetic-vision" }
+        var requests: [OperationRequest] = []
+        coordinator.performText = { requests.append($0) }
+        coordinator.start(); defer { coordinator.stop() }
+        let id = try XCTUnwrap(history.record(try image()))
+        history.updateText("Synthetic cached text", id: id)
+        coordinator.openHistory(try XCTUnwrap(history.entries.first))
+        let session = try XCTUnwrap(coordinator.session)
+        XCTAssertEqual(session.screenshotTemplates.map(\.id), [text.id, visual.id])
+        session.text = "Synthetic corrected text"
+        session.runTemplate(text.id)
+        XCTAssertEqual(requests.first?.template, text)
+        XCTAssertEqual(requests.first?.session.snapshot.text, "Synthetic corrected text")
+        session.runTemplate(visual.id)
+        XCTAssertTrue(session.confirmingImage)
+        XCTAssertEqual(session.visual.request?.template, visual)
+        XCTAssertEqual(session.visual.request?.text, "Synthetic corrected text")
+        // No confirmation: the synthetic image never reaches a network sender.
+        coordinator.closePreview()
+        XCTAssertEqual(history.entries.count, 1)
+        XCTAssertEqual(history.entries.first?.text, "Synthetic corrected text")
+    }
     @MainActor func testHistoryPanelClosesOnProtectionAndRendersBothThemes() async throws {
         let folder = temporary(), gate = HistoryGate()
         let history = ScreenshotHistory(disk: ScreenshotHistoryDisk(folder: folder), allowed: { gate.allowed }, recognize: { _, _ in "" })

@@ -45,7 +45,7 @@ public enum CandidateTranslationFailure: Int, Error, CustomNSError, LocalizedErr
         switch self {
         case .invalidRequest: "当前候选不适用于中英翻译"
         case .cancelled: "翻译已取消"
-        case .unauthorized: "翻译权限校验失败，请完成输入法升级"
+        case .unauthorized: "无法验证翻译服务身份，请重新安装与输入法匹配的 RockType 版本。"
         case .incompatibleVersion: "翻译服务版本不兼容，请完成升级"
         case .languagePackMissing: "请先在设置中准备中英翻译语言包"
         case .requiresMacOS26: "动态翻译需要 macOS 26 或更新版本"

@@ -11,6 +11,7 @@ import RoarkTPlatform
         let text: String
         let connection: AIConnectionSettings
         let model: String
+        var template: OperationTemplate? = nil
         var fallbackImageCapabilityVerified = false
     }
     typealias Send = @MainActor (Request, @escaping @Sendable () async -> Void,
@@ -19,6 +20,8 @@ import RoarkTPlatform
     private(set) var request: Request?
     private(set) var output = ""
     private(set) var model = ""
+    private(set) var customTemplate: OperationTemplate?
+    var title: String { customTemplate?.name ?? Self.title(action) }
     private(set) var action: ScreenshotAIService.Action = .explain
     private(set) var notice: String?
     var isBusy: Bool { phase == .running || phase == .thinking || phase == .streaming }
@@ -48,7 +51,7 @@ import RoarkTPlatform
                  recognize: { try await OCR().recognize($0).text }, isAllowed: permitted)
              return try await service.run(action: request.action, png: request.png, correctedText: request.text,
                  model: request.model, imageCapabilityVerified: true, apiKey: key,
-                 fallbackImageCapabilityVerified: request.fallbackImageCapabilityVerified,
+                 fallbackImageCapabilityVerified: request.fallbackImageCapabilityVerified, customPrompt: request.template?.prompt,
                  onModel: onModel, onThinking: thinking, onDelta: delta)
         }
     }
@@ -67,21 +70,24 @@ import RoarkTPlatform
         guard isBusy || phase == .confirming else { return }
         clear(); phase = .cancelled; notice = "操作已取消，未完成的结果已清除。"
     }
-    func prepare(action: ScreenshotAIService.Action, png: Data, text: String, forceConfirmation: Bool = false) {
-        clear(); self.action = action
+    func prepare(action: ScreenshotAIService.Action, png: Data, text: String, forceConfirmation: Bool = false, template: OperationTemplate? = nil) {
+        clear(); self.action = action; customTemplate = template
         guard allowed() else { fail("安全输入已启用，操作已停止。"); return }
-        guard let route = try? AIProviderRouting.resolve(settings(), task: .image), let model = visionModel else { fail("当前视觉模型尚未验证，请先配置并测试图片能力。"); return }
+        guard let route = try? AIProviderRouting.resolve(settings(), task: .image, modelOverride: template?.model), verified(route.connection, route.model) else { fail("当前视觉模型尚未验证，请先配置并测试图片能力。"); return }
         guard !png.isEmpty, png.count <= 10 * 1024 * 1024 else { fail("图片超过视觉请求的 10 MB 上限，请缩小后重试。"); return }
         guard text.utf8.count <= 32_768 else { fail("文字超过 32 KB，请精简识别文字后重试。"); return }
+        let model = route.model
         self.model = model
-        request = Request(action: action, png: png, text: text, connection: route.connection, model: model,
+        request = Request(action: action, png: png, text: text, connection: route.connection, model: model, template: template,
             fallbackImageCapabilityVerified: route.connection.fallbackModel.map { verified(route.connection, $0) } ?? false)
         phase = .confirming
         if settings().screenshot.skipImageAIConfirmation == true && !forceConfirmation { confirm(skipFuture: true) }
     }
     private func valid(_ request: Request) -> Bool {
-        allowed() && request.connection == (try? AIProviderRouting.resolve(settings(), task: .image).connection)
-            && request.model == visionModel
+        allowed() && (request.template.map { settings().templates.contains($0) } ?? true)
+            && request.connection == (try? AIProviderRouting.resolve(settings(), task: .image, modelOverride: request.template?.model).connection)
+            && request.model == (try? AIProviderRouting.resolve(settings(), task: .image, modelOverride: request.template?.model).model)
+            && verified(request.connection, request.model)
             && (!request.fallbackImageCapabilityVerified
                 || request.connection.fallbackModel.map { verified(request.connection, $0) } == true)
     }
@@ -167,10 +173,11 @@ import RoarkTPlatform
     }
     func completedResult(origin: String) -> (OperationResult, OperationTemplate)? {
         guard phase == .done, allowed() else { return nil }
-        let template = Self.template(action)
-        let snapshot = ContentSnapshot(text: Self.title(action) + "：追问仅基于已完成的文字结果；原图和识别原文不保留在对话中。",
+        var template = Self.template(action)
+        if let customTemplate { template.id = "screenshot-custom-" + customTemplate.id; template.name = customTemplate.name; template.output = customTemplate.output }
+        let snapshot = ContentSnapshot(text: title + "：追问仅基于已完成的文字结果；原图和识别原文不保留在对话中。",
             source: .init(pid: ProcessInfo.processInfo.processIdentifier, applicationName: origin), method: .screenshotOCR)
-        let session = OperationSession(snapshot: snapshot, turns: [.init(question: Self.title(action), answer: output)])
+        let session = OperationSession(snapshot: snapshot, turns: [.init(question: title, answer: output)])
         return (.init(session: session, templateID: template.id, text: output, engine: model), template)
     }
     isolated deinit { task?.cancel(); watch?.cancel() }

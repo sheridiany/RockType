@@ -129,7 +129,7 @@ import RoarkTPlatform
             } catch { self.notice = "无法保存图片，请选择其他位置后重试。" }
         }
     }
-    func runOCR(copyAfter: Bool = false, thenVisual action: ScreenshotAIService.Action? = nil, forceConfirmation: Bool = false, thenOverlay: Bool = false) {
+    func runOCR(copyAfter: Bool = false, thenVisual action: ScreenshotAIService.Action? = nil, forceConfirmation: Bool = false, thenOverlay: Bool = false, thenTemplateID: String? = nil) {
         guard check(), let data = png() else { return }
         cancel(); let current = generation; localBusy = true; notice = "本机识别中…"; ocrFinished = false
         translation.clear(); visual.clear(); overlay.clear(); showTranslatedImage = false; ocrPhase = .running
@@ -147,6 +147,7 @@ import RoarkTPlatform
                 self.ocrPhase = output.isEmpty ? .empty : .done
                 self.text = output; self.ocrFinished = true; self.localBusy = false
                 self.notice = output.isEmpty ? "没有识别到文字，可输入文字或换用更清晰的图片。" : nil
+                if let thenTemplateID { self.runTemplate(thenTemplateID, forceConfirmation: forceConfirmation) }
                 if copyAfter && !output.isEmpty { self.copyText(output) }
                 if thenOverlay { self.translateImage() }
                 if let action { self.prepareImage(action: action, forceConfirmation: forceConfirmation) }
@@ -200,6 +201,15 @@ import RoarkTPlatform
             applicationName: "截图 OCR"), method: .screenshotOCR)
         performText(OperationRequest(session: OperationSession(snapshot: snapshot), template: template, settings: config))
     }
+    var screenshotTemplates: [OperationTemplate] { settings().templates.filter { $0.showInScreenshot == true } }
+    func runTemplate(_ id: String, forceConfirmation: Bool = false) {
+        guard check(), let template = settings().templates.first(where: { $0.id == id }) else { return }
+        if !ocrFinished && !textWasEdited { runOCR(forceConfirmation: forceConfirmation, thenTemplateID: id); return }
+        if template.input == .text { runText(templateID: id); return }
+        cancel(); notice = nil; previewMode = .visual
+        guard let data = png() else { return }
+        visual.prepare(action: .explain, png: data, text: text, forceConfirmation: forceConfirmation, template: template)
+    }
     var visionModel: String? { visual.visionModel }
     func prepareImage(action: ScreenshotAIService.Action = .explain, forceConfirmation: Bool = false) {
         guard check(), visionModel != nil else { notice = "请先配置并测试视觉模型的图片能力。"; return }
@@ -215,14 +225,18 @@ import RoarkTPlatform
         visual.confirm(skipFuture: skipFuture)
     }
     func restoreImageConfirmation() { rememberImageConfirmation(false); notice = "已恢复每次发送前确认。" }
-    func retryImage() { prepareImage(action: visual.action, forceConfirmation: true) }
+    func retryImage() {
+        if let template = visual.customTemplate { runTemplate(template.id, forceConfirmation: true) }
+        else { prepareImage(action: visual.action, forceConfirmation: true) }
+    }
     func openImageFollowup() {
         guard check(), let (result, template) = visual.completedResult(origin: origin) else { return }
         imageCompleted(result, template)
     }
     static let imageTemplate = ScreenshotVisualAI.template(.explain)
     static func imageTemplate(forID id: String) -> OperationTemplate? {
-        [ScreenshotAIService.Action.translate, .summarize, .explain].map(ScreenshotVisualAI.template).first { $0.id == id }
+        if id.hasPrefix("screenshot-custom-") { var template = imageTemplate; template.id = id; template.name = "图片动作追问"; return template }
+        return [ScreenshotAIService.Action.translate, .summarize, .explain].map(ScreenshotVisualAI.template).first { $0.id == id }
     }
 
     isolated deinit { task?.cancel(); protection?.cancel() }

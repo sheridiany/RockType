@@ -19,6 +19,8 @@
 - **划词/截图文字翻译**：App 的 `DefaultOperationRunner` 经 `TextTranslationXPCClient` 先请求 Apple 离线翻译，不可用时按配置在 App 内调用 AI。结果与取消归当前操作会话。服务不是所有 AI/fallback 的统一执行位置。
 - **输入法内显式 AI**：`InputAIController` 已接入 AppDelegate 的 start/stop。启用输入法 AI 后，默认 `⌥Tab` 循环改写/润色/翻译，对已确认前缀与当前高亮候选发送显式请求；AI 与普通翻译共享 session/generation，输入变化、Esc、失焦或保护状态作废，Tab 上屏。AI 不走普通翻译缓存/防抖，部分候选提交保留未转换后缀。自动化结果见 [R3-IME](../specs/evidence/014-R3-IME.md)，真实安装试打仍待人工验证。
 
+操作模板的名称、提示词、模型、输出、图片入口和可选快捷键统一保存在设置中；工具栏顺序和启用状态沿用 selection 设置。HotkeyCenter 统一注册固定快捷键与动作快捷键，录制时暂停全部监听；文字动作走取词与操作 runner，图片动作先框选并经原预览确认。JSON 只交换动作定义，不包含连接或密钥，不执行脚本。
+
 候选与选区的 Apple 翻译只共享 `AppleTranslationSession` 的原生 session 创建及返回文字适配；方向、语言检测、可用性检查、session 缓存、重试和错误映射仍归各自后端。长文翻译/总结在 App 的操作 runner 内分段：每任务最多两段并行，按序合并，只保留完整操作结果；不会把分段或网络等待带进按键路径。限制与验证见 [R3-AI](../specs/evidence/014-R3-AI.md)。
 
 macOS 26 专属的无界面 `TranslationSession` 通过 availability 隔离；最低运行系统仍为 macOS 14。旧系统的候选静态词条、App AI 路径与本地 OCR 不依赖该 API。

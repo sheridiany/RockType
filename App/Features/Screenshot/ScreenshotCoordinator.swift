@@ -7,6 +7,7 @@ import os
 
 /// Retain in AppDelegate, call start/stop, and bind HotkeyCenter.screenshotAction to capture().
 @MainActor final class ScreenshotCoordinator {
+    private var pendingTemplateID: String?
     private var running = false
     private let suppliedHistory: ScreenshotHistory?
     private(set) lazy var history = suppliedHistory ?? ScreenshotHistory(allowed: { [weak self] in self?.allowed() ?? false })
@@ -105,6 +106,7 @@ import os
     }
     func stop() { running = false; historyPanel.close(); history.stop(); warmupTask?.cancel(); warmupTask = nil; ScreenCapture.stopWarming(); cancel(); closePreview(); PinnedImageController.shared.closeAll() }
     func cancel() {
+        pendingTemplateID = nil
         generation += 1
         let scroll = scrollCapture; scrollCapture = nil
         scroll?.onCancel = {}; scroll?.cancel(); scrollHUD.close()
@@ -123,10 +125,10 @@ import os
         if overlayWasShown, let previousApp, !previousApp.isTerminated { previousApp.activate() }
         previousApp = nil
     }
-    func capture() {
+    func capture(templateID: String? = nil) {
         guard running, captureAllowed() else { return }
         let started = CACurrentMediaTime()
-        cancel(); closePreview(); historyPanel.close()
+        cancel(); closePreview(); historyPanel.close(); pendingTemplateID = templateID
         let current = generation
         captureDesktopTop = NSScreen.screens.first?.frame.maxY ?? 0
         let mouse = NSEvent.mouseLocation
@@ -216,6 +218,12 @@ import os
             }
             view.onComplete = { [weak self, weak view] image in
                 guard let self, let view, self.captureAllowed() else { return }
+                if let id = self.pendingTemplateID {
+                    self.lastSelection = (displayID, view.selection)
+                    self.cancel(); self.openImage(image, origin: "截图", historyID: self.history.record(image))
+                    self.session?.runTemplate(id)
+                    return
+                }
                 do {
                     try ScreenshotOutput.shared.copyImage(image)
                     self.lastSelection = (displayID, view.selection)

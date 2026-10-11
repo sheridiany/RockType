@@ -89,6 +89,10 @@ import RoarkTPlatform
         }
     }
 
+    func triggerTemplate(_ id: String) {
+        guard running else { return }; beginCapture(action: id)
+    }
+
     func dismiss() {
         generation &+= 1
         pending?.cancel(); pending = nil

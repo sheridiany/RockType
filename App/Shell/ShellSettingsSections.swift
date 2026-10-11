@@ -14,7 +14,7 @@ struct ShellSettingsSections {
 // M3-5: standalone sections bound to the single SettingsStore. The settings host owns navigation.
 extension ShellSettingsSections {
     func templatesPane(settings: Binding<AppSettings>, showAIConnection: @escaping () -> Void) -> AnyView {
-        AnyView(OperationTemplateSettings(settings: settings, showAIConnection: showAIConnection))
+        AnyView(OperationTemplateSettings(settings: settings, showAIConnection: showAIConnection, hotkeys: hotkeys))
     }
 
     func modelsPane(settings: Binding<AppSettings>, showAIConnection: @escaping () -> Void) -> AnyView {

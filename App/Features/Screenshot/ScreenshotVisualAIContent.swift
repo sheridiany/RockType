@@ -9,7 +9,7 @@ struct ScreenshotVisualAIConfirmation: View {
         let p = Tokens.palette(scheme)
         if let request = session.visual.request {
             VStack(alignment: .leading, spacing: 12) {
-                Label("确认发送 · " + ScreenshotVisualAI.title(request.action), systemImage: "paperplane")
+                Label("确认发送 · " + session.visual.title, systemImage: "paperplane")
                     .font(.system(size: 15, weight: .semibold))
                 Text("将发送上方图片和下方文字至 \(request.connection.name.isEmpty ? "当前 AI 连接" : request.connection.name)（\(URL(string: request.connection.baseURL)?.host ?? "已配置端点")），模型：\(request.model)。")
                     .font(.system(size: 12)).foregroundStyle(p.secondary).fixedSize(horizontal: false, vertical: true)
@@ -54,7 +54,7 @@ struct ScreenshotVisualAIResult: View {
         let p = Tokens.palette(scheme)
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Label(session.visual.phase == .idle ? "图片 AI" : ScreenshotVisualAI.title(session.visual.action), systemImage: "photo.badge.sparkles")
+                Label(session.visual.phase == .idle ? "图片 AI" : session.visual.title, systemImage: "photo.badge.sparkles")
                     .font(.system(size: 13, weight: .semibold))
                 Spacer()
                 if session.visual.isBusy { ProgressView().controlSize(.small) }

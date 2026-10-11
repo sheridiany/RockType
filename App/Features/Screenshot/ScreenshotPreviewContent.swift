@@ -275,6 +275,13 @@ struct ScreenshotPreviewContent: View {
     }
     private var footer: some View {
         HStack {
+            if !session.screenshotTemplates.isEmpty {
+                Menu("自定义动作") {
+                    ForEach(session.screenshotTemplates) { template in
+                        Button(template.name + (template.input == .image ? "…" : "")) { session.runTemplate(template.id) }
+                    }
+                }.disabled(session.busy)
+            }
             Menu("图片操作") {
                 Button("复制图片") { session.copyImage() }
                 Button("另存为…") { session.save() }

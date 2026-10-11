@@ -143,6 +143,8 @@ public struct OperationTemplate: Codable, Equatable, Sendable, Identifiable {
     public var input: Input
     public var model: String?
     public var output: Output
+    public var shortcut: Shortcut?
+    public var showInScreenshot: Bool?
     public init(id: String = UUID().uuidString, name: String, icon: String, prompt: String,
                 input: Input = .text, model: String? = nil, output: Output = .markdown) {
         self.id = id; self.name = name; self.icon = icon; self.prompt = prompt
