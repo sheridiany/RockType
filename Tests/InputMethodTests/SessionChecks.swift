@@ -114,8 +114,52 @@ struct SessionTests {
     }
   }
 
+  static func checkFocusAndReentry() {
+    let source = RoarkTCandidateSnapshot(rawInput: "nihao", source: "你好", identity: "0:5:0", scope: "whole")
+    let transport = AITransport()
+    let client = RoarkTTranslationClient(proxyProvider: { transport }, isSecureInputEnabled: { false })
+    var state = RoarkTCandidateTranslationSession()
+    let id = UUID().uuidString
+    var delivered: [String] = []
+    func request(_ ticket: RoarkTCandidateTranslationSession.Ticket) {
+      client.rewrite(sessionID: id, generation: ticket.generation, source: source.source, action: ticket.action!, timeout: 30) {
+        if case let .success(value) = $0, state.receive(value.translatedText, for: ticket) { delivered.append(value.translatedText) }
+      }
+    }
+    client.activate()
+    let first = state.beginAI(source)
+    request(first)
+    // A reply already queued on main when focus is lost must not revive the old ticket.
+    transport.ai[0].reply(first.generation, source.source, "obsolete queued result", nil)
+    state.invalidate()
+    client.deactivate()
+    client.activate()
+    let second = state.beginAI(source)
+    precondition(second.generation > first.generation)
+    request(second)
+    drainReplies()
+    precondition(delivered.isEmpty && state.commit == nil, "same-source reentry cannot accept old replies")
+    transport.ai[1].reply(second.generation, source.source, "current result", nil)
+    drainReplies()
+    precondition(delivered == ["current result"] && state.commit?.text == "current result")
+    let cancelled = state.beginAI(source)
+    request(cancelled)
+    client.cancel(sessionID: id, throughGeneration: cancelled.generation)
+    state.invalidate()
+    transport.ai[2].reply(cancelled.generation, source.source, "cancelled result", nil)
+    drainReplies()
+    precondition(delivered == ["current result"] && state.commit == nil)
+    // Returning from AI to ordinary translation cannot let an old AI failure replace the new result.
+    let normal = state.observe(source)!
+    precondition(state.receive("hello", for: normal))
+    precondition(!state.fail("late AI failure", for: cancelled) && state.commit?.text == "hello")
+    client.invalidate()
+    print("Focus/reentry, queued AI success, cancellation and stale failure regression passed")
+  }
+
   static func main() {
     checkInputAI()
+    checkFocusAndReentry()
     for identifier in [ROARKT_APP_BUNDLE_ID, ROARKT_TRANSLATION_SERVICE_NAME, Identifiers.inputMethodBundleID] {
       let previous = "anchor apple generic and certificate leaf[subject.OU] = \"\(ROARKT_TEAM_ID)\" and identifier \"\(identifier)\""
       precondition(Identifiers.codeRequirement(for: identifier) == previous,

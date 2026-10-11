@@ -1,6 +1,6 @@
 # RockType 技术架构
 
-需求见 [PRD](prd.md)，决策见 [ADR-0001](adr/0001-swift-merged-product.md)、[ADR-0002](adr/0002-identifiers-license-shortcuts.md)。本文按 2026-10-11 SPEC-014 R3-IME 的代码现状更新；内部模块及标识符仍使用 RoarkT。后续整理事项见[架构审计](architecture-audit-2026-10.md)，不能将规划接口视为已完成功能。
+需求见 [PRD](prd.md)，决策见 [ADR-0001](adr/0001-swift-merged-product.md)、[ADR-0002](adr/0002-identifiers-license-shortcuts.md)。本文按 2026-10-11 SPEC-014 R4-IME 的代码现状更新；内部模块及标识符仍使用 RoarkT。后续整理事项见[架构审计](architecture-audit-2026-10.md)，不能将规划接口视为已完成功能。
 
 ## 进程与请求路径
 
@@ -26,6 +26,7 @@ macOS 26 专属的无界面 `TranslationSession` 通过 availability 隔离；�
 | 目录 | target / 产物 | 许可证 | 当前职责 |
 | --- | --- | --- | --- |
 | `Shared/XPCProtocol` | `RoarkTXPCProtocol`，ObjC 头及模块 | MIT | 翻译、输入法 AI、ticket 填入协议与 ObjC 标识符；不包含 MLX worker 的 Swift 协议 |
+| `Shared/VoiceWorkerProtocol` | Swift 协议源分组，由 App/独立 worker 编译同一源 | MIT | 唯一语音识别 wire 声明；只有 Foundation，不引入 MLX 或产品实现依赖 |
 | `Core` | `RoarkTCore` | MIT | 标识符、设置/快捷键、翻译校验、操作会话与路由、AI 客户端、语音模型下载/校验等 Foundation 层能力 |
 | `Platform` | `RoarkTPlatform` | MIT | AX 取词、剪贴板、Vision OCR、截图、钥匙串、权限、全局快捷键、Fn、屏幕坐标、Secure Input |
 | `App` | `RoarkTApp` → `RockType.app` | MIT | `AppDelegate` 组装；`Shell` 外壳；`Features` 真实功能；`DesignSystem` 组件 |
@@ -42,6 +43,21 @@ R4-UI 为 Mock/Gallery、依赖样本的原型视图和全部 Gallery 启动入�
 
 主 App/服务没有 InputMethod 源码或 librime 链接依赖。输入法 Xcode target 当前直接编译部分 MIT 源文件：Identifiers、Settings/Shortcuts、翻译值协议、VoiceCommitTicket/VoiceInsertionPolicy。此事实与 AGENTS“共享只能通过协议声明”的字面范围尚需主控对齐，见审计 A06；不授权把任何 GPL 实现搬到 MIT 目录。进程间请求仍只能用 XPC。
 
+### 输入法内部职责（R4-IME）
+
+输入法保留同一个 `@MainActor final SquirrelInputController` 对 session、generation、连接和计时器的所有权，按同一类型的 extension 分文件：
+
+| 文件 | 职责 |
+| --- | --- |
+| `SquirrelInputController.swift` | IMK 入口、激活/失焦/销毁、设置、菜单、原始/标记文本提交；`handle` 保留原主线程断言后同步转调 |
+| `SquirrelInputController+Events.swift` | NSEvent 顺序、修饰键映射、Shift/和弦处理、AI/Tab/Esc 分流及调用 Rime |
+| `SquirrelInputController+Candidates.swift` | 候选/翻页/光标动作、Rime context 到展示、候选与 AI 快照、Rime 属性桥 |
+| `SquirrelInputController+Translation.swift` | 翻译/AI 请求、回复校验、取消、状态展示及经过快照校验的上屏 |
+| `SquirrelView.swift` | TextKit 视图及状态、绘制入口、点击命中、可访问性 |
+| `SquirrelView+Geometry.swift` | 文本布局矩形、候选高亮路径、边框和分页几何 |
+
+这次是文件级职责整理，不引入新状态机、队列或独立所有者；跨文件 extension 所需成员改为模块内可见，不暴露公共接口。生命周期调用顺序、按键分支、Rime C 内存的读取/释放时机及全部方法体保留。语音填入已经由 `RoarkTVoiceServer` 与 `VoiceCommitTicket` 承担；controller 的 `voiceClient` 组合输入/安全输入门禁继续留在生命周期入口，没有再次拆动。
+
 ### 语音内部边界
 
 `VoiceInputController` 管理 Fn 会话、取消、保护检查与 HUD，依赖 `VoiceInterfaces` 中的本地接口。`VoiceEnvironment` 提供系统状态；`VoiceWorkerClient` 管理识别连接/准备；`VoiceCommitBridge` 管理端点发现和 ticket；`VoiceReply` 使成功、错误、超时、取消只完成一次。`VoiceModelStore` 管理下载状态，`VoiceModelVerification` 记录并复检已校验的文件身份。
@@ -52,7 +68,7 @@ R4-UI 为 Mock/Gallery、依赖样本的原型视图和全部 Gallery 启动入�
 
 ## XPC 协议位置与鉴权
 
-翻译/填入 wire 契约位于 `Shared/XPCProtocol/include/`。worker 的 `VoiceWorkerProtocol.swift` 位于独立服务包，`App/Features/Voice/VoiceWorkerProtocol.swift` 通过符号链接引用同一源文件，签名烟测也编译该路径；不存在另一份复制定义。worker 的 Identifiers 同样链接到 Core 的单一 Swift 源。
+翻译/填入 wire 契约位于 `Shared/XPCProtocol/include/`。语音识别契约唯一实体为 `Shared/VoiceWorkerProtocol/VoiceWorkerProtocol.swift`；App 与独立 worker 的同名源路径均为指向它的符号链接，签名烟测直接编译 Shared 源。保留原 `@objc(RoarkTVoiceWorkerProtocol)` 及 `prepareWithDirectory:reply:`、`transcribeWithAudio:context:reply:`、`shutdown` selectors，不增加两端运行时/包依赖。worker 的 Identifiers 仍链接到 Core 的单一 Swift 源。
 
 客户端绑定服务的签名 requirement；服务按 Team ID 与具体 identifier 鉴别客户端，并实施方法级角色限制。格式为 `anchor apple generic and certificate leaf[subject.OU] = "DF7J2VBQD8" and identifier "<允许的 identifier>"`，Swift 使用 `Identifiers.codeRequirement(for:)`。不能只检查 Team ID，不能将用于查找/退出同产品进程的 `RoarkTProcessTrust` 当成 XPC 授权策略。
 
