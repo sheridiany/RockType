@@ -6,8 +6,7 @@
 
 ## 目标
 
-候选更准、更全：换上词频经过大语料重统计的开源中文词库；补齐 AI / 开发领域词；按用户本人的习惯定制。**产品打包**与**用户个人数据**严格分开：个人词表只写入用户本机 `~/Library/Application Support/RoarkT/Rime`，不进安装包、不进 git。
-候选更准、更全，同时日常与整句首选不得低于旧词库基线。补齐 AI / 开发领域词，按用户本人的习惯定制。**已采用校准后的 C：原词库 + 繁体 AI 术语 + 英文扩充**。日常、整句、开发均保持 A，AI 达到 95%；此前 B 与未校准 C 的结论保留为历史证据，最新结论以“C 校准与采用”节为准。**产品打包**与**用户个人数据**严格分开：个人词表只写入用户本机 `~/Library/Rime`，不进安装包、不进 git。
+候选更准、更全，同时日常与整句首选不得低于旧词库基线。当前产品已采用校准后的 C，用户最新决定由 pi-ui 实施 D / W-6 全简体主词库；D 尚待合并与验收。个人词表统一在简体空间去重，兼容过渡期的繁体主词条。个人产物只写入指定 Rime 用户目录（默认 `~/Library/Application Support/RoarkT/Rime`），不进安装包、不进 git。
 
 ## 调研结论（2026-10-11）
 
@@ -30,25 +29,17 @@
 
 ## 个人层（只在用户本机，脚本化、可重复执行、可回滚）
 
-5. **学习词迁移为简体**：用户已导入的 RoType 学习词（`roarkt_zh.userdb`，繁体键）在主词库换为简体后需转换：导出 → OpenCC 繁转简（t2s）→ 导入新 userdb。脚本 `scripts/personal/migrate-userdb-simplified.sh`，执行前完整备份到 `~/Library/Application Support/RoarkT/Rime/roarkt-backups/<时间>/`。由 Claude 在合并后执行，agent 只实现与用临时目录测试。
-6. **个人习惯词表**：脚本 `scripts/personal/build-personal-dict.py`：从用户本机文本中统计高频中文词与英文术语，**来源仅限**用户明确允许的目录（默认 `~/Repos/**/*.md` 与 `~/Repos/**/*.swift` 注释/字符串，排除 `node_modules`、`.build`、`.git`），与主词库比对，产出主词库缺失或排序靠后的词，写 `~/Library/Application Support/RoarkT/Rime/roarkt_personal.dict.yaml`（文件头注明“个人词表，由 RoarkT 生成”），并通过 `roarkt.custom.yaml` / `roarkt_flypy.custom.yaml` 的 patch 挂载（与 SPEC-004 设置同步生成的 custom 文件合并，不覆盖用户手写内容）。脚本只输出统计摘要，不打印原文；不读取聊天记录、浏览器、邮件等其他数据。产物不进 git（`.gitignore`）。
-5. **学习词迁移为简体**：用户已导入的 RoType 学习词（`roarkt_zh.userdb`，繁体键）在主词库换为简体后需转换：导出 → OpenCC 繁转简（t2s）→ 导入新 userdb。脚本 `scripts/personal/migrate-userdb-simplified.sh`，执行前完整备份到 `<Rime 用户目录>/roarkt-backups/<时间>/`。由 Claude 在合并后执行，agent 只实现与用临时目录测试。
-6. **个人习惯词表**：脚本 `scripts/personal/build-personal-dict.py`：从用户本机文本中统计高频中文词与英文术语，**来源仅限**用户明确允许的目录（默认 `~/Repos/**/*.md` 与 `~/Repos/**/*.swift` 注释/字符串，排除 `node_modules`、`.build`、`.git`），与主词库比对，产出主词库缺失或排序靠后的词，写 `<Rime 用户目录>/roarkt_personal.dict.yaml`（文件头注明“个人词表，由 RockType 生成”），通过独立 `roarkt_personal.patch.yaml` 挂载。SPEC-004 设置生成的两份 custom 在 patch 内可选引用它；个人脚本不读写 custom，不覆盖用户手写内容。脚本只输出统计摘要，不打印原文；不读取聊天记录、浏览器、邮件等其他数据。产物不进 git（`.gitignore`）。
-5. **学习词保持原格式（C 方案）**：继续使用原 `luna_pinyin` / `roarkt_zh.userdb` 的繁体学习键。本次没有用户数据库格式迁移，**不应执行**先前为白霜简体主词库设计的 `scripts/personal/migrate-userdb-simplified.sh`。W-4 负责人需将个人层方案与 C 对齐，由 Claude 在合并后安排本机操作；本任务不改个人脚本、不访问真实用户数据。
-6. **个人习惯词表**：脚本 `scripts/personal/build-personal-dict.py`：从用户本机文本中统计高频中文词与英文术语，**来源仅限**用户明确允许的目录（默认 `~/Repos/**/*.md` 与 `~/Repos/**/*.swift` 注释/字符串，排除 `node_modules`、`.build`、`.git`），与主词库比对，产出主词库缺失或排序靠后的词，写 `~/Library/Rime/roarkt_personal.dict.yaml`（文件头注明“个人词表，由 RockType 生成”），并通过 `roarkt.custom.yaml` / `roarkt_flypy.custom.yaml` 的 patch 挂载（与 SPEC-004 设置同步生成的 custom 文件合并，不覆盖用户手写内容）。脚本只输出统计摘要，不打印原文；不读取聊天记录、浏览器、邮件等其他数据。产物不进 git（`.gitignore`）。
+5. **学习词简体迁移（D / W-6 后执行）**：保留 `scripts/personal/migrate-userdb-simplified.sh`。主词库全简体后，离线完整备份指定 profile，通过 macOS ICU `Hant-Hans` 转换当前 `roarkt_zh.userdb` 的词条，合并同词同编码计数，并支持回滚；不依赖外部 OpenCC。本次只用临时数据库验证，真实数据由 Claude 后续执行。
+6. **个人习惯词表**：`scripts/personal/build-personal-dict.py` 只读取明确授权来源（`--allow-default-source` 授权 `~/Repos` 下 Markdown 与 Swift 注释/字符串）。递归读取主词库 `import_tables` 及顶层字典启用的预置词表（默认 `essay.txt`），主词库和中文分词输入经 ICU 归一至简体后去重。默认仅统计，显式 `--apply --offline` 才写个人中英文词典及独立 `roarkt_personal.patch.yaml`；设置生成的 custom 可选引用它，脚本不修改 custom。只输出数量，不输出原文或词条。
 
 ## 任务
 
 | # | 任务 | 执行 | 状态 |
 | --- | --- | --- | --- |
-| W-1 | 评测集与评测脚本，先跑出现状基线 | pi-ui | 未开始 |
-| W-2 | 引入白霜词库并调整两套方案，回归 RimeChecks | pi-ui | 未开始 |
-| W-3 | AI / 开发中文词库与英文扩充，评测校准权重 | pi-ui | 未开始 |
-| W-4 | 个人层脚本：学习词简体迁移、个人习惯词表（含临时目录测试） | pi-platform | 完成；个人 patch 与设置同步解耦，用户目录支持参数/环境变量及独立默认目录 |
 | W-1 | 评测集与评测脚本，先跑出现状基线 | pi-ui | 已完成，基线 162/200（81%） |
 | W-2 | 引入白霜词库并调整两套方案，回归 RimeChecks | pi-ui | 白霜已撤回；采用 C 原主词库/原设置，回归通过 |
 | W-3 | AI / 开发中文词库与英文扩充，评测校准权重 | pi-ui | 已完成 C 校准：日常 78、整句 17、开发 29、AI 57，总计 181/200 |
-| W-4 | 个人层脚本：按 C 对齐原学习格式、个人习惯词表（含临时目录测试） | pi-platform | 待负责人与 Claude 对齐 C |
+| W-4 | 简体空间去重、ICU 学习词迁移及回归测试 | pi-platform | 完成；ICU 去重/迁移自动化与只读预览通过，真实迁移等待 D / W-6 |
 | W-5 | Claude 在本机执行个人层脚本、安装、用户试打 | Claude + 用户 | 未开始 |
 
 **文件所有权**：pi-ui：`Rime/`、`THIRD_PARTY_NOTICES.md`、`LICENSES/`、`scripts/eval-candidates.sh`、`Tests/InputMethodTests/Fixtures/`、评测相关测试；pi-platform：`scripts/personal/`、其测试、`.gitignore` 一行。两人都不改 `InputMethod/sources`（pi-ime 正在恢复 RoType 视觉）。
@@ -258,6 +249,17 @@ A/B 与先前保存结果、重建 C 与新保存结果的三个 `cmp` 均退出
 - 新增临时 HOME 下的 CLI 测试：两个入口分别验证默认路径（含空格）、环境覆盖、参数优先于环境、对应目录内执行及回滚；检查未选中的目录和旧 `Library/Rime` 哨兵保持原样。学习词转换使用真实 librime/OpenCC 和合成数据。
 - 验收：完整 `scripts/test.sh` 通过，直接捕获真实退出码 `0`；153 个 Swift Testing 测试通过，其中个人脚本包装执行 11 项临时目录检查。Rime 部署、能力、输入法及 AppShell 检查通过。`git diff --check` 通过。
 - 未验证：真实用户目录操作、安装与试打。Core 单一路径常量由 pi-ime 实现，待其合入 main 后再在当前 worktree 合并对齐。
-1. W-4 需对齐 C：继续使用原繁体学习键，不执行为白霜设计的简体 userdb 迁移；个人词表的字表/编码/挂载由负责人和 Claude 确认。本任务未修改个人脚本或真实数据。
+1. 旧 C 的“不迁移学习键”约定已被最新 D / W-6 决定替代：主词库全简体后执行 ICU 学习词迁移，见下方 W-4 记录。
 2. Claude 从 main 合并后安排真实试打：全拼/双拼、原学习词优先级、整句、英文与候选翻译。自动化均通过，但真实 IMK 延迟和用户数据库规模未验收。
 3. 早期白霜与上下文模型取舍已关闭：采用保留原设置的校准 C。旧标识守卫已按授权收窄，不再误伤普通词；白霜的 40 条专名排除随整个词库撤回而不再涉及产品。
+
+### W-4 后续：简体空间去重与 ICU 迁移（D / W-6 准备）
+
+- 用户最新决定：pi-ui 实施全简体主词库 D / W-6；个人层先在简体空间去重，兼容过渡期繁体条目，保留学习词迁移并在主词库全简体后执行。本次未对真实 userdb 运行迁移。
+- 根因核查：安装包中 `roarkt_zh` 递归导入确实包含 `luna_pinyin`、`roarkt_ai`，合计 63,129 个字典词项。常用词还来自 `use_preset_vocabulary: true` 启用的 `essay.txt`，计入后为 463,892 个词项；“公司”只在预置词表中。原实现同时漏掉繁简归一和预置词表，不能仅修递归遍历。
+- 修复：递归字典词项及顶层字典启用的预置词表统一经 macOS Foundation ICU `Hant-Hans` 去重；中文来源在分词前同样归一。遵循预置词表名及长度/频率过滤，缺少任一导入或预置文件即拒绝，不以不完整词库继续生成。
+- `migrate_userdb.py` 同样使用系统 ICU，通过私有管道转换词条，移除 `--opencc` / `--t2s-config` 及外部 OpenCC 依赖。保留完整备份、离线/数据库锁、编码及计数合并、导入核对、失败保护及摘要验证回滚；README 明确“主词库全简体后执行”。
+- 回归先红后绿：合成递归/环形导入、繁体“數據”、同形“公司”（仅预置词表）等旧代码产生误入词条，退出 1；修复后通过。新增缺失导入/预置词表拒绝检查，迁移测试不再因 OpenCC 缺失而跳过。ICU + 真实 librime 的转换碰撞、重复执行、回滚、活动锁和编译失败保护均通过。
+- 只读真实预览：`python3 -B scripts/personal/build-personal-dict.py --dictionary-dir '/Users/xuean/Library/Input Methods/RockType Input.app/Contents/SharedSupport' --allow-default-source`，退出 **0**。`files=6784 distinct=85577 missing_chinese=26 missing_english=1474`，missing 为默认最少 3 次及总上限 1500 后的选中数量，不代表全部长尾缺失词。只输出统计，不记录原文/词条，不加 `--apply`，不写真实 profile。首次前台预览受工具 60 秒时限中断，后改为后台完整运行并记录真实退出码。
+- 验收：最终完整 `scripts/test.sh` 通过，直接捕获退出码 **0**；164 项 Swift Testing（含 12 项个人脚本子检查）及 Rime/输入法/AppShell 检查全部通过。`git diff --check` 通过。
+- 未验证：D / W-6 合并部署、真实学习词迁移与排序、个人词表人工质量及真实试打。既有导出不保留删除标记/完整动态学习元数据的限制不变。

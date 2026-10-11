@@ -31,7 +31,7 @@
 | M3-4 | 结果浮窗窗口与交互、复制并返回、追问、置顶（C12、C13） | pi-surfaces | 完成（待验收） |
 | M3-5 | 设置：操作模板编辑与自定义模板、按功能指定模型（C9、C10、C15 的界面） | pi-surfaces | 完成（待验收） |
 | M3-6 | 集成与验收 | pi-platform / Claude 验收 | 代码集成完成（待验收） |
-| M3-T1 | 修复集成测试异步等待及数组越界，连续 5 次完整测试 | pi-platform | 完成；连续 5 次完整测试通过 |
+| M3-T1 | 修复集成测试异步等待及数组越界，连续 5 次完整测试 | pi-platform | 完成；后续改为终态消费确认，再次连续 5 次完整测试通过 |
 
 **接口先行**：pi-xpc 第一个 commit 只提交 `Core/Operations/` 的公开类型（`ContentSnapshot`、`OperationRequest`、`OperationEvent` 流事件、`OperationRunner` 协议、`RecentResults` 接口）与测试桩，在“进度”节登记 hash；pi-platform 与 pi-surfaces 合并该 commit 后开发，用桩实现自测。
 
@@ -173,3 +173,12 @@ scripts/render-gallery.sh
 - 预防：测试必须等待被验证的事件已经消费，必要的前置条件必须失败即停止；本次无需新增生产接口或改变架构。
 - 按 Claude 要求，同一份最终代码连续执行 `scripts/test.sh` **5 次，真实退出码依次为 0、0、0、0、0**。每轮 153 个 Swift Testing 测试（含 M3 两种参数）、个人脚本 9 项检查、既有 Rime/输入法/AppShell 检查及标识扫描全部通过。日志位于忽略目录 `.build/m3-five-runs/run-{1...5}.log`，退出码汇总为 `.build/m3-five-runs/results.txt`。`git diff --check` 退出 0。
 - 未进行真实个人数据操作、安装、输入法注册、App 启动或真实 AI 调用；人工产品验收范围不变。
+
+### M3-T1 后续：终态消费确认（2026-10-11）
+
+- 当前 `agent/platform` 快进合并 `main@289989b`，包括 Core 的 `Identifiers.rimeUserDirectory(home:)`；个人脚本默认目录与之相符，完成上一任务等待的 main 对齐。未切分支或修改主仓库。
+- Claude 报告旧 `completionDelay: 0.025` 用例在全量负载下偶发超时。本次修改前专项与一轮全量基线均退出 0，未复现该次偶发失败，不将可能的调度延迟当作已确认根因。
+- `Tests/SelectionTests/M3IntegrationTests.swift` 移除按 25ms 定时发送终态的桩，覆盖即时缓冲及异步发送两种方式。桩通过每个事件流的 `onTermination` 提供可缓冲的消费确认；测试等待消费者退出后，必须断言完成状态、对应会话、最近结果或失败提示，取消不能冒充成功。30 秒仅作挂起故障截止时间，不作为通过依据。部分流式内容仍使用有截止时间的状态条件等待。
+- 修复期间首次编译因参数引用 private 桩类型失败（退出 1），将测试方法访问范围改为 fileprivate 后专项通过（退出 0）。生产 runner、窗口、权限和隐私逻辑未修改。
+- 最终同一份测试代码连续执行 `scripts/test.sh` 五轮，直接捕获的真实退出码为 **0、0、0、0、0**。完整日志位于 `.build/m3-consumption-runs/run-{1...5}.log`，退出码汇总 `.build/m3-consumption-runs/results.txt`；没有经管道取末端命令退出码。`git diff --check` 通过。
+- 未验证：Claude 那次失败的确切触发条件、真实 AI 与跨应用人工验收。未执行安装、注册输入法或真实用户数据操作。

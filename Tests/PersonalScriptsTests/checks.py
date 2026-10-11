@@ -85,6 +85,35 @@ class PersonalTests(unittest.TestCase):
                 self.assertFalse((target / 'roarkt_personal.patch.yaml').exists())
         self.assertEqual(digest(legacy), legacy_before)
 
+    def test_recursive_and_preset_vocabulary_normalized(self):
+        (self.dicts / 'roarkt_zh.dict.yaml').write_text(
+            '---\nname: roarkt_zh\nuse_preset_vocabulary: true\n'
+            'import_tables: [luna_pinyin, roarkt_ai]\n...\n')
+        (self.dicts / 'luna_pinyin.dict.yaml').write_text(
+            '---\nname: luna_pinyin\nimport_tables: [nested]\n...\n數據\tshu ju\n')
+        (self.dicts / 'nested.dict.yaml').write_text(
+            '---\nname: nested\nimport_tables: [luna_pinyin]\n...\n應當\tying dang\n')
+        (self.dicts / 'roarkt_ai.dict.yaml').write_text(
+            '---\nname: roarkt_ai\nimport_tables: [nested]\n...\n軟件\truan jian\n')
+        (self.dicts / 'essay.txt').write_text('公司\t100\n管理\t90\n')
+        self.source.joinpath('code.swift').unlink()
+        self.source.joinpath('note.md').write_text(('数据 數據 应当 公司 管理 软件 火星 QuasarToken\n') * 4)
+        result = invoke('build-personal-dict.py', self.args + ['--apply', '--offline'])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        generated = (self.target / 'roarkt_personal.dict.yaml').read_text()
+        for word in ['数据', '數據', '应当', '公司', '管理', '软件']:
+            self.assertNotIn(word, generated)
+        self.assertIn('火星', generated)
+        # A missing dependency must fail closed, never claim its words are missing.
+        for name in ['nested.dict.yaml', 'essay.txt']:
+            path = self.dicts / name
+            contents = path.read_bytes()
+            path.unlink()
+            result = invoke('build-personal-dict.py', self.args)
+            self.assertEqual(result.returncode, 2)
+            self.assertEqual((self.target / 'roarkt_personal.dict.yaml').read_text(), generated)
+            path.write_bytes(contents)
+
     def test_source_lexer(self):
         text = personal.swift_text('let CodeToken = 0\n/* outer /* inner */ tail */\nlet a = #"raw word"#\nlet b = """multi\nline"""\nlet c = "skip \\(SecretCode)"')
         self.assertIn('inner', text)
@@ -223,19 +252,7 @@ class MigrationTests(unittest.TestCase):
         shutil.copy2(ROOT / 'InputMethod/bin/rime_dict_manager', self.bin / 'rime_dict_manager')
         (self.base / 'Frameworks').symlink_to(ROOT / 'InputMethod/lib')
         self.manager = self.bin / 'rime_dict_manager'
-        self.opencc = Path(os.environ.get('ROARKT_TEST_OPENCC', ROOT / '.build/vendor/OpenCC/build/src/tools/opencc'))
-        self.config = self.base / 'opencc'; self.config.mkdir()
-        source = ROOT / '.build/vendor/OpenCC'
-        if not self.opencc.is_file():
-            # Migration is only needed if the main dictionary becomes simplified (SPEC-011).
-            self.skipTest('OpenCC not built; see scripts/personal/README.md to run migration checks')
-        config_source = Path(os.environ.get('ROARKT_TEST_T2S', source / 'data/config/t2s.json'))
-        data_source = Path(os.environ.get('ROARKT_TEST_OPENCC_DATA', source / 'build/data'))
-        shutil.copy2(config_source, self.config / 't2s.json')
-        for path in data_source.glob('*.ocd2'):
-            shutil.copy2(path, self.config / path.name)
-        self.args = ['--rime-dir', self.target, '--offline', '--manager', self.manager,
-                     '--opencc', self.opencc, '--t2s-config', self.config / 't2s.json']
+        self.args = ['--rime-dir', self.target, '--offline', '--manager', self.manager]
         self.seed = self.base / 'seed.txt'
         self.seed.write_text('發現\tfa xian\t7\n发现\tfa xian\t3\n頭髮\ttou fa\t5\n')
         command([self.manager, '-i', 'roarkt_zh', self.seed], self.target)
@@ -312,9 +329,13 @@ class MigrationTests(unittest.TestCase):
         self.assertEqual(digest(self.target / 'roarkt_zh.userdb'), before)
 
     def test_converter_failure_leaves_database(self):
+        # Fail the system compiler invocation without adding a production override.
         before = digest(self.target / 'roarkt_zh.userdb')
-        args = self.args.copy(); args[args.index('--opencc') + 1] = '/usr/bin/false'
-        result = invoke('migrate_userdb.py', args)
+        shim = self.base / 'failure-bin'; shim.mkdir()
+        (shim / 'xcrun').write_text('#!/bin/sh\nexit 1\n')
+        (shim / 'xcrun').chmod(0o700)
+        env = {**os.environ, 'PATH': str(shim) + ':' + os.environ['PATH']}
+        result = invoke('migrate_userdb.py', self.args, env)
         self.assertEqual(result.returncode, 2)
         self.assertEqual(digest(self.target / 'roarkt_zh.userdb'), before)
         self.assertEqual(len(list((self.target / 'roarkt-backups').iterdir())), 1)

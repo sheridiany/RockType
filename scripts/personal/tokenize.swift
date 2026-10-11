@@ -3,7 +3,9 @@ import NaturalLanguage
 
 // Text travels only through private process pipes, never arguments or logs.
 let data = FileHandle.standardInput.readDataToEndOfFile()
-guard let text = String(data: data, encoding: .utf8) else { exit(1) }
+guard let original = String(data: data, encoding: .utf8),
+      let text = original.applyingTransform(StringTransform("Hant-Hans"), reverse: false)
+else { exit(1) }
 let tokenizer = NLTokenizer(unit: .word)
 tokenizer.setLanguage(.simplifiedChinese)
 tokenizer.string = text

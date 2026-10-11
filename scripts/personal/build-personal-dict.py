@@ -10,7 +10,7 @@ import sys
 import tempfile
 
 sys.dont_write_bytecode = True
-from personal_common import add_rime_directory_argument, Refusal, require, plain, run, locked, publish, restore_files
+from personal_common import build_simplifier, simplify_words, add_rime_directory_argument, Refusal, require, plain, run, locked, publish, restore_files
 
 HEADER = '# 个人词表，由 RockType 生成\n'
 NAMES = ['roarkt_personal.dict.yaml', 'roarkt_personal_en.dict.yaml',
@@ -142,6 +142,7 @@ def sources(roots):
 
 
 def vocabulary(root, name, seen=None):
+    is_root = seen is None
     seen = set() if seen is None else seen
     require(re.fullmatch(r'[A-Za-z0-9_/.-]+', name) and '..' not in name and not name.startswith('/'), 'invalid dictionary import')
     if name in seen:
@@ -156,6 +157,24 @@ def vocabulary(root, name, seen=None):
     words = {line.split('\t')[0] for line in parts[1].splitlines() if line and not line.startswith('#')}
     for imported in meta.get('import_tables', []):
         words |= vocabulary(root, imported, seen)
+    # librime configures preset vocabulary from the top-level dictionary header.
+    # Common words may exist only here, not in the imported spelling tables.
+    if is_root and (meta.get('use_preset_vocabulary') or meta.get('vocabulary')):
+        preset = meta.get('vocabulary') or 'essay'
+        require(isinstance(preset, str) and re.fullmatch(r'[A-Za-z0-9_/.-]+', preset)
+                and '..' not in preset and not preset.startswith('/'), 'invalid preset vocabulary')
+        source = plain(root / (preset + '.txt'))
+        require(source.is_relative_to(root) and source.is_file(), 'preset vocabulary missing')
+        maximum = meta.get('max_phrase_length', 0)
+        minimum = meta.get('min_phrase_weight', 0)
+        for line in source.read_text().splitlines():
+            if not line or line.startswith('#'):
+                continue
+            fields = line.split('\t')
+            word = fields[0]
+            weight = float(fields[1]) if len(fields) > 1 else 0
+            if word and (maximum <= 0 or len(word) <= maximum) and (minimum <= 0 or weight >= minimum):
+                words.add(word)
     return words
 
 
@@ -187,6 +206,7 @@ def main():
     known = vocabulary(dictionary, 'roarkt_zh') | vocabulary(dictionary, 'roarkt_en')
     counts, files = Counter(), 0
     with tempfile.TemporaryDirectory(prefix='roarkt-tokenizer-') as temporary:
+        known = set(simplify_words(build_simplifier(temporary), sorted(known)))
         binary = Path(temporary) / 'tokenize'
         run(['xcrun', 'swiftc', Path(__file__).with_name('tokenize.swift'), '-o', binary])
         for text in sources(roots):

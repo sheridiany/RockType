@@ -7,9 +7,11 @@ import RoarkTCore
     var requests: [OperationRequest] = []
     var streams: [AsyncStream<OperationEvent>.Continuation] = []
     var stops = 0
-    private let completionDelay: Duration
+    enum Delivery: Sendable { case buffered, afterSuspension }
+    private let delivery: Delivery
+    private var terminations: [AsyncStream<Void>] = []
     private var deliveries: [Task<Void, Never>] = []
-    init(completionDelay: Duration) { self.completionDelay = completionDelay }
+    init(delivery: Delivery) { self.delivery = delivery }
     func start() {}
     func stop() {
         stops += 1
@@ -19,7 +21,15 @@ import RoarkTCore
     func cancel() {}
     func run(_ request: OperationRequest) -> AsyncStream<OperationEvent> {
         requests.append(request)
-        return AsyncStream { streams.append($0) }
+        let termination = AsyncStream<Void>.makeStream()
+        terminations.append(termination.stream)
+        return AsyncStream {
+            $0.onTermination = { _ in
+                termination.continuation.yield(())
+                termination.continuation.finish()
+            }
+            streams.append($0)
+        }
     }
     func complete(_ index: Int, text: String = "Synthetic answer") throws -> OperationResult {
         try #require(requests.indices.contains(index) && streams.indices.contains(index),
@@ -29,22 +39,44 @@ import RoarkTCore
             turns: request.session.turns + [.init(question: request.question ?? "", answer: text)])
         let result = OperationResult(session: session, templateID: request.template.id, text: text, engine: "Synthetic model")
         let stream = streams[index]
-        if completionDelay == .zero {
+        if delivery == .buffered {
             stream.yield(.completed(result))
         } else {
-            deliveries.append(Task { @MainActor [completionDelay] in
-                do { try await Task.sleep(for: completionDelay) } catch { return }
+            deliveries.append(Task { @MainActor in
+                await Task.yield()
+                guard !Task.isCancelled else { return }
                 stream.yield(.completed(result))
             })
         }
         return result
     }
+    func waitForConsumption(_ index: Int) async throws {
+        try #require(terminations.indices.contains(index))
+        let termination = terminations[index]
+        // The consumer exits after applying a terminal event. An acknowledgement
+        // is buffered even when consumption precedes this wait. Cancellation also
+        // terminates the stream, so callers must assert the resulting state.
+        let consumed = await withTaskGroup(of: Bool.self) { group in
+            group.addTask {
+                for await _ in termination { return true }
+                return false
+            }
+            group.addTask {
+                do { try await Task.sleep(for: .seconds(30)) } catch { return false }
+                return false
+            }
+            let result = await group.next() ?? false
+            group.cancelAll()
+            return result
+        }
+        try #require(consumed, "Request \(index) consumer did not terminate")
+    }
 }
 
 @Suite(.serialized) @MainActor struct M3IntegrationTests {
-    // A delayed completion reproduces the former fixed-yield race deterministically.
-    @Test(arguments: [Duration.zero, .milliseconds(25)])
-    func toolbarStreamsIntoWindowAndRecentResultsWithFollowUpAndPrivacy(completionDelay: Duration) async throws {
+    // Cover buffered and asynchronously delivered events without wall-clock delays.
+    @Test(arguments: [IntegrationRunner.Delivery.buffered, .afterSuspension])
+    fileprivate func toolbarStreamsIntoWindowAndRecentResultsWithFollowUpAndPrivacy(delivery: IntegrationRunner.Delivery) async throws {
         _ = NSApplication.shared
         var settings = AppSettings.defaults
         var configured = true
@@ -55,7 +87,7 @@ import RoarkTCore
         environment.start()
         let operations = SelectionOperationsController(environment: environment, settings: { settings },
             aiConfigured: { configured }, notice: { notices.append($0) }, readable: { readable }, makeRunner: {
-                let runner = IntegrationRunner(completionDelay: completionDelay); runners.append(runner); return runner
+                let runner = IntegrationRunner(delivery: delivery); runners.append(runner); return runner
             })
         defer { operations.stop(); environment.stop() }
         let selection = SelectionController(settings: { settings },
@@ -73,9 +105,8 @@ import RoarkTCore
             window.state.answer == "Synthetic partial" && window.state.phase == .streaming
         }
         let result = try first.complete(0)
-        try await waitFor("Completion is consumed before asking a follow-up") {
-            window.state.phase == .done && environment.recent.results == [result]
-        }
+        try await first.waitForConsumption(0)
+        try #require(window.state.phase == .done && environment.recent.results == [result])
         settings.selection.assistantModel = "new-model"
         operations.settingsChanged()
         window.state.question = "Synthetic follow-up"
@@ -86,17 +117,15 @@ import RoarkTCore
         settings.privacy.keepRecentResultsInMemory = false
         operations.settingsChanged()
         let privateResult = try first.complete(1)
-        try await waitFor("Private completion is consumed without adding recent results") {
-            window.state.phase == .done && window.state.session == privateResult.session
-                && environment.recent.results.isEmpty
-        }
+        try await first.waitForConsumption(1)
+        try #require(window.state.phase == .done && window.state.session == privateResult.session
+                     && environment.recent.results.isEmpty)
         settings.privacy.keepRecentResultsInMemory = true
         window.state.question = "Synthetic second follow-up"; window.ask()
         try #require(first.requests.count == 3 && first.streams.count == 3)
         let latest = try first.complete(2)
-        try await waitFor("Second follow-up reaches recent results") {
-            window.state.phase == .done && environment.recent.results == [latest]
-        }
+        try await first.waitForConsumption(2)
+        try #require(window.state.phase == .done && environment.recent.results == [latest])
         operations.reopen(latest)
         try #require(first.stops > 0 && runners.count == 2)
         #expect(runners[1].requests.isEmpty)
@@ -122,9 +151,8 @@ import RoarkTCore
         try #require(runners[2].requests.count == 1 && runners[2].streams.count == 1)
         #expect(runners[2].requests[0].settings.translation.engine == .offlineFirst)
         runners[2].streams[0].yield(.failed(.unavailable))
-        try await waitFor("Failure feedback is consumed") {
-            notices.last?.contains("服务") == true
-        }
+        try await runners[2].waitForConsumption(0)
+        try #require(operations.window?.state.phase == .failed && notices.last?.contains("服务") == true)
         readable = false
         selection.performAction("translate", captured: captured, fromToolbar: true)
         #expect(runners.count == 3)
