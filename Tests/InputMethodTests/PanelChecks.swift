@@ -232,10 +232,38 @@ struct PanelChecks {
     precondition(pagingView.click(at: upPoint).2 == nil && pagingView.click(at: downPoint).2 == nil,
                  "disabled paging removes both old hit areas")
     pagingPanel.hide()
+    // Freeze rendering/layout before moving geometry helpers. Exercise multiline,
+    // surrogate-pair text, both list directions and both writing orientations.
+    for layout in ["linear", "stacked"] {
+      for orientation in ["horizontal", "vertical"] {
+        for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+          NSApp.appearance = NSAppearance(named: appearance)
+          let config = SquirrelConfig()
+          precondition(config.load(yaml: "style:\n  candidate_list_layout: \(layout)\n  text_orientation: \(orientation)\n  inline_preedit: false\n  show_paging: true\n"))
+          let panel = SquirrelPanel(position: caret)
+          panel.load(config: config, forDarkMode: false)
+          panel.load(config: config, forDarkMode: true)
+          panel.inputController = controller
+          panel.update(preedit: "已选 ni hao", selRange: NSRange(location: 3, length: 6), caretPos: 9,
+            candidates: ["你好", String(repeating: "跨行候选", count: 5), "SwiftUI", "𠀀汉字", "第五项"],
+            comments: ["", "多行", "", "", ""], labels: ["1", "2", "3", "4", "5"],
+            highlighted: 1, page: 1, lastPage: false, update: true)
+          try render(panel, "geometry-\(layout)-\(orientation)-\(name)")
+          let view = panel.contentView!.subviews.compactMap { $0 as? SquirrelView }.first!
+          precondition(view.candidateRanges.count == 5)
+          precondition(view.contentRect.width.isFinite && view.contentRect.height.isFinite)
+          let items = view.accessibilityChildren() as! [NSAccessibilityElement]
+          precondition(items.count == 5 && items[3].accessibilityPerformPress())
+          precondition(controller.selected == 3, "surrogate-pair candidate keeps the selected index")
+          precondition(view.click(at: NSPoint(x: -100, y: -100)).0 == nil)
+          panel.hide()
+        }
+      }
+    }
     var forgotten = false
     let learning = RoarkTCandidateLearningMenu.make(candidate: "测试", canForget: true) { forgotten = true }
     let item = learning.items[0]
-    precondition(item.title == "忘记「测试」的学习记录")
+    precondition(item.title == "忘记“测试”的学习记录")
     NSApp.sendAction(item.action!, to: item.target, from: item)
     precondition(forgotten)
     let disabled = RoarkTCandidateLearningMenu.make(candidate: "测试", canForget: false) {}

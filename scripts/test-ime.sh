@@ -21,6 +21,7 @@ xcrun swiftc -swift-version 6 -import-objc-header "$root/Tests/InputMethodTests/
   "$root/InputMethod/sources/BridgingFunctions.swift" \
   "$root/InputMethod/sources/SquirrelConfig.swift" "$root/InputMethod/sources/SquirrelTheme.swift" \
   "$root/InputMethod/sources/SquirrelView.swift" \
+  "$root/InputMethod/sources/SquirrelView+Geometry.swift" \
   "$root/InputMethod/sources/RoarkTCandidateTranslationSession.swift" \
   "$root/InputMethod/sources/SquirrelPanel.swift" "$root/InputMethod/sources/RoarkTTranslationPanel.swift" \
   "$root/InputMethod/sources/RoarkTInputModePanel.swift" \

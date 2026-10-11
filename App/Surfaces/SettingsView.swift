@@ -199,7 +199,7 @@ struct SettingsView: View {
                 toggle("本地文字清理", "cleanup", detail: "整理口头填充词与标点，无需 AI")
                 row("按住说话", detail: "松开结束，Esc 取消，不自动发送") { Kbd("Fn") }
             }
-            Text("密码框或 Secure Input 开启时，不填入语音。")
+            Text("密码框或安全输入开启时，不填入语音。")
                 .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(p.secondary)
         }
     }
@@ -244,7 +244,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
             DesignCard {
                 row("开始截图", detail: "冻结屏幕后框选；Esc 取消") { Kbd("⌃1") }
-                toggle("框选后显示 OCR 入口", "ocr", detail: "文字识别在本机完成，不上传")
+                toggle("框选后显示文字识别入口", "ocr", detail: "文字识别在本机完成，不上传")
                 choice("另存格式", "format", ["PNG", "JPEG"])
                 row("完成动作", detail: "仅在选择另存为时写入文件") { Text("复制图片").foregroundStyle(p.secondary) }
             }
@@ -395,7 +395,7 @@ struct SettingsView: View {
     }
     private var permissionsPane: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
-            DesignSectionTitle(title: "主 App 权限")
+            DesignSectionTitle(title: "RockType 权限")
             ForEach([("辅助功能", "读取选中文字，并在返回来源时切换窗口。"),
                      ("屏幕录制", "仅在你按下截图快捷键后读取屏幕。"),
                      ("麦克风", "仅在按住 Fn 时录音，松开立即结束。")], id: \.0) { title, detail in
@@ -422,7 +422,7 @@ struct SettingsView: View {
                 }
             }
             DesignCard {
-                Text("密码框 / Secure Input") .font(Tokens.Typography.font(weight: .medium))
+                Text("密码框与安全输入") .font(Tokens.Typography.font(weight: .medium))
                 Text("不取词、不翻译、不调用 AI、不填入语音、不写缓存。")
                     .font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(p.secondary)
             }
@@ -444,7 +444,7 @@ struct SettingsView: View {
                     .font(Tokens.Typography.font(Tokens.Typography.meta))
             }
             DesignCard {
-                row("开源许可", detail: "主 App：MIT · 输入法：GPL v3，按进程隔离。") {
+                row("开源许可", detail: "主程序：MIT · 输入法：GPL v3") {
                     Button("查看说明") { feedback = "许可证见仓库 LICENSES 与 THIRD_PARTY_NOTICES" }.buttonStyle(DesignButtonStyle(variant: .ghost))
                 }
                 row("版本更新", detail: "更新来源以安装版本的配置为准。") { Chip(text: "待配置") }

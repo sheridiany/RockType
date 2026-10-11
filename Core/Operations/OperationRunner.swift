@@ -33,6 +33,7 @@ public struct OperationRequest: Sendable {
 
 public enum OperationFailure: Error, Equatable, Sendable {
     case emptyInput, inputTooLong(limit: Int), unsupportedInput, protectedInput
+    case codeBlockTooLong(limit: Int), tooManySegments(limit: Int)
     case unavailable, invalidSearchURL
     case ai(AIClientError)
 }

@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import XCTest
 import RoarkTCore
 @testable import RoarkTApp
@@ -71,18 +72,76 @@ final class ScrollCaptureControllerTests: XCTestCase, @unchecked Sendable {
         controller.cancel(); ready?.resume(returning: source)
         await waitFor { source.stopped }; XCTAssertEqual(source.calls, 0)
     }
-    @MainActor func testCompletedScrollEntersExistingPreviewSession() async throws {
+    @MainActor func testCompletedScrollEntersHistoryAndReopensWithoutDuplicates() async throws {
+        for diskEnabled in [false, true] {
+            let source = GatedScrollSource(try image())
+            var panels = 0
+            let resolved = try XCTUnwrap(realpath(FileManager.default.temporaryDirectory.path, nil))
+            let folder = URL(fileURLWithPath: String(cString: resolved)).appendingPathComponent(UUID().uuidString)
+            free(resolved)
+            defer { try? FileManager.default.removeItem(at: folder) }
+            let history = ScreenshotHistory(disk: ScreenshotHistoryDisk(folder: folder), allowed: { true }, recognize: { _, _ in "synthetic long screenshot" })
+            let coordinator = ScreenshotCoordinator(allowed: { true }, history: history, presentPreview: { _ in panels += 1 })
+            var settings = AppSettings.defaults
+            if diskEnabled { settings.screenshot.historyOnDisk = true }
+            coordinator.readSettings = { settings }
+            coordinator.start(); await history.flush(); defer { source.release(); coordinator.stop() }
+            let controller = ScrollCaptureController(allowed: { true }, prepare: { source }, interval: .milliseconds(1))
+            controller.onComplete = { coordinator.completeScrollCapture($0, region: CGRect(x: 0, y: 0, width: 120, height: 160), rounded: true) }
+            controller.start(); await waitFor { controller.canFinish }
+            XCTAssertTrue(history.entries.isEmpty)
+            controller.finish(); await waitFor { coordinator.session != nil }
+            await waitFor { history.entries.first?.recognized == true }
+            XCTAssertEqual(history.matches("long screenshot").count, 1)
+            let entry = try XCTUnwrap(history.entries.first)
+            XCTAssertTrue(entry.image === coordinator.session?.image)
+            XCTAssertEqual(panels, 1); XCTAssertEqual(coordinator.session?.origin, "滚动长截图")
+            XCTAssertEqual(coordinator.session?.image?.height, 160)
+            coordinator.session?.text = "corrected synthetic text"
+            coordinator.closePreview(); XCTAssertNil(coordinator.session)
+            XCTAssertEqual(history.entries.first?.text, "corrected synthetic text")
+            coordinator.openHistory(try XCTUnwrap(history.entries.first))
+            XCTAssertEqual(coordinator.session?.text, "corrected synthetic text")
+            XCTAssertEqual(history.entries.map(\.id), [entry.id])
+            await history.flush()
+            if diskEnabled {
+                let saved = try await ScreenshotHistoryDisk(folder: folder).load(allowed: { true })
+                XCTAssertEqual(saved.map(\.id), [entry.id]); XCTAssertEqual(saved.first?.image.height, 160)
+                XCTAssertEqual(saved.first?.text, "corrected synthetic text")
+            } else { XCTAssertFalse(FileManager.default.fileExists(atPath: folder.path)) }
+        }
+    }
+    @MainActor func testCancelledAndProtectedScrollDoNotEnterHistory() async throws {
+        var allowed = true
+        let history = ScreenshotHistory(allowed: { allowed }, recognize: { _, _ in "" })
+        let coordinator = ScreenshotCoordinator(allowed: { allowed }, history: history, presentPreview: { _ in XCTFail("No preview expected") })
+        coordinator.start(); defer { coordinator.stop() }
         let source = GatedScrollSource(try image())
-        var panels = 0
-        let coordinator = ScreenshotCoordinator(allowed: { true }, presentPreview: { _ in panels += 1 })
-        coordinator.start(); defer { source.release(); coordinator.stop() }
-        let controller = ScrollCaptureController(allowed: { true }, prepare: { source }, interval: .milliseconds(1))
-        controller.onComplete = { coordinator.openImage($0, origin: "滚动长截图") }
-        controller.start(); await waitFor { controller.canFinish }
-        controller.finish(); await waitFor { coordinator.session != nil }
-        XCTAssertEqual(panels, 1); XCTAssertEqual(coordinator.session?.origin, "滚动长截图")
-        XCTAssertEqual(coordinator.session?.image?.height, 160)
-        coordinator.closePreview(); XCTAssertNil(coordinator.session)
+        let controller = ScrollCaptureController(allowed: { allowed }, prepare: { source }, interval: .milliseconds(1))
+        controller.onComplete = { coordinator.completeScrollCapture($0, region: CGRect(x: 0, y: 0, width: 120, height: 160), rounded: false) }
+        controller.start(); await waitFor { source.waiting != nil }
+        controller.cancel(); source.release()
+        try await Task.sleep(for: .milliseconds(20))
+        XCTAssertTrue(history.entries.isEmpty); XCTAssertNil(coordinator.session)
+        allowed = false
+        coordinator.completeScrollCapture(try image(), region: CGRect(x: 0, y: 0, width: 120, height: 160), rounded: false)
+        XCTAssertTrue(history.entries.isEmpty); XCTAssertNil(coordinator.session)
+    }
+    @MainActor func testPinUsesCurrentlyDisplayedTranslationAndKeepsPreviewOpen() async throws {
+        let original = try OverlayTranslationTests.image(), runner = OverlayTestRunner()
+        let session = ScreenshotSession(image: original, origin: "Synthetic scroll", settings: { .defaults },
+            verified: { _, _ in false }, allowed: { true }, overlayRunner: runner)
+        defer { session.close() }
+        session.overlay.run(image: original, lines: OverlayTranslationTests.lines, settings: .defaults)
+        runner.complete("[[RT:0]]\n你好\n[[RT:1]]\n继续\n[[RT:END]]")
+        await waitFor { session.overlay.phase == .done }
+        let translated = try XCTUnwrap(session.overlay.image)
+        var pinned: CGImage?
+        session.onPin = { pinned = $0; return true }
+        session.showTranslatedImage = true; session.pinDisplayedImage()
+        XCTAssertTrue(pinned === translated); XCTAssertNotNil(session.image)
+        session.showTranslatedImage = false; session.pinDisplayedImage()
+        XCTAssertTrue(pinned === original); XCTAssertNotNil(session.image)
     }
     @MainActor func testEntryRequiresSelectionAndPinUsesProtectedNormalSession() throws {
         let canvas = CaptureCanvas(frame: CGRect(x: 0, y: 0, width: 120, height: 160), image: try image())
@@ -96,8 +155,9 @@ final class ScrollCaptureControllerTests: XCTestCase, @unchecked Sendable {
         var allowed = true, pins = 0
         let session = ScreenshotSession(image: try image(), origin: "Synthetic scroll", settings: { .defaults }, verified: { _, _ in false }, allowed: { allowed })
         session.onPin = { _ in pins += 1; return true }
-        allowed = false; session.pinImage(); XCTAssertEqual(pins, 0)
-        allowed = true; session.pinImage(); XCTAssertEqual(pins, 1); XCTAssertNil(session.image)
-        session.pinImage(); XCTAssertEqual(pins, 1)
+        allowed = false; session.pinDisplayedImage(); XCTAssertEqual(pins, 0)
+        allowed = true; session.pinDisplayedImage(); XCTAssertEqual(pins, 1); XCTAssertNotNil(session.image)
+        session.close()
+        session.pinDisplayedImage(); XCTAssertEqual(pins, 1)
     }
 }

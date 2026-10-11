@@ -134,11 +134,11 @@ extension PinnedImageTests {
         let event = try XCTUnwrap(NSEvent.mouseEvent(with: .rightMouseDown, location: .zero, modifierFlags: [],
             timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
         let menu = try XCTUnwrap(view.menu(for: event))
-        for title in ["另存为…", "识别文字…", "翻译…（先核对识别文字）"] {
+        for title in ["另存为…", "识别文字…", "翻译…（先核对识别文字）", "覆盖式图片翻译…", "识别二维码 / 条码…"] {
             let item = try XCTUnwrap(menu.items.first { $0.title == title })
             XCTAssertTrue(NSApplication.shared.sendAction(try XCTUnwrap(item.action), to: item.target, from: item))
         }
-        XCTAssertEqual(actions, [.save, .ocr, .translate])
+        XCTAssertEqual(actions, [.save, .ocr, .translate, .translateImage, .barcodes])
         let opacity = try XCTUnwrap(menu.items.first { $0.submenu != nil }?.submenu?.items.first { $0.tag == 40 })
         XCTAssertTrue(NSApplication.shared.sendAction(try XCTUnwrap(opacity.action), to: opacity.target, from: opacity))
         XCTAssertEqual(panel.alphaValue, 0.4)
@@ -164,3 +164,35 @@ extension PinnedImageTests {
         XCTAssertEqual(history.limit, 0)
     }
 }
+
+extension PinnedImageTests {
+    @MainActor func testGroupHideShowFocusWrapAndClosePreservesRecovery() throws {
+        var focused: [NSPanel] = [], shown: [NSPanel] = []
+        let controller = PinnedImageController(allowed: { true }, showsMenu: false, show: { shown.append($0) }, present: { focused.append($0) })
+        defer { controller.closeAll() }
+        for _ in 0..<3 { XCTAssertTrue(controller.pin(try syntheticImage(), at: CGRect(x: 100, y: 100, width: 200, height: 100))) }
+        let panels = controller.panels, first = try XCTUnwrap(panels.first)
+        first.alphaValue = 0.4; first.ignoresMouseEvents = true
+        let view = try XCTUnwrap(first.contentView as? PinnedImageView); view.toggleLock()
+        controller.toggleAll(); XCTAssertTrue(controller.allHidden); XCTAssertEqual(controller.panels.count, 3)
+        XCTAssertTrue(controller.history.entries.isEmpty)
+        controller.toggleAll(); XCTAssertFalse(controller.allHidden); XCTAssertEqual(shown.count, 3)
+        XCTAssertEqual(first.alphaValue, 0.4); XCTAssertTrue(view.locked); XCTAssertTrue(first.ignoresMouseEvents)
+        for expected in panels { controller.focusNext(); XCTAssertTrue(focused.last === expected) }
+        controller.focusNext(); XCTAssertTrue(focused.last === first); XCTAssertFalse(first.ignoresMouseEvents)
+        controller.toggleAll(); controller.focusNext(); XCTAssertFalse(controller.allHidden)
+        controller.closeGroup(); XCTAssertTrue(controller.panels.isEmpty); XCTAssertEqual(controller.history.entries.count, 3)
+        XCTAssertTrue(controller.restoreLast()); XCTAssertEqual(controller.panels.count, 1)
+    }
+    @MainActor func testProtectedGroupActionsNeverShowOrFocusAndPurgeHistory() throws {
+        let gate = PinGroupGate()
+        var shows = 0, focus = 0
+        let controller = PinnedImageController(allowed: { gate.allowed }, showsMenu: false, show: { _ in shows += 1 }, present: { _ in focus += 1 })
+        defer { controller.closeAll() }
+        XCTAssertTrue(controller.pin(try syntheticImage(), at: CGRect(x: 100, y: 100, width: 20, height: 10)))
+        controller.toggleAll(); gate.allowed = false; controller.focusNext(); controller.showAll()
+        XCTAssertEqual(shows, 0); XCTAssertEqual(focus, 1)
+        XCTAssertTrue(controller.panels.isEmpty); XCTAssertTrue(controller.history.entries.isEmpty); XCTAssertFalse(controller.allHidden)
+    }
+}
+@MainActor private final class PinGroupGate { var allowed = true }

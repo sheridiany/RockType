@@ -21,16 +21,22 @@
     "Check for updates..." : {
       "comment" : "Menu item",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check for Updates…"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "检查新版本..."
+            "value" : "检查更新…"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "檢查新版本..."
+            "value" : "檢查更新…"
           }
         }
       }
@@ -57,19 +63,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Error occurred. Please check log files"
+            "value" : "Input method deployment did not finish. Open the logs folder for details, then try again."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "有错误！请查看日志"
+            "value" : "输入法部署未完成，请打开日志文件夹查看详情后重试。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "有錯誤！請查看日誌"
+            "value" : "輸入法部署未完成，請開啟日誌資料夾查看詳情後重試。"
           }
         }
       }
@@ -101,7 +107,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Squirrel is ready."
+            "value" : "RockType is ready."
           }
         },
         "zh-Hans" : {
@@ -143,16 +149,22 @@
     "Logs..." : {
       "comment" : "Menu item",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Logs Folder…"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "日志..."
+            "value" : "打开日志文件夹…"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "日誌..."
+            "value" : "開啟日誌資料夾…"
           }
         }
       }
@@ -160,16 +172,22 @@
     "Rime Wiki..." : {
       "comment" : "Menu item",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Online Documentation…"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在线文档..."
+            "value" : "在线文档…"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在線文檔..."
+            "value" : "線上文件…"
           }
         }
       }
@@ -177,16 +195,22 @@
     "Settings..." : {
       "comment" : "Menu item",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Input Method Configuration Folder…"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "用户设定..."
+            "value" : "输入法配置文件夹…"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "用戶設定"
+            "value" : "輸入法設定資料夾…"
           }
         }
       }
@@ -194,6 +218,12 @@
     "Squirrel" : {
       "comment" : "Menu title",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RockType"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",

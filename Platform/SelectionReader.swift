@@ -2,7 +2,7 @@ import Foundation
 import ApplicationServices
 
 @MainActor public enum SelectionReader {
-    public enum Status: Sendable { case success, empty, unsupported, noPermission, secureInput }
+    public enum Status: Equatable, Sendable { case success, empty, unsupported, noPermission, secureInput }
     public struct Result: Sendable {
         public let status: Status
         public let text: String?
@@ -38,6 +38,25 @@ import ApplicationServices
         }
         guard SecureInput.status() == .allowed else { return result(.secureInput) }
         guard source == Accessibility.frontmostApplication else { return result(.unsupported) }
-        return text.isEmpty ? result(.empty) : result(.success, text, rect)
+        if text.isEmpty {
+            // Some web/Electron controls expose an empty string despite a selection.
+            // Only a positively reported zero-length range proves that nothing is selected.
+            if let range = Accessibility.attribute(kAXSelectedTextRangeAttribute, of: element),
+               CFGetTypeID(range) == AXValueGetTypeID() {
+                let value = range as! AXValue
+                var selected = CFRange()
+                if AXValueGetType(value) == .cfRange, AXValueGetValue(value, .cfRange, &selected), selected.length >= 0 {
+                    return result(classify(text: text, selectionLength: selected.length))
+                }
+            }
+            return result(classify(text: text, selectionLength: nil))
+        }
+        return result(.success, text, rect)
     }
+    static func classify(text: String?, selectionLength: Int?) -> Status {
+        guard let text else { return .unsupported }
+        if !text.isEmpty { return .success }
+        return selectionLength == 0 ? .empty : .unsupported
+    }
+
 }

@@ -9,7 +9,6 @@ struct ScreenshotPreviewContent: View {
     var viewport: CGSize? = nil
     @State private var selectedLine: Int?
     @State private var showBoxes = true
-    @State private var showVisual = true
     @State private var imageExpanded = false
     @Environment(\.colorScheme) private var scheme
     private var p: Tokens.Palette { Tokens.palette(scheme) }
@@ -26,12 +25,22 @@ struct ScreenshotPreviewContent: View {
                     else {
                         controls
                         visualActions
-                        ViewThatFits(in: .horizontal) {
-                            HStack(alignment: .top, spacing: Tokens.Space.md) {
-                                sourceColumn.frame(minWidth: 300)
-                                resultColumn.frame(minWidth: 300)
+                        if session.previewMode == .overlay {
+                            ScreenshotLocalImageTools(session: session)
+                        } else if session.previewMode == .codes {
+                            ScreenshotBarcodeResults(session: session)
+                        } else {
+                            ViewThatFits(in: .horizontal) {
+                                HStack(alignment: .top, spacing: Tokens.Space.md) {
+                                    sourceColumn.frame(minWidth: 300)
+                                    resultColumn.frame(minWidth: 300)
+                                }
+                                VStack(spacing: Tokens.Space.md) { sourceColumn; resultColumn }
                             }
-                            VStack(spacing: Tokens.Space.md) { sourceColumn; resultColumn }
+                        }
+                        if !session.barcodes.codes.isEmpty && session.previewMode != .codes {
+                            Button("已识别 \(session.barcodes.codes.count) 个二维码 / 条码，查看内容…") { session.previewMode = .codes }
+                                .buttonStyle(.link).font(.system(size: 12))
                         }
                     }
                     if let notice = session.notice, !session.busy {
@@ -47,6 +56,13 @@ struct ScreenshotPreviewContent: View {
         .frame(width: viewport?.width ?? Self.width, height: viewport?.height ?? Self.height)
         .modifier(DesignSurface())
         .onExitCommand { session.close() }
+        .onChange(of: session.previewMode) { _, mode in
+            if mode != .overlay { session.showTranslatedImage = false }
+            if mode != .codes { session.barcodes.dismissURL() }
+        }
+        .onChange(of: session.overlay.phase) { _, phase in
+            if phase == .done { session.showTranslatedImage = true }
+        }
         .onChange(of: session.ocrFinished) { _, finished in if !finished { selectedLine = nil } }
     }
     private var header: some View {
@@ -68,9 +84,14 @@ struct ScreenshotPreviewContent: View {
     @ViewBuilder private var imagePreview: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("原图对照").font(.system(size: 12, weight: .medium))
+                Text(session.showTranslatedImage && !session.confirmingImage ? "译图" : "原图对照").font(.system(size: 12, weight: .medium))
+                if session.overlay.image != nil && !session.confirmingImage {
+                    Picker("图片版本", selection: $session.showTranslatedImage) {
+                        Text("原图").tag(false); Text("译图").tag(true)
+                    }.pickerStyle(.segmented).labelsHidden().frame(width: 150)
+                }
                 if !session.confirmingImage {
-                    Button(imageExpanded ? "收起原图" : "展开原图") { imageExpanded.toggle() }
+                    Button(imageExpanded ? "收起图片" : "展开图片") { imageExpanded.toggle() }
                         .buttonStyle(.link).font(.system(size: 11))
                 }
                 Spacer()
@@ -78,10 +99,10 @@ struct ScreenshotPreviewContent: View {
                     Toggle("文字框", isOn: $showBoxes).toggleStyle(.checkbox).font(.system(size: 11))
                 }
             }.foregroundStyle(p.secondary)
-            if let image = session.image {
+            if let image = session.displayedImage {
                 Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: .fit)
                     .overlay {
-                        if showBoxes && session.ocrFinished {
+                        if showBoxes && session.ocrFinished && !session.showTranslatedImage {
                             GeometryReader { geometry in
                                 ForEach(Array(session.ocrLines.enumerated()), id: \.offset) { index, line in
                                     let r = line.rect
@@ -96,7 +117,7 @@ struct ScreenshotPreviewContent: View {
                             }
                         }
                     }
-                    .frame(maxWidth: .infinity, maxHeight: session.confirmingImage ? 190 : (imageExpanded ? 300 : 110))
+                    .frame(maxWidth: .infinity, maxHeight: session.confirmingImage ? 190 : (imageExpanded ? 300 : (session.previewMode == .overlay ? 220 : 110)))
                     .accessibilityLabel(session.confirmingImage ? "即将发送的图片" : "原图，可点击文字框对照")
             }
             if let selectedLine, session.ocrLines.indices.contains(selectedLine) {
@@ -149,7 +170,7 @@ struct ScreenshotPreviewContent: View {
             }.frame(height: 210).background(p.canvas, in: RoundedRectangle(cornerRadius: 7))
             HStack {
                 Button("复制原文") { session.copyText(session.text) }.disabled(!canUseText)
-                Button("仅文字翻译") { showVisual = false; session.translate() }.disabled(!canUseText)
+                Button("仅文字翻译") { session.previewMode = .text; session.translate() }.disabled(!canUseText)
                 Spacer()
                 Text("\(session.text.count) 字").font(.system(size: 11)).monospacedDigit().foregroundStyle(p.secondary)
             }.buttonStyle(DesignButtonStyle(variant: .secondary))
@@ -224,19 +245,21 @@ struct ScreenshotPreviewContent: View {
         }
     }
     @ViewBuilder private var resultColumn: some View {
-        if showVisual { ScreenshotVisualAIResult(session: session) }
+        if session.previewMode == .visual { ScreenshotVisualAIResult(session: session) }
         else { translationColumn }
     }
     private var visualActions: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Picker("结果类型", selection: $showVisual) {
-                    Text("图片 AI").tag(true)
-                    Text("仅文字翻译").tag(false)
-                }.pickerStyle(.segmented).frame(width: 250)
+                Picker("操作", selection: $session.previewMode) {
+                    Text("图片 AI").tag(ScreenshotSession.PreviewMode.visual)
+                    Text("文字翻译").tag(ScreenshotSession.PreviewMode.text)
+                    Text("覆盖翻译").tag(ScreenshotSession.PreviewMode.overlay)
+                    Text("二维码 / 条码").tag(ScreenshotSession.PreviewMode.codes)
+                }.pickerStyle(.segmented).labelsHidden()
                 Spacer()
             }
-            if showVisual {
+            if session.previewMode == .visual {
                 HStack {
                     Button("截图翻译…") { session.prepareImage(action: .translate) }
                     Button("截图总结…") { session.prepareImage(action: .summarize) }
@@ -255,14 +278,14 @@ struct ScreenshotPreviewContent: View {
             Menu("图片操作") {
                 Button("复制图片") { session.copyImage() }
                 Button("另存为…") { session.save() }
-                Button("贴图") { session.pinImage() }
+                Button("贴当前图片") { session.pinDisplayedImage() }
                 Divider()
-                Button("解释图片…") { showVisual = true; session.prepareImage() }.disabled(session.visionModel == nil || session.busy)
+                Button("解释图片…") { session.previewMode = .visual; session.prepareImage() }.disabled(session.visionModel == nil || session.busy)
                 Button("配置视觉模型…") { session.configureVision() }
                 Button("恢复图片 AI 每次发送确认") { session.restoreImageConfirmation() }
             }.fixedSize()
             Spacer()
-            Text(showVisual ? "图片 AI 会发送图片与识别文字" : "仅文字翻译不发送图片").font(.system(size: 11)).foregroundStyle(p.secondary)
+            Text(session.previewMode == .visual ? "图片 AI 会发送图片与识别文字" : "本机识别 · 翻译仅发送文字").font(.system(size: 11)).foregroundStyle(p.secondary)
             Button("关闭") { session.close() }.buttonStyle(DesignButtonStyle(variant: .secondary))
         }
     }

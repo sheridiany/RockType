@@ -98,6 +98,8 @@ final class ResultWindowState {
         answer = ""; engine = ""; notice = nil
         guard readable() else { phase = .failed; notice = "当前输入受保护或无法检查，未发送请求。"; return }
         phase = .connecting
+        if request.question == nil, ["translate", "summarize"].contains(request.template.id),
+           request.session.snapshot.text.utf8.count > LongTextPlan.segmentBytes { notice = LongTextPlan.guidance }
         let revision = self.revision
         let stream = runner.run(request)
         task = Task { [weak self] in
@@ -158,7 +160,9 @@ final class ResultWindowState {
     private static func message(_ error: OperationFailure) -> String {
         switch error {
         case .emptyInput: "没有可处理的内容。"
-        case .inputTooLong(let limit): "内容超过模型输入上限（\(limit) 字节），请缩短后重试。"
+        case .inputTooLong(let limit): "内容超过本次处理上限（\(limit) 字节），请缩短或分成几次处理。"
+        case .codeBlockTooLong(let limit): "单个代码块超过分段上限（\(limit) 字节），请手动拆开代码块后重试。"
+        case .tooManySegments(let limit): "内容需要超过 \(limit) 个分段，请分成几次处理。"
         case .unsupportedInput: "当前模型不支持此类输入，请检查模型配置。"
         case .protectedInput: "当前输入受保护，已停止请求。"
         case .unavailable: "服务暂不可用，请检查连接后重试。"

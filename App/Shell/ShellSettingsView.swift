@@ -205,7 +205,7 @@ struct ShellSettingsView: View {
             }
             DesignSectionTitle(title: "离线语言包")
             DesignCard { LanguagePackStepView(model: language) }
-            Notice(text: "动态离线翻译需要 macOS 26 和语言包。候选静态词条按原文精确匹配；开启候选 AI 后，候选文字可能发送到所配置的服务商。")
+            Notice(text: "动态离线翻译需要 macOS 26 和语言包。候选静态词条按原文精确匹配；主动触发输入法 AI 时，当前文字会发送到所配置的服务商。")
         }
     }
     private var voice: some View {
@@ -276,7 +276,7 @@ struct ShellSettingsView: View {
     }
     private var screenshot: some View {
         Group {
-            Notice(text: "快捷键默认为 ⌃1；仅主动保存时写入文件。")
+            Notice(text: "快捷键默认为 ⌃1；默认不保存历史到磁盘，可在下方开启。")
             DesignSectionTitle(title: "复制与导出")
             ScreenshotOutputSettings(settings: $settings.screenshot)
             DesignCard {
@@ -284,6 +284,7 @@ struct ShellSettingsView: View {
                     Text("PNG").tag(ScreenshotSettings.Format.png); Text("JPEG").tag(ScreenshotSettings.Format.jpeg)
                 }
             }
+            ScreenshotHistorySettings(settings: $settings.screenshot)
             ScreenshotStyleSettings(settings: $settings.screenshot)
             DesignSectionTitle(title: "贴图历史")
             DesignCard {
@@ -314,7 +315,7 @@ struct ShellSettingsView: View {
                 Text("最多 10 条，只保存在内存中。退出或关闭开关后清空最近结果。")
                     .font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(p.secondary)
                 DesignRule()
-                SettingsControlRow("清除当前内容", detail: "清空结果和追问上下文，不删除另存的图片。") {
+                SettingsControlRow("清除当前内容", detail: "清空结果与追问，不删除另存的图片；已开启磁盘保存的截图历史请在历史面板清空。") {
                     Button("清除", action: clearCurrentContent).buttonStyle(DesignButtonStyle(variant: .danger))
                 }
             }
@@ -337,7 +338,7 @@ struct ShellSettingsView: View {
                 Text("版本 " + AboutDocuments.version(Bundle.main.infoDictionary ?? [:]))
                 Text("macOS 14 及以上 · Apple Silicon")
                 DesignRule()
-                Text("主 App：MIT · 输入法：GPL v3")
+                Text("主程序：MIT · 输入法：GPL v3")
                     .font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(p.secondary)
                 UpdateSettingsView()
             }

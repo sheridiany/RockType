@@ -14,7 +14,7 @@ public struct ClipboardSnapshot: Sendable, Equatable {
     func string() -> String?
 }
 
-@MainActor private struct SystemClipboard: ClipboardBackend {
+@MainActor struct SystemClipboard: ClipboardBackend {
     let pasteboard: NSPasteboard
     var changeCount: Int { pasteboard.changeCount }
     func snapshot() throws -> ClipboardSnapshot {
@@ -29,9 +29,11 @@ public struct ClipboardSnapshot: Sendable, Equatable {
         return ClipboardSnapshot(items: items)
     }
     func restore(_ snapshot: ClipboardSnapshot) throws {
-        let items = snapshot.items.map { types in
+        let items = try snapshot.items.map { types in
             let item = NSPasteboardItem()
-            for (type, data) in types { item.setData(data, forType: .init(type)) }
+            for (type, data) in types {
+                guard item.setData(data, forType: .init(type)) else { throw PlatformReadError.writeFailed }
+            }
             return item
         }
         pasteboard.clearContents()
@@ -129,25 +131,45 @@ public struct ClipboardSnapshot: Sendable, Equatable {
         try checkReadable()
         guard changeCount == before else { throw PlatformReadError.clipboardChanged }
         guard sourcePID() == pid else { throw PlatformReadError.sourceChanged }
-        try postCopy()
-        let deadline = ContinuousClock.now + timeout
-        while changeCount == before {
+        let deadline = ContinuousClock.now + min(max(timeout, .zero), .seconds(1))
+        var ours: Int?
+        var posted = false
+        do {
+            try postCopy()
+            posted = true
+            while changeCount == before {
+                try Task.checkCancellation()
+                try checkReadable()
+                guard sourcePID() == pid else { throw PlatformReadError.sourceChanged }
+                guard ContinuousClock.now < deadline else { throw PlatformReadError.timeout }
+                try await Task.sleep(for: .milliseconds(15))
+            }
+            guard changeCount == before + 1 else { throw PlatformReadError.clipboardChanged }
+            ours = changeCount
             try Task.checkCancellation()
             try checkReadable()
             guard sourcePID() == pid else { throw PlatformReadError.sourceChanged }
-            guard ContinuousClock.now < deadline else { throw PlatformReadError.timeout }
-            try await Task.sleep(for: .milliseconds(15))
+            let text = backend.string()
+            try await Task.sleep(for: .milliseconds(30))
+            try checkReadable()
+            guard sourcePID() == pid else { throw PlatformReadError.sourceChanged }
+            guard changeCount == ours else { throw PlatformReadError.clipboardChanged }
+            try restore(saved, ifUnchanged: ours!)
+            return text
+        } catch {
+            // A posted copy can finish while cancellation interrupts the polling sleep.
+            // Keep this transaction exclusive until its bounded deadline; inspect only
+            // changeCount during cleanup, never protected selection text.
+            if ours == nil, posted {
+                ours = await Task { @MainActor [self] in
+                    while changeCount == before, ContinuousClock.now < deadline {
+                        try? await Task.sleep(for: .milliseconds(15))
+                    }
+                    return changeCount == before + 1 ? changeCount : nil
+                }.value
+            }
+            if let ours { try restore(saved, ifUnchanged: ours) }
+            throw error
         }
-        let ours = changeCount
-        defer { _ = try? restore(saved, ifUnchanged: ours) }
-        try Task.checkCancellation()
-        try checkReadable()
-        guard sourcePID() == pid else { throw PlatformReadError.sourceChanged }
-        let text = backend.string()
-        try await Task.sleep(for: .milliseconds(30))
-        try checkReadable()
-        guard sourcePID() == pid else { throw PlatformReadError.sourceChanged }
-        guard changeCount == ours else { throw PlatformReadError.clipboardChanged }
-        return text
     }
 }

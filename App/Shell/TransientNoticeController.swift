@@ -12,7 +12,7 @@ final class TransientNoticeController {
         guard [.screenshot, .translateSelection, .summarizeSelection].contains(action) else { return }
         // The closed diagnostic vocabulary groups unavailable shortcut actions here.
         Task { try? await DiagnosticLog.shared.record(.init(action: .hotkeyRegistration, status: .unavailable)) }
-        show(message: "\(action.title) · 即将推出")
+        show(message: "\(action.title)暂不可用。请重新打开 RockType 后重试。")
     }
 
     func show(message: String) {
