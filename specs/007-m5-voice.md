@@ -41,7 +41,7 @@
 
 | 项 | 方法 | 结果 | 证据 |
 | --- | --- | --- | --- |
-| worker 构建、签名、identifier | 命令 | 未运行 | |
+| worker 构建、签名、identifier | 命令 | 通过 | `scripts/build-voice-worker.sh`：Xcode Release、MLX self-test、codesign verify 通过；identifier `com.roarkist.roarkt.voice`，Team `DF7J2VBQD8`。真实 App XPC 启动待验证。 |
 | 下载取消、校验失败不加载 | 单元测试 | 未运行 | |
 | ticket：目标变化 / 超时 / Secure Input 拒绝 | 单元测试 + 手工 | 未运行 | |
 | 真实麦克风：中文、中英混说识别并填入 | 手工 | 待人工验证 | |
@@ -50,6 +50,6 @@
 
 ## 进度
 
-- V1：固定版本 MLX 独立包、双向签名 XPC 协议、内存音频、取消退出进程；构建脚本嵌入 XPC helper/Metal 资源、补主 App 麦克风声明与 entitlement。`scripts/test.sh` 通过（66 测试与 Rime 部署）；worker 首次构建正在运行，最终构建/签名结果在验收表补齐。未进行真实模型与权限验收。
+- V1：固定版本 MLX 独立包、双向签名 XPC 协议、内存音频、取消退出进程；构建脚本嵌入 XPC helper/Metal 资源、补主 App 麦克风声明与 entitlement。`scripts/test.sh` 通过（66 测试与 Rime 部署）；worker Release 构建、MLX self-test 与签名校验通过。未进行真实模型与权限验收。
 
 ## 问题

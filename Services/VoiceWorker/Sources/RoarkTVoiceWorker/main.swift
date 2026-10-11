@@ -63,7 +63,7 @@ if CommandLine.arguments.contains("--self-test") {
     print("RoarkT voice MLX self-test passed")
     exit(0)
 }
-let service = Service()
+private let service = Service()
 let listener = NSXPCListener.service()
 listener.delegate = service
 listener.resume()
