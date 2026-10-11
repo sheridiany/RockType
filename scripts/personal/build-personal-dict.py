@@ -13,11 +13,8 @@ sys.dont_write_bytecode = True
 from personal_common import Refusal, require, plain, run, locked, publish, restore_files
 
 HEADER = '# 个人词表，由 RockType 生成\n'
-CUSTOM_HEADER = '# RockType personal dictionary; preserve with personal scripts.\n'
-BEGIN = '  # BEGIN RockType personal dictionary\n'
-END = '  # END RockType personal dictionary\n'
 NAMES = ['roarkt_personal.dict.yaml', 'roarkt_personal_en.dict.yaml',
-         'roarkt.custom.yaml', 'roarkt_flypy.custom.yaml', 'roarkt_personal_en.schema.yaml']
+         'roarkt_personal_en.schema.yaml', 'roarkt_personal.patch.yaml']
 EXCLUDED = {'.git', '.build', 'node_modules', 'roarkt-backups'}
 
 
@@ -50,45 +47,13 @@ def parse_yaml(text):
     return yaml.safe_load(text), node
 
 
-def patch(text):
-    if text.startswith(CUSTOM_HEADER):
-        text = text[len(CUSTOM_HEADER):]
-    if BEGIN in text or END in text:
-        require(text.count(BEGIN) == text.count(END) == 1, 'invalid managed patch')
-        start, end = text.index(BEGIN), text.index(END) + len(END)
-        require(start < end, 'invalid managed patch')
-        require(text[start:end] == managed_block(), 'managed patch was edited')
-        text = text[:start] + text[end:]
-    data, node = parse_yaml(text)
-    yaml = yaml_module()
-    if data is None:
-        text += ('\n' if text and not text.endswith('\n') else '') + 'patch:\n'
-        index = len(text)
-    else:
-        require(isinstance(data, dict) and (isinstance(data.get('patch'), dict) or data.get('patch') is None), 'block patch mapping required')
-        mapping = next(v for k, v in node.value if k.value == 'patch')
-        require((isinstance(mapping, yaml.MappingNode) and not mapping.flow_style) or (isinstance(mapping, yaml.ScalarNode) and mapping.tag.endswith(':null')), 'block patch mapping required')
-        for key in (data['patch'] or {}):
-            require(isinstance(key, str), 'non-string patch key')
-            require(not any(key == prefix or key.startswith(prefix + '/') or key.startswith(prefix + '+')
-                            for prefix in ('translator/dictionary', 'translator/user_dict', 'english/dictionary', 'english/user_dict', 'schema/dependencies')) and key not in ('translator', 'english', 'schema', 'translator/+', 'english/+', 'schema/+', '__include', '__patch'), 'translator/english patch conflict')
-        index = mapping.end_mark.index
-        if isinstance(mapping, yaml.ScalarNode) and text[index:index + 1] == '\n':
-            index += 1
-        # end_mark can be at a following root key; preserve all original bytes.
-    prefix = text[:index]
-    text = prefix + ('\n' if prefix and not prefix.endswith('\n') else '') + managed_block() + text[index:]
-    result = CUSTOM_HEADER + text
-    parse_yaml(result)
-    return result
-
-
-def managed_block():
-    return (BEGIN + '  "translator/dictionary": roarkt_personal\n'
+def personal_patch():
+    return (HEADER + 'patch:\n'
+            '  "translator/dictionary": roarkt_personal\n'
             '  "translator/user_dict": roarkt_zh\n'
             '  "english/dictionary": roarkt_personal_en\n'
             '  "english/user_dict": roarkt_en\n'
-            '  "schema/dependencies/@next": roarkt_personal_en\n' + END)
+            '  "schema/dependencies/@next": roarkt_personal_en\n')
 
 
 def swift_text(text):
@@ -257,13 +222,11 @@ speller:
 translator:
   dictionary: roarkt_personal_en
 ''').encode()
+    changes['roarkt_personal.patch.yaml'] = personal_patch().encode()
     with locked(target):
-        for name in NAMES[:2] + NAMES[4:]:
+        for name in NAMES:
             p = plain(target / name)
             require(not p.exists() or p.read_text().startswith(HEADER), 'personal dictionary is user-owned')
-        for name in NAMES[2:4]:
-            p = plain(target / name)
-            changes[name] = patch(p.read_text() if p.exists() else '').encode()
         token = publish(target, changes, 'personal')
     print('unchanged' if token is None else f'applied backup_id={token}; redeploy manually')
 

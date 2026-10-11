@@ -30,7 +30,7 @@
 ## 个人层（只在用户本机，脚本化、可重复执行、可回滚）
 
 5. **学习词迁移为简体**：用户已导入的 RoType 学习词（`roarkt_zh.userdb`，繁体键）在主词库换为简体后需转换：导出 → OpenCC 繁转简（t2s）→ 导入新 userdb。脚本 `scripts/personal/migrate-userdb-simplified.sh`，执行前完整备份到 `~/Library/Rime/roarkt-backups/<时间>/`。由 Claude 在合并后执行，agent 只实现与用临时目录测试。
-6. **个人习惯词表**：脚本 `scripts/personal/build-personal-dict.py`：从用户本机文本中统计高频中文词与英文术语，**来源仅限**用户明确允许的目录（默认 `~/Repos/**/*.md` 与 `~/Repos/**/*.swift` 注释/字符串，排除 `node_modules`、`.build`、`.git`），与主词库比对，产出主词库缺失或排序靠后的词，写 `~/Library/Rime/roarkt_personal.dict.yaml`（文件头注明“个人词表，由 RoarkT 生成”），并通过 `roarkt.custom.yaml` / `roarkt_flypy.custom.yaml` 的 patch 挂载（与 SPEC-004 设置同步生成的 custom 文件合并，不覆盖用户手写内容）。脚本只输出统计摘要，不打印原文；不读取聊天记录、浏览器、邮件等其他数据。产物不进 git（`.gitignore`）。
+6. **个人习惯词表**：脚本 `scripts/personal/build-personal-dict.py`：从用户本机文本中统计高频中文词与英文术语，**来源仅限**用户明确允许的目录（默认 `~/Repos/**/*.md` 与 `~/Repos/**/*.swift` 注释/字符串，排除 `node_modules`、`.build`、`.git`），与主词库比对，产出主词库缺失或排序靠后的词，写 `~/Library/Rime/roarkt_personal.dict.yaml`（文件头注明“个人词表，由 RockType 生成”），通过独立 `roarkt_personal.patch.yaml` 挂载。SPEC-004 设置生成的两份 custom 在 patch 内可选引用它；个人脚本不读写 custom，不覆盖用户手写内容。脚本只输出统计摘要，不打印原文；不读取聊天记录、浏览器、邮件等其他数据。产物不进 git（`.gitignore`）。
 
 ## 任务
 
@@ -39,7 +39,7 @@
 | W-1 | 评测集与评测脚本，先跑出现状基线 | pi-ui | 未开始 |
 | W-2 | 引入白霜词库并调整两套方案，回归 RimeChecks | pi-ui | 未开始 |
 | W-3 | AI / 开发中文词库与英文扩充，评测校准权重 | pi-ui | 未开始 |
-| W-4 | 个人层脚本：学习词简体迁移、个人习惯词表（含临时目录测试） | pi-platform | 脚本及临时目录测试完成；设置同步衔接待 Claude 决定 |
+| W-4 | 个人层脚本：学习词简体迁移、个人习惯词表（含临时目录测试） | pi-platform | 完成；个人 patch 与设置同步解耦，真实部署测试通过 |
 | W-5 | Claude 在本机执行个人层脚本、安装、用户试打 | Claude + 用户 | 未开始 |
 
 **文件所有权**：pi-ui：`Rime/`、`THIRD_PARTY_NOTICES.md`、`LICENSES/`、`scripts/eval-candidates.sh`、`Tests/InputMethodTests/Fixtures/`、评测相关测试；pi-platform：`scripts/personal/`、其测试、`.gitignore` 一行。两人都不改 `InputMethod/sources`（pi-ime 正在恢复 RoType 视觉）。
@@ -57,7 +57,7 @@
 
 ## 进度
 
-### W-4 脚本与临时目录验收证据（2026-10-11）
+### W-4 首次交付证据（2026-10-11；custom 合并方式已被下节替代）
 
 - 已按后续通知在当前 `agent/platform` worktree 先后快进合入 `main@9b197ce`、`main@6b0081f`，未切分支、未修改主仓库；新增用户可见名称统一为 **RockType**，内部 `roarkt*`、SPM 模块名不改。
 - `scripts/personal/migrate-userdb-simplified.sh` / `migrate_userdb.py`：显式目标 + 离线确认；独立进程持有 LevelDB POSIX 锁；完整 profile 备份（排除备份目录自身）→ 副本导出 → OpenCC t2s 只转换词条 → 同词同编码合并次数 → 空库导入及再导出核对 → 替换。支持备份 ID 回滚；后续学习导致库变化则拒绝覆盖。转换失败、活动数据库或符号链接均不改原库。
@@ -85,5 +85,12 @@
 
 ## 问题
 
-1. **W-4 / SPEC-004 衔接需 Claude 决定**：设置模块当前整份重写 custom，并要求首行是自己的生成标记。个人脚本保留已有设置和手写内容，但加独立首行标记，使设置模块拒绝覆盖并提示冲突，防止无声删掉个人 patch。后续需由设置模块所有者支持保留个人 patch，或明确暂时接受挂载后不能同步输入法选项的限制；本任务未越权修改 Core/App，不能声称这项无缝集成通过。
-2. W-5 执行前确认接受 librime 普通导出导致删除标记、动态学习时间信息重建的语义限制，以及强制中断时从完整备份人工恢复的边界。真实数据未触碰。
+1. W-4 / SPEC-004 原文件归属冲突已按 Claude 决定解决，详见下方解耦验收。手写 custom 不自动修改，由所有者决定加入可选引用。
+2. Claude 已接受 librime 导出丢失删除标记、动态学习时间元数据的限制，继续保留原库备份与记录。强制中断的人工恢复边界不变，真实数据未触碰。
+
+### W-4 后续：个人 patch 与设置同步解耦
+
+- 先用临时目录中最小 schema 实测 `patch` 下 `__include: roarkt_personal.patch:/patch?`：文件缺失与存在两次部署均退出 0；缺失不阻塞部署，存在则引入个人字段，同时保留设置的同级覆盖。
+- `Core/Settings/RimeSettingsPatch.swift` 为两套 custom 加入该可选引用。个人脚本移除 custom 解析、合并及所有权标记，仅读写独立个人 patch、中英文词典和英文编译依赖 schema（共 4 文件），回滚不包含 custom。
+- 临时测试调用实际 `RimeSettingsPatchWriter`，验证设置写入不覆盖个人文件；将默认及重写后的设置产物交给真实 librime 部署，两个方案的中文与英文个人词共 8 次候选探测通过。重写后的 Shift/英文补全设置也实际生效。回滚删除个人 patch 后重新部署，两个方案恢复工厂 dictionary；既有 Core 部署测试覆盖全新 profile 中缺少个人 patch 的场景。
+- `swift test --filter personalScriptsInTemporaryDirectories`：退出 0，9 项个人脚本检查通过（删除旧 custom 合并专用测试，替换为解耦及文件归属验证）。`scripts/test.sh`：退出 0。仅临时目录合成数据，无真实 profile 操作。

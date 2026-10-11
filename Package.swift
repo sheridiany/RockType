@@ -38,7 +38,7 @@ let package = Package(
         .testTarget(name: "RoarkTSettingsStoreTests", dependencies: ["RoarkTApp", "RoarkTCore"], path: "Tests/SettingsStoreTests"),
         .testTarget(name: "RoarkTSelectionTests", dependencies: ["RoarkTApp", "RoarkTCore", "RoarkTPlatform"], path: "Tests/SelectionTests"),
         .testTarget(name: "RoarkTOperationTests", dependencies: ["RoarkTCore", "RoarkTApp"], path: "Tests/OperationTests"),
-        .testTarget(name: "RoarkTPersonalScriptsTests", path: "Tests/PersonalScriptsTests", exclude: ["checks.py", "CandidateProbe.swift"]),
+        .testTarget(name: "RoarkTPersonalScriptsTests", dependencies: ["RoarkTCore"], path: "Tests/PersonalScriptsTests", exclude: ["checks.py", "CandidateProbe.swift"]),
         .testTarget(name: "RoarkTCoreTests", dependencies: ["RoarkTCore"], path: "Tests/CoreTests"),
         .testTarget(
             name: "RoarkTTranslationServiceTests",

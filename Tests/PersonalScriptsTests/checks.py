@@ -59,22 +59,6 @@ class PersonalTests(unittest.TestCase):
         self.assertNotIn('CodeToken', text)
         self.assertNotIn('SecretCode', text)
 
-    def test_patch_preserves_handwritten_and_settings(self):
-        text = '# 由 RockType 生成；请通过 RockType 设置修改。\npatch:\n  "english/enable_completion": false # keep\n  "translator/enable_correction": true\n  "menu/page_size": 5\nother: yes\n'
-        result = personal.patch(text)
-        self.assertIn('false # keep', result)
-        self.assertIn('other: yes', result)
-        self.assertEqual(personal.patch(result), result)
-        loaded, _ = personal.parse_yaml(result)
-        self.assertEqual(loaded['patch']['translator/user_dict'], 'roarkt_zh')
-        self.assertFalse(loaded['patch']['english/enable_completion'])
-
-    def test_patch_conflicts(self):
-        for text in ['patch: {x: 1}\n', 'patch:\n  translator/dictionary: custom\n',
-                     'patch:\n  x: 1\n  x: 2\n', 'patch: &p\n  x: 1\nother: *p\n']:
-            with self.assertRaises(Refusal):
-                personal.patch(text)
-
     def test_authorization_and_symlink_rejected(self):
         result = invoke('build-personal-dict.py', ['--rime-dir', self.target])
         self.assertEqual(result.returncode, 2)
@@ -84,11 +68,14 @@ class PersonalTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
 
     def test_build_idempotence_privacy_rollback_and_deploy(self):
-        custom = '# handwritten\npatch:\n  "menu/page_size": 5 # retained\n'
-        (self.target / 'roarkt.custom.yaml').write_text(custom)
+        fixture = Path(os.environ['ROARKT_SETTINGS_FIXTURE'])
+        customs = ['roarkt.custom.yaml', 'roarkt_flypy.custom.yaml']
+        for name in customs:
+            shutil.copy2(fixture / 'initial' / name, self.target / name)
+        initial = {name: (self.target / name).read_bytes() for name in customs}
         result = invoke('build-personal-dict.py', self.args)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(len(list(self.target.iterdir())), 1)
+        self.assertEqual(len(list(self.target.iterdir())), 2)
         result = invoke('build-personal-dict.py', self.args + ['--apply', '--offline'])
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn('QuasarToken', result.stdout + result.stderr)
@@ -103,6 +90,7 @@ class PersonalTests(unittest.TestCase):
         result = invoke('build-personal-dict.py', self.args + ['--apply', '--offline'])
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('unchanged', result.stdout)
+        self.assertEqual(initial, {name: (self.target / name).read_bytes() for name in customs})
         self.assertEqual(before, {n: (self.target / n).read_bytes() for n in personal.NAMES})
         # Real deployment with minimal synthetic source tables and both factory schemas.
         bin_dir = self.base / 'bin'; bin_dir.mkdir()
@@ -138,18 +126,35 @@ class PersonalTests(unittest.TestCase):
         for scheme, code in [('roarkt', 'huoxing'), ('roarkt_flypy', 'hoxk')]:
             command([probe, shared, self.target, build, scheme, code, '火星'], self.base)
             command([probe, shared, self.target, build, scheme, 'quasartoken', 'QuasarToken'], self.base)
+        # Rewrite the settings-owned custom files with actual writer output.
+        for name in customs:
+            shutil.copy2(fixture / 'updated' / name, self.target / name)
+        command([bin_dir / 'rime_deployer', '--build', self.target, shared, build], self.base)
+        self.assertEqual(before, {n: (self.target / n).read_bytes() for n in personal.NAMES})
+        for scheme, code in [('roarkt', 'huoxing'), ('roarkt_flypy', 'hoxk')]:
+            deployed = yaml.safe_load((build / (scheme + '.schema.yaml')).read_text())
+            self.assertFalse(deployed['english']['enable_completion'])
+            self.assertEqual(deployed['ascii_composer']['switch_key']['Shift_L'], 'noop')
+            command([probe, shared, self.target, build, scheme, code, '火星'], self.base)
+            command([probe, shared, self.target, build, scheme, 'quasartoken', 'QuasarToken'], self.base)
         result = invoke('build-personal-dict.py', ['--rime-dir', self.target, '--rollback', token, '--apply', '--offline'])
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual((self.target / 'roarkt.custom.yaml').read_text(), custom)
+        for name in customs:
+            self.assertEqual((self.target / name).read_bytes(), (fixture / 'updated' / name).read_bytes())
         for name in personal.NAMES:
-            if name != 'roarkt.custom.yaml':
-                self.assertFalse((self.target / name).exists())
+            self.assertFalse((self.target / name).exists())
+        # Optional reference absent, including after removal from a previously built profile.
+        command([bin_dir / 'rime_deployer', '--build', self.target, shared, build], self.base)
+        for scheme in ['roarkt', 'roarkt_flypy']:
+            deployed = yaml.safe_load((build / (scheme + '.schema.yaml')).read_text())
+            self.assertEqual(deployed['translator']['dictionary'], 'roarkt_zh')
+            self.assertEqual(deployed['english']['dictionary'], 'roarkt_en')
 
     def test_rollback_refuses_later_handwritten_change(self):
         result = invoke('build-personal-dict.py', self.args + ['--apply', '--offline'])
         self.assertEqual(result.returncode, 0, result.stderr)
         token = result.stdout.split('backup_id=')[1].split(';')[0]
-        path = self.target / 'roarkt.custom.yaml'
+        path = self.target / 'roarkt_personal.patch.yaml'
         changed = path.read_text() + '# later handwritten change\n'
         path.write_text(changed)
         result = invoke('build-personal-dict.py', ['--rime-dir', self.target, '--rollback', token, '--apply', '--offline'])
@@ -157,16 +162,21 @@ class PersonalTests(unittest.TestCase):
         self.assertEqual(path.read_text(), changed)
         self.assertTrue((self.target / 'roarkt_personal.dict.yaml').exists())
 
-    def test_conflict_preflight_leaves_both_files(self):
-        a = 'patch:\n  menu/page_size: 5\n'
-        b = 'patch:\n  english/dictionary: handwritten\n'
-        (self.target / 'roarkt.custom.yaml').write_text(a)
-        (self.target / 'roarkt_flypy.custom.yaml').write_text(b)
+    def test_handwritten_customs_untouched_and_personal_conflict_refused(self):
+        contents = {'roarkt.custom.yaml': 'patch: {menu/page_size: 5}\n',
+                    'roarkt_flypy.custom.yaml': '# handwritten\npatch:\n  english/dictionary: handwritten\n'}
+        for name, text in contents.items():
+            (self.target / name).write_text(text)
+        result = invoke('build-personal-dict.py', self.args + ['--apply', '--offline'])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for name, text in contents.items():
+            self.assertEqual((self.target / name).read_text(), text)
+        patch = self.target / 'roarkt_personal.patch.yaml'
+        patch.write_text('# handwritten personal patch\npatch: {}\n')
+        before = {name: (self.target / name).read_bytes() for name in personal.NAMES}
         result = invoke('build-personal-dict.py', self.args + ['--apply', '--offline'])
         self.assertEqual(result.returncode, 2, result.stderr)
-        self.assertEqual((self.target / 'roarkt.custom.yaml').read_text(), a)
-        self.assertEqual((self.target / 'roarkt_flypy.custom.yaml').read_text(), b)
-        self.assertFalse((self.target / 'roarkt_personal.dict.yaml').exists())
+        self.assertEqual(before, {name: (self.target / name).read_bytes() for name in personal.NAMES})
 
 
 class MigrationTests(unittest.TestCase):

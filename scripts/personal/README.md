@@ -25,11 +25,11 @@ python3 scripts/personal/build-personal-dict.py \
 
 - `roarkt_personal.dict.yaml`：导入 `roarkt_zh` 并补充中文，沿用 `roarkt_zh` userdb。
 - `roarkt_personal_en.dict.yaml` 及同名 schema：导入 `roarkt_en` 并补充英文，沿用 `roarkt_en` userdb；额外 schema 只用作编译依赖。
-- `roarkt.custom.yaml`、`roarkt_flypy.custom.yaml`：保留现有字节及注释，插入带边界标记的 patch。已经自定义 dictionary、user_dict、schema dependencies，或者存在重复 YAML 键、锚点、tag、行内 patch 等歧义时，两份 custom 均不修改。重复执行内容相同则不写文件。
+- `roarkt_personal.patch.yaml`：只挂载个人中英文词典及编译依赖。设置生成的两份 custom 通过 `patch` 下的 `__include: roarkt_personal.patch:/patch?` 可选引用它，文件不存在时正常部署。脚本从不读取、修改或备份两份 custom；手写 custom 也保持原样，需由其所有者自行加入同样的可选引用。重复执行内容相同则不写文件。
 
-**设置同步限制**：SPEC-004 写入器目前只允许覆盖以自身标记开头的文件，而且会整份重写。个人脚本加独立首行标记，使其识别为用户文件并提示冲突，避免之后设置操作静默删除个人 patch。现有设置在生成时完整保留；挂载后不能继续通过设置页面同步输入法选项。Claude 需决定由设置模块支持保留个人 patch，或暂时接受该限制；在解决前不应把它当作无缝集成已验收。本任务不越权修改设置模块。
+设置同步与个人脚本各自管理自己的文件：设置重写 custom 不影响个人词典，个人脚本回滚也不撤销设置变更。已用真实 librime 验证缺失引用、加入词表、重写设置后继续命中个人词，以及回滚删除个人 patch 后恢复工厂词典。个人层文件没有生成标记时拒绝覆盖。
 
-成功写入会输出 `backup_id`。回滚只恢复这 5 个文件，且要求它们仍与本次生成内容相同；有后续手改则拒绝覆盖：
+成功写入会输出 `backup_id`。回滚只恢复这 4 个个人层文件，且要求它们仍与本次生成内容相同；有后续手改则拒绝覆盖：
 
 ```sh
 python3 scripts/personal/build-personal-dict.py \
@@ -74,8 +74,10 @@ cmake -S .build/vendor/OpenCC -B .build/vendor/OpenCC/build \
   -DCMAKE_OSX_SYSROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk \
   -DENABLE_TESTING=OFF -DBUILD_DOCUMENTATION=OFF
 cmake --build .build/vendor/OpenCC/build -j 8
-python3 -B Tests/PersonalScriptsTests/checks.py
+swift test --filter personalScriptsInTemporaryDirectories
 scripts/test.sh
 ```
 
 SDK 路径按机器已有 SDK 设置；本机默认 macOS 27 SDK 与链接器不匹配，因此本次显式选 26.5。也可通过 `ROARKT_TEST_OPENCC`、`ROARKT_TEST_T2S`、`ROARKT_TEST_OPENCC_DATA` 指向已准备的 CLI、t2s 配置和词典目录。测试缺少真实依赖时失败，绝不静默跳过。测试经 `RoarkTPersonalScriptsTests` 注册在 Package.swift，统一测试入口可运行。
+
+测试入口先调用实际 `RimeSettingsPatchWriter` 生成默认及修改后的设置文件，再将私有 fixture 路径交给 Python 检查；`checks.py` 是内部子进程，不单独运行。
