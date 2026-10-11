@@ -50,6 +50,7 @@
 | W-3 | AI / 开发中文词库与英文扩充，评测校准权重 | pi-ui | 已完成 C 校准：日常 78、整句 17、开发 29、AI 57，总计 181/200 |
 | W-4 | 个人层脚本：按 C 对齐原学习格式、个人习惯词表（含临时目录测试） | pi-platform | 待负责人与 Claude 对齐 C |
 | W-5 | Claude 在本机执行个人层脚本、安装、用户试打 | Claude + 用户 | 未开始 |
+| W-6 | 全简体管线 D：词库、预置词汇、模型、方案与 C/D 冻结评测 | pi-ui | 失败后停止；试验已保存，产品保持 C，详见 W-6 验收 |
 
 **文件所有权**：pi-ui：`Rime/`、`THIRD_PARTY_NOTICES.md`、`LICENSES/`、`scripts/eval-candidates.sh`、`Tests/InputMethodTests/Fixtures/`、评测相关测试；pi-platform：`scripts/personal/`、其测试、`.gitignore` 一行。两人都不改 `InputMethod/sources`（pi-ime 正在恢复 RoType 视觉）。
 
@@ -261,3 +262,82 @@ A/B 与先前保存结果、重建 C 与新保存结果的三个 `cmp` 均退出
 1. W-4 需对齐 C：继续使用原繁体学习键，不执行为白霜设计的简体 userdb 迁移；个人词表的字表/编码/挂载由负责人和 Claude 确认。本任务未修改个人脚本或真实数据。
 2. Claude 从 main 合并后安排真实试打：全拼/双拼、原学习词优先级、整句、英文与候选翻译。自动化均通过，但真实 IMK 延迟和用户数据库规模未验收。
 3. 早期白霜与上下文模型取舍已关闭：采用保留原设置的校准 C。旧标识守卫已按授权收窄，不再误伤普通词；白霜的 40 条专名排除随整个词库撤回而不再涉及产品。
+
+## W-6 全简体管线 D（2026-10-11，未通过，停止采用）
+
+**最新结论：D 未达到整句门槛，RimeChecks 也失败；按用户指令停止优化，产品保持 C。**
+没有修改冻结期望，没有尝试其他模型或调高词频。实现试验保存为
+`Tests/InputMethodTests/Fixtures/variant-d/` 与 `integration.patch`，不是产品打包资源。
+
+### 任务
+
+| 步骤 | 状态 | 产物与未完成项 |
+| --- | --- | --- |
+| W-6.1 ICU 主词表与 AI 简体转换 | 试验完成，语义校正未完成 | 70,732 → 67,548 条；相同词＋编码权重相加，3,050 个碰撞键；人工统一妳→你；著/乾/瞭/藉等风险清单见下述文档 |
+| W-6.2 简体 essay 与 gram | 来源/许可核实完成，保存试验资源 | rime-essay-simp + octagram hans 的 bgw 词模型；未进入最终安装包 |
+| W-6.3 两方案去除繁简转换 | 试验实现，未采用 | 完整补丁保存；模糊音、简拼、纠错、Shift、英文、Lua 候选翻译、五候选、上下文建议配置保留；行为回归未全部通过 |
+| W-6.4 冻结 C/D 评测 | **失败，停止** | 整句 15 < 17；RimeChecks 现存/显存断言失败 |
+| W-6.5 用户学习词迁移 | 未运行，非 pi-ui 职责 | **D 未来正式采用时，`roarkt_zh.userdb` 必须由 pi-platform 脚本 + Claude 执行 t2s 迁移。当前保留 C，不执行迁移。** |
+
+### 来源与派生方法
+
+详细许可、SHA-256、碰撞表和未处理高频项见
+[`docs/dictionary-simplification.md`](../docs/dictionary-simplification.md)。主词表保留上游完整文件头；LGPL-3.0。
+macOS 自带 ICU `Hant-Hans` 转换，百分比/空权重先按原繁体 essay 解析为绝对值再相加，保留不同读音。
+AI 仍为 MIT 原创词表；只转换文本，保留 C 的数值/相对权重。
+
+- 简体 essay：`rime/rime-essay-simp@dc06d4c96ae72ad46b29e3aa824a5d1e8f721fd0`，原 `essay-zh-hans.txt` 原样重命名 `essay.txt`；LGPL-3.0。
+- 简体模型：实际来源为 `lotem/rime-octagram-data` 的 hans 分支，`f8ce3b534733e489a8470a7c2adf5a154e8ea069`；`zh-hans-t-essay-bgw.gram`，LGPL-3.0。采用与 C 相同类别的 bgw 词模型；用户列举的 bgc 是另一种模型，本次未尝试。
+- 两个仓库/分支的 LICENSE 已读取、原样保存；NOTICES 明确它们仅为未采用试验夹具。原有运行库来源追溯限制未关闭。
+
+### 验收证据
+
+| 类别 | 本次重跑 C | 试验 D | 门槛 | D 结果 |
+| --- | --- | --- | --- | --- |
+| 日常 | 78/80 | 78/80 | ≥78 | 通过 |
+| 整句 | 17/20 | **15/20** | ≥17 | **失败** |
+| 开发 | 29/40 | 31/40 | ≥29 | 通过 |
+| AI | 57/60 | 58/60 | ≥57 | 通过 |
+| 总计 | 181/200 | 182/200 | 四类同时满足 | **不可采用** |
+
+同一冻结集 SHA-256 `7b8d9651974895879a2d11a28325eb2ca86e6e046a2b6c1c345b41ab39d15f96`。
+C/D 逐项结果：`candidate-w6-C.tsv`、`candidate-w6-D.tsv`。总数提升不能抵消整句退步；日常总数相同也不代表逐项无退步。
+
+D 全部 18 项未命中（标记“新增退步”表示 C 曾命中）：
+
+| 类别 | 期望 | D 首选 | 与 C 比较 |
+| --- | --- | --- | --- |
+| 日常 | 同事 | 同时 | 原未命中 |
+| 日常 | 哪里 | 那里 | 新增退步 |
+| AI | 对齐 | 对其 | 原未命中 |
+| AI | 算力 | 算你 | 新增退步 |
+| 开发 | 埋点 | 卖点 | 原未命中 |
+| 开发 | 联调 | 链条 | 原未命中 |
+| 开发 | 前端 | 前段 | 新增退步 |
+| 开发 | 组件 | 逐渐 | 原未命中 |
+| 开发 | 异步 | 一步 | C 首选一部，均未命中 |
+| 开发 | 协程 | 写成 | 原未命中 |
+| 开发 | 线程 | 县城 | 原未命中 |
+| 开发 | 编译 | 便宜 | 原未命中 |
+| 开发 | 断点 | 断电 | 原未命中 |
+| 整句 | 很高兴认识你 | 很高兴人是你 | 新增退步 |
+| 整句 | 你现在在哪里 | 你现在在那里 | 新增退步 |
+| 整句 | 我正在学习编程 | 我正在学习变成 | 原未命中 |
+| 整句 | 我想喝一杯咖啡 | 我想和一杯咖啡 | 原未命中 |
+| 整句 | 我们下周再讨论 | 我们下走在讨论 | 原未命中 |
+
+| 实际验证 | 真实退出码 | 结论 |
+| --- | --- | --- |
+| `bash scripts/eval-candidates.sh .build/dictionary/w6/C/Rime .build/dictionary/w6/results-C` | 0 | C 181/200，四类达标 |
+| `bash scripts/eval-candidates.sh Rime .build/dictionary/w6/results-D`（当时 Rime 为 D） | 0 | D 182/200，**整句门槛失败**；脚本退出 0 仅代表评测执行/旧总分底线通过 |
+| `zsh scripts/test.sh`（D） | 1 | 164 个测试中记录 17 个失败 issue：13 个 AI `100%` 没有新 essay 频率、2 个频率下限、1 个缺“著”字、1 个整句门槛；未削弱断言 |
+| `bash scripts/test-rime-capabilities.sh`（D） | 133 | RimeChecks 在全拼日常保护“现存”得到“显存”而停止；后续检查及双拼完整回归未完成，不能声明全过 |
+| 恢复 C 后 `zsh scripts/test.sh` | 0 | 当前产品完整回归通过；个人脚本包装报告 11 项中 5 项因环境依赖跳过，不作为真实迁移验收 |
+| `bash scripts/eval-candidates.sh .build/dictionary/replay-D/Rime .build/dictionary/replay-D/results` | 0 | 按夹具 README 重建 D，仍为 182/200 / 整句 15 |
+| 重建 D 结果与保存 D `cmp` | 0 | 200 条输出逐项一致 |
+| `git diff --check` | 0 | 无空白错误 |
+
+本次 C/D 单次临时部署 2.52s / 1.48s，1878 按键同步刷新 P95 2.432ms / 1.163ms；不代表真实 IMK 性能验收。
+日志在 `.build/dictionary/w6/{C.log,D.log,tests.log,rimechecks.log,restored-C-tests.log,replay-D.log}`。
+未运行整包构建/签名/包内验证：D 已被门槛拒绝，打包接入仅保存补丁，不声称打包成功。
+未安装、注册、启动输入法；未触碰真实 Rime 目录；未改输入法 sources、个人迁移脚本或评测期望。
