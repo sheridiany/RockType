@@ -75,6 +75,7 @@ struct InputAIConfiguration: Sendable {
 final class InputAICoordinator {
     typealias Reply = @Sendable (Int64, String?, String?, NSError?) -> Void
     typealias Complete = @Sendable (InputAIConfiguration, String) async throws -> String
+    typealias DeadlineWait = @Sendable (Duration) async throws -> Void
     private struct Key: Hashable { let connection: UUID; let session: String }
     private struct Pending {
         let generation: Int64
@@ -89,13 +90,15 @@ final class InputAICoordinator {
     private var protectionWatch: Task<Void, Never>?
     private let isSecure: () -> Bool
     private let complete: Complete
+    private let waitForDeadline: DeadlineWait
 
     init(isSecure: @escaping () -> Bool = { IsSecureEventInputEnabled() },
+         waitForDeadline: @escaping DeadlineWait = { try await Task.sleep(for: $0) },
          complete: @escaping Complete = { config, prompt in
              try await AIClient(connection: config.connection, timeout: config.timeout)
                  .complete(text: prompt, apiKey: config.apiKey)
          }) {
-        self.isSecure = isSecure; self.complete = complete
+        self.isSecure = isSecure; self.complete = complete; self.waitForDeadline = waitForDeadline
     }
 
     func configure(_ values: [String: String], owner: UUID) -> NSError? {
@@ -147,8 +150,12 @@ final class InputAICoordinator {
                 self.finish(key, error: InputAIError.from(error))
             }
         }
-        let deadline = Task { [weak self] in
-            do { try await Task.sleep(for: .seconds(configuration.timeout)) } catch { return }
+        let deadline = Task { [weak self, waitForDeadline] in
+            do {
+                try Task.checkCancellation()
+                try await waitForDeadline(.seconds(configuration.timeout))
+                try Task.checkCancellation()
+            } catch { return }
             guard self?.pending[key]?.generation == generation else { return }
             self?.finish(key, error: .timeout)
         }
