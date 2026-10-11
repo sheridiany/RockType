@@ -4,12 +4,12 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 RockType contributors
 # Original AI, engineering, product, design and collaboration vocabulary.
-# Simplified text for the D experiment.
+# Simplified production vocabulary; factory homophone priorities remain protected.
 # Uncoded words are encoded by Rime from the imported character table.
 # Ambiguous domain readings are explicit in the optional third column.
 ---
 name: roarkt_ai
-version: "0.2.0"
+version: "0.3.0"
 sort: by_weight
 use_preset_vocabulary: false
 columns: [text, weight, code]
@@ -350,7 +350,7 @@ columns: [text, weight, code]
 并发	100%
 限流	800
 灰度	800
-埋点	800
+埋点	5000
 验收	100%
 需求文档	800
 技术方案	100%
@@ -369,7 +369,7 @@ columns: [text, weight, code]
 持续集成	800
 持续交付	800
 容器	100%
-镜像	100%
+镜像	4000
 数据库	100%
 缓存	100%
 队列	100%
@@ -1105,3 +1105,70 @@ columns: [text, weight, code]
 安装包	100%
 卸载	100%
 后台服务	800
+
+# 开发与协作搭配：保留短词的日常同音首选，用完整术语消歧。
+学习编程	800
+编程入门	800
+编程实践	800
+编程教程	800
+编译错误	800
+编译选项	800
+编译缓存	800
+编译优化	800
+增量编译	800
+交叉编译	800
+镜像构建	800
+镜像仓库	800
+镜像标签	800
+镜像拉取	800
+容器镜像	800
+埋点事件	800
+埋点方案	800
+埋点验证	800
+埋点数据	800
+事件埋点	800
+组件拆分	800
+组件复用	800
+组件测试	800
+异步调用	800	yi bu diao yong
+异步任务	800
+异步回调	800	yi bu hui diao
+回调函数	800	hui diao han shu
+回调地址	800	hui diao di zhi
+协程取消	800
+协程调度	800	xie cheng diao du
+线程调度	800	xian cheng diao du
+线程隔离	800
+线程切换	800
+断点调试	800	duan dian tiao shi
+条件断点	800
+接口联调	800	jie kou lian tiao
+联调环境	800	lian tiao huan jing
+联调测试	800	lian tiao ce shi
+需求澄清	800
+需求拆解	800
+需求确认	800
+需求冻结	800
+产品验收	800
+验收用例	800
+验收结论	800
+评审结论	800
+评审记录	800
+评审范围	800
+协作流程	800
+任务交接	800
+交接文档	800
+问题定位	800
+问题复盘	800
+风险评估	800
+风险跟踪	800
+上线检查	800
+上线验收	800
+发布窗口	800
+回滚方案	800
+再讨论	3000
+再确认	3000
+再评估	3000
+再检查	3000
+再验证	3000
+再沟通	3000
