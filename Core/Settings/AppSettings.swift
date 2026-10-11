@@ -64,7 +64,19 @@ public struct VoiceSettings: Codable, Equatable, Sendable {
     public var model: Model = .small
     public var automaticallyPrepareModel = false
     public var polishWithAI = false
+    public var cleanUpLocally = true
     public init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case model, automaticallyPrepareModel, polishWithAI, cleanUpLocally
+    }
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        model = try values.decode(Model.self, forKey: .model)
+        automaticallyPrepareModel = try values.decode(Bool.self, forKey: .automaticallyPrepareModel)
+        polishWithAI = try values.decode(Bool.self, forKey: .polishWithAI)
+        cleanUpLocally = try values.decodeIfPresent(Bool.self, forKey: .cleanUpLocally) ?? true
+    }
 }
 
 public struct SelectionSettings: Codable, Equatable, Sendable {

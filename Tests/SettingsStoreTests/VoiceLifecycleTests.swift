@@ -15,8 +15,13 @@ import RoarkTCore
 @MainActor private final class WorkerDouble: VoiceRecognizing {
     var stopped = 0
     var prepared = 0
+    var preparation: CheckedContinuation<Void, any Error>?
+    var delayPreparation = false
     var pending: CheckedContinuation<String, any Error>?
-    func prepare(directory: URL) async throws { prepared += 1 }
+    func prepare(directory: URL) async throws {
+        prepared += 1
+        if delayPreparation { try await withCheckedThrowingContinuation { preparation = $0 } }
+    }
     func transcribe(_ audio: Data) async throws -> String {
         try await withCheckedThrowingContinuation { pending = $0 }
     }
@@ -45,6 +50,7 @@ import RoarkTCore
     var pid: Int32? = 10
     var granted = true
     var validModel = true
+    var present = true
     var settings = VoiceSettings()
     var selected = false
     var polish: @MainActor (String) async -> String = { $0 }
@@ -54,7 +60,7 @@ import RoarkTCore
             validate: { _ in
                 guard self.validModel else { throw VoiceFailure.model }
                 return URL(fileURLWithPath: "/synthetic-model")
-            }, shortcutEnabled: { true }, inputSourceSelected: { self.selected },
+            }, shortcutEnabled: { true }, modelPresent: { _ in self.present }, inputSourceSelected: { self.selected },
             polish: { await self.polish($0) }), presentsHUD: false)
     func begin() async {
         controller.start(monitorEvents: false); controller.press()
@@ -76,8 +82,8 @@ import RoarkTCore
     #expect(h.worker.pending != nil)
     h.worker.resolve("合成测试结果")
     for _ in 0..<20 { await Task.yield() }
-    #expect(h.bridge.texts == ["合成测试结果"])
-    #expect(h.controller.state.result == "合成测试结果")
+    #expect(h.bridge.texts == ["合成测试结果。"])
+    #expect(h.controller.state.result == "合成测试结果。")
     #expect(h.controller.state.phase == .failed)
     h.controller.stop()
 }
@@ -109,6 +115,7 @@ import RoarkTCore
     invalid.validModel = false
     await invalid.begin(); await invalid.recognize()
     #expect(invalid.worker.prepared == 0)
+    #expect(invalid.recorder.starts == 0)
     #expect(invalid.bridge.texts.isEmpty)
     invalid.controller.stop()
 }
@@ -193,6 +200,7 @@ import RoarkTCore
     h.worker.resolve("AI 前的合成原文")
     for _ in 0..<30 { await Task.yield() }
     #expect(pending != nil)
+    #expect(h.controller.state.phase == .polishing)
     h.controller.cancel()
     pending?.resume(returning: "迟到的 AI 合成文本")
     for _ in 0..<30 { await Task.yield() }
@@ -212,5 +220,73 @@ import RoarkTCore
     for _ in 0..<30 { await Task.yield() }
     #expect(h.bridge.texts.isEmpty)
     #expect(h.controller.state.phase == .recording)
+    h.controller.stop()
+}
+
+@MainActor @Test func voiceColdLoadDoesNotOpenMicAndReleaseDiscardsLateLoad() async {
+    let h = VoiceHarness()
+    h.worker.delayPreparation = true
+    await h.begin()
+    #expect(h.controller.state.phase == .loading)
+    #expect(h.controller.state.message == "模型加载中…")
+    #expect(h.recorder.starts == 0)
+    h.held = false; h.controller.release()
+    h.worker.preparation?.resume(); h.worker.preparation = nil
+    for _ in 0..<30 { await Task.yield() }
+    #expect(h.recorder.starts == 0)
+    #expect(h.controller.state.phase == .hidden)
+    h.controller.stop()
+}
+
+@MainActor @Test func voiceMissingModelNeverRecords() async {
+    let h = VoiceHarness()
+    h.present = false
+    await h.begin()
+    #expect(h.recorder.starts == 0)
+    #expect(h.worker.prepared == 0)
+    #expect(h.controller.state.phase == .failed)
+    h.controller.stop()
+}
+
+@MainActor @Test func voiceEmptyRecognitionDismissesWithoutModelError() async throws {
+    let h = VoiceHarness()
+    await h.begin(); await h.recognize()
+    #expect(h.controller.state.phase == .recognizing)
+    h.worker.resolve("  ")
+    for _ in 0..<30 { await Task.yield() }
+    #expect(h.controller.state.message == "未检测到有效声音，请重试。")
+    #expect(h.bridge.texts.isEmpty)
+    try await Task.sleep(for: .milliseconds(2200))
+    #expect(h.controller.state.phase == .hidden)
+    h.controller.stop()
+}
+
+@MainActor @Test func voiceCleanupSwitchAndPolishFallbackUseSameText() async {
+    for enabled in [true, false] {
+        let h = VoiceHarness()
+        h.settings.cleanUpLocally = enabled
+        h.settings.polishWithAI = true
+        var received = ""
+        h.polish = { text in received = text; return text }
+        await h.begin(); await h.recognize()
+        h.worker.resolve("嗯，合成  测试")
+        for _ in 0..<30 { await Task.yield() }
+        let expected = enabled ? "合成 测试。" : "嗯，合成  测试"
+        #expect(received == expected)
+        #expect(h.bridge.texts == [expected])
+        h.controller.stop()
+    }
+}
+
+@MainActor @Test func voiceFillerOnlyResultDoesNotPolishOrInsert() async {
+    let h = VoiceHarness()
+    var calls = 0
+    h.polish = { text in calls += 1; return text }
+    await h.begin(); await h.recognize()
+    h.worker.resolve("嗯，呃。")
+    for _ in 0..<30 { await Task.yield() }
+    #expect(calls == 0)
+    #expect(h.bridge.texts.isEmpty)
+    #expect(h.controller.state.message == "未检测到有效声音，请重试。")
     h.controller.stop()
 }

@@ -63,6 +63,7 @@ import RoarkTPlatform
     private var attemptedPreparation: String?
     private var observedSettings: VoiceSettings?
     private var idleTicks = 0
+    private var dismissal: Task<Void, Never>?
 
     init(store: SettingsStore = .shared, models: VoiceModelStore = .shared,
          recorder: (any VoiceRecording)? = nil, worker: (any VoiceRecognizing)? = nil,
@@ -145,7 +146,7 @@ import RoarkTPlatform
 
     func press() {
         guard running, environment.shortcutEnabled(), environment.allowed(), environment.held() else { return }
-        let idle = ![.preparing, .recording, .recognizing].contains(state.phase)
+        let idle = ![.preparing, .loading, .recording, .recognizing, .polishing].contains(state.phase)
         let keepPrepared = idle && environment.settings().automaticallyPrepareModel && environment.inputSourceSelected() &&
             preparedModel == VoiceModel(environment.settings().model)
         reset(preservingPrepared: keepPrepared)
@@ -160,6 +161,7 @@ import RoarkTPlatform
         guard let pid = environment.pid() else { return }
         sourcePID = pid
         let id = session
+        let model = VoiceModel(environment.settings().model)
         show(.preparing, "正在绑定输入位置…")
         task = Task { [weak self] in
             guard let self else { return }
@@ -168,21 +170,33 @@ import RoarkTPlatform
                 guard session == id, !Task.isCancelled else { return }
                 target = captured
                 guard environment.held(), environment.allowed(), environment.pid() == pid else { cancel(); return }
+                if preparedModel != model {
+                    show(.loading, "模型加载中…")
+                    let directory = try await environment.validate(model)
+                    guard session == id, !Task.isCancelled, environment.allowed() else { return }
+                    try await worker.prepare(directory: directory)
+                    guard session == id, !Task.isCancelled, environment.allowed() else { return }
+                    preparedModel = model
+                }
+                guard environment.held(), environment.allowed(), environment.pid() == pid else { cancel(); return }
                 try recorder.start()
                 recordingStarted = ProcessInfo.processInfo.systemUptime
                 show(.recording, "录音中")
             } catch {
                 guard session == id else { return }
-                Self.log.error("binding failed: \(String(describing: error), privacy: .public)")
+                Self.log.error("voice preparation failed: \(String(describing: error), privacy: .private)")
+                worker.stop(); preparedModel = nil
                 bridge.cancel(target); target = nil
-                show(.failed, "无法绑定输入位置，请选中 RockType 输入法后重试。")
+                show(.failed, state.phase == .loading
+                     ? "模型未就绪，请检查设置 → 语音中的下载与校验状态。"
+                     : "无法绑定输入位置，请选中 RockType 输入法后重试。")
             }
         }
     }
     func release() {
         guard running else { return }
         guard state.phase == .recording, let target else {
-            if state.phase == .preparing { cancel() }
+            if [.preparing, .loading].contains(state.phase) { cancel() }
             return
         }
         // Close the microphone synchronously, before scheduling model work.
@@ -191,28 +205,29 @@ import RoarkTPlatform
         guard environment.allowed() else { cancel(); return }
         guard !audio.isEmpty else {
             bridge.cancel(target); self.target = nil
-            show(.failed, "未检测到有效声音，请重试。")
+            showNoSpeech()
             return
         }
         let id = session
-        let model = VoiceModel(environment.settings().model)
         show(.recognizing, "正在本机识别…")
         task = Task { [weak self] in
             guard let self else { return }
             do {
-                if preparedModel != model {
-                    let directory = try await environment.validate(model)
-                    guard session == id, !Task.isCancelled, environment.allowed() else { return }
-                    try await worker.prepare(directory: directory)
-                    guard session == id, !Task.isCancelled, environment.allowed() else { return }
-                    preparedModel = model
-                }
                 let text = try await worker.transcribe(audio)
                 guard session == id, !Task.isCancelled, environment.allowed() else { return }
-                let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !normalized.isEmpty else { throw VoiceFailure.empty }
+                let normalized = environment.settings().cleanUpLocally
+                    ? VoiceTextCleaner.clean(text)
+                    : text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !normalized.isEmpty else {
+                    bridge.cancel(target); self.target = nil
+                    if !environment.settings().automaticallyPrepareModel || !environment.inputSourceSelected() {
+                        worker.stop(); preparedModel = nil
+                    }
+                    showNoSpeech()
+                    return
+                }
                 state.result = normalized
-                if environment.settings().polishWithAI { show(.recognizing, "正在润色…") }
+                if environment.settings().polishWithAI { show(.polishing, "正在润色…") }
                 let polished = await environment.polish(normalized)
                 guard session == id, !Task.isCancelled, environment.allowed() else { return }
                 state.result = polished
@@ -238,6 +253,7 @@ import RoarkTPlatform
     func cancel() { reset(preservingPrepared: false) }
 
     private func reset(preservingPrepared: Bool) {
+        dismissal?.cancel(); dismissal = nil
         session = UUID()
         preparationID = UUID(); preparation?.cancel(); preparation = nil
         attemptedPreparation = nil
@@ -255,11 +271,11 @@ import RoarkTPlatform
         if idleTicks >= 20 { idleTicks = 0; refreshPreparation() }
         guard state.phase != .hidden else { return }
         if !environment.allowed() {
-            if [.preparing, .recording, .recognizing].contains(state.phase) || !state.result.isEmpty { cancel() }
+            if [.preparing, .loading, .recording, .recognizing, .polishing].contains(state.phase) || !state.result.isEmpty { cancel() }
             return // Keep permission guidance visible; it contains no captured content.
         }
         if !environment.shortcutEnabled() { cancel(); return }
-        if state.phase == .preparing, !environment.held() { cancel(); return }
+        if [.preparing, .loading].contains(state.phase), !environment.held() { cancel(); return }
         guard state.phase == .recording, let recordingStarted else { return }
         if !recorder.isRecording { cancel(); return }
         if !environment.held() { release(); return }
@@ -277,7 +293,7 @@ import RoarkTPlatform
         observedSettings = settings
         let selected = environment.inputSourceSelected()
         let shouldPrepare = settings.automaticallyPrepareModel && selected
-        let active = [.preparing, .recording, .recognizing].contains(state.phase)
+        let active = [.preparing, .loading, .recording, .recognizing, .polishing].contains(state.phase)
         if !shouldPrepare {
             // An in-flight dictation may finish; do not stop its worker merely on source change.
             if !active {
@@ -306,6 +322,17 @@ import RoarkTPlatform
                 guard preparationID == id else { return }
                 worker.stop(); preparedModel = nil
             }
+        }
+    }
+
+    private func showNoSpeech() {
+        show(.failed, "未检测到有效声音，请重试。")
+        let id = session
+        dismissal = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(2)) } catch { return }
+            guard let self, session == id else { return }
+            state.phase = .hidden; state.message = ""
+            hud?.hide()
         }
     }
 
