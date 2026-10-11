@@ -3,6 +3,7 @@ import Testing
 import RoarkTCore
 import RoarkTXPCProtocol
 @testable import RoarkTTranslationService
+@testable import RoarkTApp
 
 private func aiConfig(timeout: String = "1") -> [String: String] {
     ["baseURL": "https://example.invalid/v1", "model": "synthetic-model", "apiKey": "synthetic-test-key",
@@ -207,4 +208,33 @@ private final class AIListener: NSObject, NSXPCListenerDelegate, @unchecked Send
         }
     }
     #expect(response.source == "Synthetic source" && response.result == "Synthetic result")
+}
+
+@Test @MainActor func inputAIAppClientPublishesAndRevokesOverAnonymousXPC() async throws {
+    let ai = InputAICoordinator(isSecure: { false }, complete: { _, _ in "Synthetic result" })
+    let service = TranslationXPCService(coordinator: TranslationCoordinator(inputAI: ai), role: .mainApp)
+    let delegate = AIListener(service)
+    let listener = NSXPCListener.anonymous(); listener.delegate = delegate; listener.resume()
+    defer { delegate.stop(); listener.invalidate() }
+    var count = 0
+    let client = InputAIConfigurationClient(makeConnection: {
+        count += 1; return NSXPCConnection(listenerEndpoint: listener.endpoint)
+    })
+    try await client.configure(aiConfig())
+    #expect(await aiPerform(ai).result == "Synthetic result")
+    try await client.configure([:])
+    #expect(await aiPerform(ai).code == 101)
+    try await client.configure(aiConfig())
+    client.clearAndInvalidate()
+    var cleared = false
+    let deadline = ContinuousClock.now + .seconds(3)
+    while !cleared, ContinuousClock.now < deadline {
+        cleared = await aiPerform(ai).code == 101
+        await Task.yield()
+    }
+    #expect(cleared)
+    try await client.configure(aiConfig())
+    #expect(count == 2)
+    #expect(await aiPerform(ai).result == "Synthetic result")
+    client.invalidate()
 }

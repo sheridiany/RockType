@@ -22,7 +22,7 @@
 | # | 任务 | 执行 | 状态 |
 | --- | --- | --- | --- |
 | E-1 | XPC 协议新增 `configureAI`、`rewriteCandidate`；服务实现（内存配置、取消、超时、错误码、鉴权） | pi-xpc | E-1 代码与自动化通过；真实安装鉴权待 Claude 验收 |
-| E-2 | 主 App 下发配置：启动、AI 设置/模板/密钥变化、退出清空；设置中输入法 AI 开关与快捷键项 | pi-xpc | 未开始 |
+| E-2 | 主 App 下发配置：启动、AI 设置/模板/密钥变化、退出清空；设置中输入法 AI 开关与快捷键项 | pi-xpc | E-2 代码与自动化通过；AppDelegate 接线及 UI 验收待 Claude |
 | E-3 | 输入法侧：触发键、请求、译文栏 AI 状态、Tab 上屏、作废规则 | pi-ime（M1 合并后） | 未开始 |
 | E-4 | 验收 | Claude + 用户 | 未开始 |
 
@@ -35,7 +35,7 @@
 | 鉴权：输入法不能 configureAI，主 App 不能 rewriteCandidate | 服务测试 | 通过 | `InputAITests` 角色拒绝与共享 generation 测试；真实签名安装场景待人工 |
 | 未配置 / 配置清空后返回明确错误 | 服务测试 | 通过 | 空配置、无配置、非法替换配置、配置所属连接断开均撤销 |
 | generation 取消与迟到丢弃 | 服务测试 | 通过 | 忽略取消的受控 backend；取消立即回复、deadline 独立终止、旧结果丢弃 |
-| 密钥不落盘、不进日志 | 代码检查 + 测试 | E-1 通过；E-2 待实现 | 内存配置；AIClient ephemeral 会话；固定错误映射，未透传服务商错误内容 |
+| 密钥不落盘、不进日志 | 代码检查 + 测试 | 自动化与代码检查通过 | 内存配置；AIClient ephemeral 会话；固定错误映射，未透传服务商错误内容；主 App 持久化测试确认未写入密钥 |
 | 打字期间 AI 请求不影响按键延迟 | 手工 | 待人工验证 | |
 | 真实 AI 改写 / 润色 / 翻译上屏 | 手工 | 待人工验证 | |
 
@@ -49,5 +49,16 @@
 - 验证：`swift test --filter RoarkTTranslationServiceTests` 退出 0（45 tests）；补匿名 XPC 字典/回复往返后 `scripts/test.sh` 退出 0（131 tests、Rime 部署、Hotkey/Permission checks 均通过）。首次编译因 actor 隔离报错退出 1，已修复并通过上述复测。
 - 未运行安装、LaunchAgent 加载、真实端点请求、真实签名安装鉴权和键盘验收；这些不由单元测试替代。
 
+### E-2（2026-10-11）
+
+- 提供 `App/Features/InputAI/InputAIController` 的 `start()/stop()`：启动下发，监听 SettingsStore（AI 配置、模板、输入法 AI 设置）与无内容钥匙串事件；事件注册失败时每 2 秒重读。专用 XPC 客户端做签名绑定、串行更新、超时/取消与断连重试，停止时下发空配置后关闭连接。
+- `InputSettings.inputAI` 新增可选设置（缺失时默认关闭、`⌥Tab`、30 秒）；通过现有设置文件和通知同步到输入法。未使用旧的 `ShortcutSettings.inputMethodAI` 占位字段，不做迁移。设置 → 快捷键新增开关、录制、清除、恢复默认和与已配置全局键的冲突提示；不把输入法按键注册为全局键。
+- 验证：`swift test --filter inputAI` 退出 0（13 tests）；补匿名 XPC 主 App 客户端下发/清空/重连及快捷键冲突检查后，`scripts/test.sh` 退出 0（139 tests + Rime + Hotkey/Permission checks）。初次编译因 Swift 6 通知隔离与 Security 枚举导入名称报错，已修复并通过复测。
+- 验证覆盖启动、重复 start/stop、设置/模板/模拟钥匙串变化、删除密钥、读取失败、并发编辑时串行下发、停止后重启、配置不含密钥的持久化、IME 设置投影。系统钥匙串回调实机送达与设置 UI 走查待人工。
+- 未改 AppDelegate。Claude 集成时持有一个 `InputAIController`，设置就绪后调用 `start()`，`applicationWillTerminate` 调用 `stop()`。在此接线与 E-3 完成前，不能宣称输入法内 AI 已端到端可用。
+- 已按通知在 E-1 后执行 `git merge main`，取得本机环境规则。E-2 提交后将再次合入 main，并复用新增 `AIClient.isAllowedEndpoint` 统一地址校验。
 
 ## 问题
+
+- 待 Claude 集成 AppDelegate 生命周期并从 main 做安装/签名鉴权、真实端点、按键 P95、三动作 Tab 上屏、Secure Input/密码框与浅深色 UI/键盘/VoiceOver 验收。
+- 钥匙串事件接口为 macOS 现有但已标记 deprecated 的 `SecKeychainAddCallback`；注册失败有重读兜底。需实机验证更换、删除、锁定钥匙串时配置能撤销/刷新。

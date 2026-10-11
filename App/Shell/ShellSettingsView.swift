@@ -81,7 +81,7 @@ struct ShellSettingsView: View {
         case .screenshot: screenshot
         case .ai: ShellConnectionView(model: connection, settings: $settings.ai)
         case .templates: sections.templatesPane(settings: $settings, showAIConnection: { section = .ai })
-        case .shortcuts: sections.shortcutsPane()
+        case .shortcuts: sections.shortcutsPane(settings: $settings)
         case .permissions: sections.permissionsPane()
         case .privacy: privacy
         case .about: about
