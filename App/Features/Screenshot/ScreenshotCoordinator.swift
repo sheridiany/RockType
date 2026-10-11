@@ -83,6 +83,8 @@ import os
             guard let self, self.running, self.allowed() else { return }
             self.openImage(image, origin: action == .translate ? "贴图 · 核对文字后点击翻译" : "贴图")
             if action == .save { self.session?.save() }
+            else if action == .translateImage { self.session?.translateImage() }
+            else if action == .barcodes { self.session?.recognizeCodes() }
             else if action == .translate { self.session?.prepareImage(action: .translate) }
             else { self.session?.runOCR(copyAfter: action == .copyText) }
         }
