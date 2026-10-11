@@ -47,15 +47,27 @@ import ScreenCaptureKit
         refreshGeneration += 1
         refreshTask?.cancel(); refreshTask = nil; content = nil
     }
+    /// Explicit screen capture needs screen-recording permission, not AX permission.
+    /// Keep fail-closed password/unavailable handling when AX inspection is available.
+    public static var isReadable: Bool { permitsCapture(SecureInput.status()) }
+    public static func permitsCapture(_ status: SecureInput.Status) -> Bool {
+        switch status { case .allowed, .noPermission: true; case .secureInput, .unavailable: false }
+    }
+    private static func requireReadable() throws {
+        let status = SecureInput.status()
+        guard permitsCapture(status) else {
+            throw status == .unavailable ? PlatformReadError.unavailable : PlatformReadError.secureInput
+        }
+    }
     public enum Failure: Error { case permission, unavailable }
     public static func capture() async throws -> [Frame] {
-        try SecureInput.requireReadable()
+        try requireReadable()
         guard Permissions.status(for: .screenRecording) == .granted else { throw Failure.permission }
         let content: SCShareableContent
         if let cached = self.content { content = cached }
         else { content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true); self.content = content }
         try Task.checkCancellation()
-        try SecureInput.requireReadable()
+        try requireReadable()
         // Snapshot at capture time, not the older warmed SCShareableContent window list.
         let windowInfo = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
         let desktopTop = NSScreen.screens.first?.frame.maxY ?? 0
@@ -64,7 +76,7 @@ import ScreenCaptureKit
         defer { captures.forEach { $0.cancel() } }
         for screen in NSScreen.screens {
             try Task.checkCancellation()
-            try SecureInput.requireReadable()
+            try requireReadable()
             guard let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber,
                   let display = content.displays.first(where: { $0.displayID == number.uint32Value }) else {
                 throw Failure.unavailable
@@ -79,10 +91,10 @@ import ScreenCaptureKit
                 ownPID: ProcessInfo.processInfo.processIdentifier)
             captures.append(Task { @MainActor in
                 try Task.checkCancellation()
-                try SecureInput.requireReadable()
+                try requireReadable()
                 let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
                 try Task.checkCancellation()
-                try SecureInput.requireReadable()
+                try requireReadable()
                 return Frame(displayID: display.displayID, rect: rect, image: image, windows: windows)
             })
         }
