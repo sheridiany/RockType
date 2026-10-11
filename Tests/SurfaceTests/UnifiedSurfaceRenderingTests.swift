@@ -25,12 +25,15 @@ extension UnifiedSurfaceRenderingTests {
     @Test func renderProductionMenuPanel() throws {
         guard let path = ProcessInfo.processInfo.environment["ROARKT_SURFACE_RENDER_DIR"] else { return }
         _ = NSApplication.shared
+        try FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true)
         let clock = MenuBarClock()
         clock.refresh(at: Date(timeIntervalSince1970: 1_728_662_400))
         clock.stop()
         for dark in [false, true] {
             let view = ShellMenuBarPanel(clock: clock, showClock: true,
-                aiStatus: "AI 已配置 · 文字、流式与图片能力待验证", showSettings: {}, quit: {})
+                aiStatus: "AI 已配置 · 文字、流式与图片能力待验证",
+                screenshot: ScreenshotCoordinator(allowed: { false }), pinHistoryCount: 2,
+                hasPassthroughPins: true, showSettings: {}, quit: {})
                 .environment(\.colorScheme, dark ? .dark : .light)
                 .frame(width: Tokens.Size.menuWidth)
             let hosting = NSHostingView(rootView: view)

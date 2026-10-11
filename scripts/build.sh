@@ -27,6 +27,9 @@ app="$repo_dir/dist/RockType.app"
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Helpers" "$app/Contents/Resources"
 cp "$repo_dir/App/Info.plist" "$app/Contents/Info.plist"
+# About links must work in signed development builds as well as installer builds.
+ditto "$repo_dir/LICENSES" "$app/Contents/Resources/Licenses"
+cp "$repo_dir/THIRD_PARTY_NOTICES.md" "$app/Contents/Resources/Licenses/"
 # MIT-authored vocabulary, independent of the GPL input-method executable.
 cp "$repo_dir/Rime/roarkt_ai.dict.yaml" "$app/Contents/Resources/VoiceVocabulary.dict.yaml"
 cp "$bin_dir/RoarkTApp" "$app/Contents/MacOS/RockType"

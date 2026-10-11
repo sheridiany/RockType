@@ -33,7 +33,7 @@ struct PinnedImageHistory {
         let locked: Bool
         var bytes: Int { image.bytesPerRow * image.height }
     }
-    let limit: Int
+    private(set) var limit: Int
     let byteLimit: Int
     private(set) var entries: [Entry] = []
     init(limit: Int = 10, byteLimit: Int = 64 * 1024 * 1024) {
@@ -43,6 +43,10 @@ struct PinnedImageHistory {
         guard limit > 0, entry.bytes <= byteLimit else { return }
         entries.append(entry)
         while entries.count > limit || entries.reduce(0, { $0 + $1.bytes }) > byteLimit { entries.removeFirst() }
+    }
+    mutating func setLimit(_ value: Int) {
+        limit = min(50, max(0, value))
+        if entries.count > limit { entries.removeFirst(entries.count - limit) }
     }
     mutating func removeLast() { if !entries.isEmpty { entries.removeLast() } }
     mutating func clear() { entries.removeAll() }
@@ -117,6 +121,12 @@ enum PinnedImageAction { case save, ocr, copyText, translate }
         panel.ignoresMouseEvents = false
         updateMenu()
         return true
+    }
+
+    func setHistoryLimit(_ value: Int) {
+        history.setLimit(value)
+        updateMenu()
+        if panels.isEmpty && history.entries.isEmpty { protectionTask?.cancel(); protectionTask = nil }
     }
 
     @objc private func restoreFromMenu() { _ = restoreLast() }

@@ -29,11 +29,17 @@ final class MenuBarPanelController {
     func toggle<Content: View>(from button: NSStatusBarButton, @ViewBuilder content: () -> Content) {
         if panel.isVisible { close(); return }
         guard let buttonWindow = button.window else { return }
-        let hosting = NSHostingView(rootView: content())
+        let root = content()
+        let hosting = NSHostingView(rootView: root)
         panel.contentView = hosting
-        let size = hosting.fittingSize
+        var size = hosting.fittingSize
         let anchor = buttonWindow.convertToScreen(button.convert(button.bounds, to: nil))
         let visible = buttonWindow.screen?.visibleFrame ?? anchor
+        if size.height > visible.height - Tokens.Space.lg {
+            size.height = max(1, visible.height - Tokens.Space.lg)
+            panel.contentView = NSHostingView(rootView: ScrollView { root }
+                .frame(width: size.width, height: size.height))
+        }
         let x = max(visible.minX, min(anchor.maxX - size.width, visible.maxX - size.width))
         let y = max(visible.minY, min(anchor.minY - size.height, visible.maxY - size.height))
         panel.setFrame(NSRect(origin: NSPoint(x: x, y: y), size: size), display: true)
@@ -78,6 +84,11 @@ struct ShellMenuBarPanel: View {
     var clear: () -> Void = {}
     var screenshot: ScreenshotCoordinator?
     var capture: () -> Void = {}
+    var pinHistoryCount = 0
+    var restorePin: () -> Void = {}
+    var hasPassthroughPins = false
+    var exitPinPassthrough: () -> Void = {}
+    var prepareImageAction: () -> Void = {}
     let showSettings: () -> Void
     let quit: () -> Void
     @Environment(\.colorScheme) private var scheme
@@ -131,7 +142,13 @@ struct ShellMenuBarPanel: View {
             Button(action: capture) {
                 HStack { Label("截图", systemImage: "viewfinder"); Spacer(); Text("框选屏幕").font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(p.secondary) }
             }.buttonStyle(DesignButtonStyle(variant: .secondary))
-            if let screenshot { ScreenshotImportControls(coordinator: screenshot) }
+            if let screenshot { ScreenshotImportControls(coordinator: screenshot, prepare: prepareImageAction) }
+            Button("找回最近关闭的贴图（\(pinHistoryCount)）", action: restorePin)
+                .buttonStyle(DesignButtonStyle(variant: .ghost)).disabled(pinHistoryCount == 0)
+            if hasPassthroughPins {
+                Button("退出贴图鼠标穿透", action: exitPinPassthrough)
+                    .buttonStyle(DesignButtonStyle(variant: .secondary))
+            }
             U4Rule()
             Label(aiStatus, systemImage: "sparkles")
                 .font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(p.secondary)
