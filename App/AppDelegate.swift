@@ -13,10 +13,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let panel = MenuBarPanelController()
     private let diagnostics = DiagnosticExportController()
     private let permissions = PermissionCenter()
+    private let comingSoon = ComingSoonController()
     private lazy var hotkeys = HotkeyCenter(
         read: { [unowned self] in self.store.settings.shortcuts },
         write: { [unowned self] in self.store.settings.shortcuts = $0 },
-        showSettings: { [weak self] in self?.showSettings() })
+        showSettings: { [weak self] in self?.showSettings() },
+        comingSoon: { [weak self] in self?.comingSoon.show($0) })
     private lazy var onboarding = OnboardingWindowController(
         store: store,
         permissions: { [unowned self] in AnyView(PermissionCenterView(center: self.permissions)) },
@@ -34,6 +36,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // The design gallery has no production listeners, preference writes or onboarding.
+        if CommandLine.arguments.contains("--gallery") { gallery.show(); return }
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.image = Self.statusImage()
         item.button?.imagePosition = .imageLeading
@@ -56,12 +60,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 status: store.persistenceError == nil ? .succeeded : .failed,
                 failure: store.persistenceError == nil ? nil : .storage))
         }
-        if CommandLine.arguments.contains("--gallery") {
-            gallery.show()
-        } else {
-            permissions.start()
-            hotkeys.start()
-        }
+        permissions.start()
+        hotkeys.start()
         onboarding.applicationDidFinishLaunching()
     }
 
@@ -72,6 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         connection.cancel()
         hotkeys.stop()
+        comingSoon.stop()
         permissions.stop()
         clock.stop()
         panel.stop()
