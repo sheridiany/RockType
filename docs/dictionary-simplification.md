@@ -33,3 +33,23 @@ AI 文本列转换，读音与权重不动；第一轮仍有 13 个 `100%` 词�
 octagram 参数依据 `lotem/librime-octagram@57d18b9f58e5284bd891d559f6bdd16cf60341e9` 的 `src/octagram.cc`；只读取搭配长度及四种 penalty，没有 `grammar/weight`。本次运行日志确认加载所选模型；不以仅写入 YAML 作为参数有效性的证据。
 
 第二轮复现：`bash scripts/dictionary/prepare-trial.sh r2-max bgw 4 3 max`，随后按相同命令评测该目录。`max` 只对同词同编码取原始解析频率最大值，不调整其他频率。
+
+## 第三轮：语义与频率继承
+
+```sh
+for mode in semantics floor; do
+  bash scripts/dictionary/prepare-trial.sh "r3-$mode" bgw 4 3 sum
+  swift scripts/dictionary/correct-trial.swift ".build/dictionary/w6/trials/r3-$mode" InputMethod/data/plum "$mode"
+  bash scripts/eval-candidates.sh ".build/dictionary/w6/trials/r3-$mode/Rime" ".build/dictionary/w6/trials/r3-$mode/results"
+  # 预计失败，真实退出码 133；不修改任何断言。
+  bash scripts/test-rime-capabilities.sh ".build/dictionary/w6/trials/r3-$mode/Rime"
+done
+```
+
+- 主词表重新从原始 Luna 生成，保持 sum。按编码保留 `著 zhu`、`乾 qian`、`藉 ji`，恢复 `瞭 liao`；按词义校正乾坤/乾隆、瞭望、慰藉/蕴藉、借口/借助/凭借。54 条与纯 ICU 不同（包括妳→你），输出 67,549 条；明细只生成在本地 `corrections.tsv`。
+- 两组均把简体上游 essay 残存的繁体用 ICU 规范化，同词用最大值，避免频率估计相加。AI 按最终预置词频统一使用 `100%`（≥800），缺失或不足800使用原领域优先级800；不对评测单题加词。
+- `semantics` 的 essay 规范化后 239,164 条；`floor` 再对所有转换后的原 essay 词条取 `max(新频率, C原频率)`，得到438,486条。不同来源是频率估计，不是可直接相加的独立语料；此规则用于维持 C 的频率下限，不按评测逐词调权。
+- `floor` 的派生 essay 同时来自已核实的 LGPL-3.0 简体上游与仓库原 essay；原 essay 的精确历史来源限制仍适用。数据仅在 `.build/`，未打包。
+- bgc 数据 SHA-256：`c52deb56b1642e4f56a18926fffcb4b70385828f921bfac92c5ff4055cce5377`。
+
+**三轮后停止，产品仍为 C。** 最接近交付的是 `r3-floor`：79/18/30/57，保留 C 的181条原命中；RimeChecks 在“链条→炼条”失败。源 essay 的“鍊條”和“鏈條”各2071，ICU 前者变成“炼条”，后者变成“链条”，两者同频；这是尚未处理的词义歧义，不能把评测达标视为全简体质量已通过。没有继续第四轮校正。`r3-semantics` 总分更高（186），但“现存→显存”仍失败。

@@ -86,3 +86,11 @@ and `LICENSES/rime-octagram-data/`, together with `LICENSES/GPL-3.0.txt`.
 Large experimental resources live only under ignored `.build/dictionary/w6/`;
 only accepted production resources will be shipped. See the reproduction commands
 in `docs/dictionary-simplification.md`.
+
+The final W-6 trial also derives a normalized essay from the pinned simplified
+essay and the existing bundled essay, taking the maximum frequency for each
+simplified word. `scripts/dictionary/correct-trial.swift` applies reading/meaning
+corrections to the Luna derivative and records the changed entries locally.
+Both derived dictionaries remain LGPL-3.0 and are stored only in `.build/`:
+three trial rounds did not pass all RimeChecks, so production resources remain C.
+The existing bundled essay's exact historical provenance caveat still applies.
