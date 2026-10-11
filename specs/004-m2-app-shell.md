@@ -84,7 +84,7 @@
 
 ## 进度
 
-（S1 第一个 commit 后在此登记。）
+Settings 模型已提交：f87c60a。`Core/Settings/AppSettings.swift` 为公共接口，`scripts/test.sh` 通过（40 tests + Rime 部署与标识检查）。S1 后续存储、AI 与诊断进行中。
 
 ## 问题
 
