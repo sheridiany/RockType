@@ -14,7 +14,7 @@ public struct ContentSnapshot: Equatable, Sendable, Identifiable {
             self.windowIdentifier = windowIdentifier
         }
     }
-    public enum CaptureMethod: String, Sendable { case accessibility, copyFallback, paste }
+    public enum CaptureMethod: String, Sendable { case accessibility, copyFallback, paste, screenshotOCR }
     public let id: UUID
     public let text: String
     public let source: Source

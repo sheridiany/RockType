@@ -95,7 +95,7 @@ import Testing
         _ = NSApplication.shared
         let controller = ResultWindowController(runner: ControlledRunner(), settings: { .defaults }, feedback: { _ in })
         let snapshot = ContentSnapshot(text: "This is synthetic preview content.\nA second paragraph preserves spacing.",
-                                       source: .init(pid: 0, applicationName: "Preview"), method: .accessibility)
+                                       source: .init(pid: 0, applicationName: "Preview"), method: .screenshotOCR)
         let session = OperationSession(snapshot: snapshot,
                                        turns: [.init(question: "", answer: "这是用于界面检查的合成内容。\n\n• 保留段落与列表\n• 复制后自行粘贴")])
         let result = OperationResult(session: session, templateID: "summarize", text: session.turns[0].answer, engine: "Preview model")

@@ -30,6 +30,7 @@
 | D-2 | 标注工具与原始分辨率合成、撤销 | pi-xpc | 已实现，待人工验收 |
 | D-3 | 完成/保存、OCR、翻译、图片理解 | pi-xpc | 已实现，待集成与人工验收 |
 | D-4 | 剪贴板图片与拖入图片入口 | pi-xpc | 已实现，待菜单栏集成与人工验收 |
+| D-3a | 截图 OCR 独立取词方式与显示 | pi-xpc | 已完成，自动化通过 |
 | D-5 | 验收 | Claude + 用户 | 未开始 |
 
 **文件所有权**：`App/Features/Screenshot/`、`App/Surfaces/` 中截图编辑器与图片预览视图（只做接线需要的最小调整，保持 Gallery 可渲染）、`App/Shell/Hotkeys/` 中截图动作一处、`Platform/` 补充（捕获）、对应 `Tests/`。`AppDelegate` 接线由 Claude 集成（提供 `start()`/`stop()`）。
@@ -48,7 +49,11 @@
 | `scripts/test.sh`、`scripts/build.sh`、`scripts/render-gallery.sh` | 命令 | 通过 | 2026-10-11：32 XCTest + 91 Swift Testing、Rime 部署及标识检查通过；全部产物构建签名通过；Gallery 输出 208 张 PNG。Gallery 只验证原型可渲染，不代表实际编辑器已验收 |
 | 外部图片导入 | 单元测试 + 手工 | 自动化通过；待人工验证 | `ImportTests`：PNG 尺寸、损坏/超限数据拒绝、远程 URL/目录拒绝、图片与文件拖放类型识别；真实拖放及剪贴板待集成 |
 
+| 截图 OCR 独立取词方式与显示 | 回归测试 | 通过 | `SessionTests.testTextOperationsUseEditedOCRMethodAndSettings` 验证翻译/总结保留修正后文字并使用 `.screenshotOCR`；`ResultWindowTests.renderLiveSurface` 覆盖此类型的深浅色渲染。`scripts/test.sh`：32 XCTest、114 Swift Testing、Rime、快捷键、权限与标识检查全部通过。通用浮窗实际接线及人工走查留待 M3-6 后续集成 |
+
 ## 进度
+
+- D-3a：按 Claude 验收反馈补充 `.screenshotOCR` 及“截图 OCR”显示；截图文字翻译/总结和相关测试已同步。仅补充通用结果视图的枚举显示分支，未进行截图结果控制器集成。
 
 - D-1：ScreenCaptureKit 单次内存捕获，排除自身应用；每屏独立遮罩、8 手柄、方向键/Shift 微调、像素尺寸、Esc 取消与迟到捕获丢弃。HotkeyCenter.screenshotAction 供 Claude 接线。`scripts/test.sh` 通过（几何、取消与快捷键回归）；真实多屏、权限及焦点待人工验证。
 
@@ -77,5 +82,5 @@
 ## 问题
 
 - 请 Claude 确认外部图片导入的 40 MB / 6400 万像素上限；当前超限明确提示，不缩小或静默截断。
-- Core 的 `ContentSnapshot.CaptureMethod` 目前只有 accessibility/copyFallback/paste，本功能暂以 `.paste` 承载已编辑 OCR 文字，来源显示为“截图 OCR”。是否增加专门的 OCR 枚举由 Claude 跨模块决定；本分支未改 Core。
+- 已按 Claude 决定新增 `ContentSnapshot.CaptureMethod.screenshotOCR`，截图编辑后文字的翻译/总结使用此类型；通用结果浮窗显示“截图 OCR”。本次仅补充枚举显示分支，截图结果并入通用浮窗的接线等待后续通知。
 - 图片理解走现有 AIClient 的非流式图片接口；OCR 文字操作走既有 OperationRunner 流式接口。运行态结果浮窗使用相同 Tokens，尚未与并行开发的通用结果窗口控制器合并；如需共用控制器，由 Claude 集成。
