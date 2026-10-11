@@ -290,3 +290,19 @@ import RoarkTCore
     #expect(h.controller.state.message == "未检测到有效声音，请重试。")
     h.controller.stop()
 }
+
+
+@MainActor @Test func voiceWorkerErrorsGiveSpecificRecoveryWithoutInserting() async {
+    for (failure, message) in [(VoiceFailure.empty, "未检测到有效声音，请重试。"), (.timeout, "识别超时，请缩短录音后重试。"), (.unavailable, "识别未完成，请在设置 → 语音检查模型后重试。")] {
+        let h = VoiceHarness()
+        await h.begin(); await h.recognize()
+        h.worker.pending?.resume(throwing: failure)
+        h.worker.pending = nil
+        for _ in 0..<30 { await Task.yield() }
+        #expect(h.controller.state.phase == .failed)
+        #expect(h.controller.state.message == message)
+        #expect(h.bridge.texts.isEmpty)
+        #expect(h.controller.state.result.isEmpty)
+        h.controller.stop()
+    }
+}

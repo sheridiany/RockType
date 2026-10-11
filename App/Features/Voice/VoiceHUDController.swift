@@ -46,7 +46,7 @@ import RoarkTPlatform
         case .done: hud.show(.success(state.message))
         case .failed:
             if state.result.isEmpty {
-                hud.show(.notice(title: "语音输入", detail: state.message))
+                hud.show(.notice(title: state.message, detail: state.message))
             } else {
                 hud.show(.result(state.result, reason: state.message))
             }

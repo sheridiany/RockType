@@ -184,7 +184,7 @@ import RoarkTPlatform
                 show(.recording, "录音中")
             } catch {
                 guard session == id else { return }
-                Self.log.error("voice preparation failed: \(String(describing: error), privacy: .private)")
+                Self.log.error("voice preparation failed")
                 worker.stop(); preparedModel = nil
                 bridge.cancel(target); target = nil
                 show(.failed, state.phase == .loading
@@ -243,10 +243,15 @@ import RoarkTPlatform
                 show(accepted ? .done : .failed, accepted ? "已填入 · 未发送" : "输入位置已变化或提交超时，请复制结果。")
             } catch {
                 guard session == id, !Task.isCancelled else { return }
-                let nsError = error as NSError
-                Self.log.error("recognition failed: \(String(describing: type(of: error)), privacy: .public) \(nsError.domain, privacy: .public) \(nsError.code) \(String(describing: error), privacy: .private)")
+                Self.log.error("voice recognition failed")
                 worker.stop(); preparedModel = nil; bridge.cancel(target); self.target = nil
-                show(.failed, "识别未完成，请检查模型下载与校验状态后重试。")
+                if let failure = error as? VoiceFailure, failure == .empty {
+                    showNoSpeech()
+                } else {
+                    show(.failed, (error as? VoiceFailure) == .timeout
+                         ? "识别超时，请缩短录音后重试。"
+                         : "识别未完成，请在设置 → 语音检查模型后重试。")
+                }
             }
         }
     }

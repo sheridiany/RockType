@@ -39,7 +39,16 @@ final class RoarkTVoiceHUD: NSObject {
     var onCancel: (() -> Void)?
     private let panel = Panel(contentRect: NSRect(x: 0, y: 0, width: 188, height: 36),
                               styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-    private let background = NSView()
+    private final class Surface: NSView {
+        override func viewDidChangeEffectiveAppearance() { super.viewDidChangeEffectiveAppearance(); updateColors() }
+        func updateColors() {
+            effectiveAppearance.performAsCurrentDrawingAppearance {
+                layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+                layer?.borderColor = NSColor.separatorColor.cgColor
+            }
+        }
+    }
+    private let background = Surface()
     private let label = NSTextField(labelWithString: "")
     private let icon = NSTextField(labelWithString: "")
     private let clock = NSTextField(labelWithString: "0:00")
@@ -67,20 +76,19 @@ final class RoarkTVoiceHUD: NSObject {
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         background.wantsLayer = true
-        background.layer?.backgroundColor = NSColor(srgbRed: 0.149, green: 0.157, blue: 0.145, alpha: 1).cgColor
-        background.layer?.borderColor = NSColor.white.withAlphaComponent(0.14).cgColor
+        background.updateColors()
         background.layer?.borderWidth = 0.5
         background.layer?.cornerRadius = 11
         panel.contentView = background
         for field in [label, icon, clock] {
             field.font = .systemFont(ofSize: 12, weight: .regular)
-            field.textColor = NSColor(white: 0.93, alpha: 1)
+            field.textColor = .labelColor
             field.alignment = .center
             field.lineBreakMode = .byTruncatingTail
             background.addSubview(field)
         }
         clock.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
-        clock.textColor = NSColor(white: 0.77, alpha: 1)
+        clock.textColor = .secondaryLabelColor
         configure(close, title: "×", action: #selector(cancel))
         close.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "取消")?
             .withSymbolConfiguration(.init(pointSize: 9, weight: .medium))
@@ -94,14 +102,14 @@ final class RoarkTVoiceHUD: NSObject {
         waveform.setAccessibilityRole(.levelIndicator)
         panel.setAccessibilityTitle("RockType 语音输入")
         detailText.font = .systemFont(ofSize: 12)
-        detailText.textColor = NSColor(white: 0.9, alpha: 1)
+        detailText.textColor = .labelColor
         detailText.maximumNumberOfLines = 0
         scroll.drawsBackground = false
         scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true
         scroll.documentView = detailText
         background.addSubview(scroll)
-        render(.preparing)
+        layout()
     }
 
     private func configure(_ button: NSButton, title: String, action: Selector) {
@@ -110,7 +118,7 @@ final class RoarkTVoiceHUD: NSObject {
         button.action = action
         button.isBordered = false
         button.font = .systemFont(ofSize: 11)
-        button.contentTintColor = NSColor(white: 0.8, alpha: 1)
+        button.contentTintColor = .secondaryLabelColor
         background.addSubview(button)
     }
 
@@ -131,6 +139,7 @@ final class RoarkTVoiceHUD: NSObject {
     }
 
     func render(_ state: State) {
+        guard self.state != state else { layout(); return }
         self.state = state
         expanded = false
         waveform.reset()
@@ -147,6 +156,8 @@ final class RoarkTVoiceHUD: NSObject {
 
     private func layout() {
         let hasDetail = state.detail != nil
+        let isSuccess: Bool = { if case .success = state { true } else { false } }()
+        background.updateColors()
         let width: CGFloat = expanded ? 288 : (hasDetail ? 240 : 188)
         let height: CGFloat = expanded ? 180 : 36
         panel.setContentSize(NSSize(width: width, height: height))
@@ -165,8 +176,11 @@ final class RoarkTVoiceHUD: NSObject {
         icon.stringValue = recording ? "•" : (hasDetail ? "!" : "·")
         if state.isResult { icon.stringValue = "↗" }
         if case .success = state { icon.stringValue = "✓" }
-        icon.textColor = recording ? NSColor(srgbRed: 0.93, green: 0.55, blue: 0.49, alpha: 1)
-            : NSColor(white: 0.78, alpha: 1)
+        icon.textColor = recording ? .systemRed : .secondaryLabelColor
+        if case .success = state { icon.textColor = .systemGreen }
+        if case .notice = state { icon.textColor = .systemOrange }
+        close.setAccessibilityLabel(hasDetail || isSuccess ? "关闭语音提示" : "取消语音输入")
+        close.toolTip = hasDetail || isSuccess ? "关闭 · Esc" : "取消 · Esc"
         waveform.frame = NSRect(x: 29, y: 9, width: 72, height: 18)
         waveform.setAccessibilityLabel("录音音量；松开 Fn 结束，Esc 取消")
         // NSTextField's 11 pt digit ink sits above its frame center. Align the visible
@@ -196,7 +210,12 @@ final class RoarkTVoiceHUD: NSObject {
         layout()
     }
 
-    func hide() { dismissal?.cancel(); dismissal = nil; panel.orderOut(nil); anchor = nil }
+    func hide() {
+        dismissal?.cancel(); dismissal = nil
+        panel.orderOut(nil); anchor = nil
+        // Release retained result text and reset a later recording, even if its state is identical.
+        render(.preparing)
+    }
     @objc private func copyResult() { onCopy?() }
     @objc private func cancel() { onCancel?(); hide() }
 }
