@@ -79,7 +79,7 @@ struct ShellSettingsView: View {
         case .voice: voice
         case .selection: selection
         case .screenshot: screenshot
-        case .ai: ShellConnectionView(model: connection, settings: $settings.ai)
+        case .ai: AIProviderSettingsView(model: connection, settings: $settings)
         case .templates: sections.templatesPane(settings: $settings, showAIConnection: { section = .ai })
         case .shortcuts: sections.shortcutsPane(settings: $settings)
         case .permissions: sections.permissionsPane()
@@ -180,7 +180,7 @@ struct ShellSettingsView: View {
     }
     private var selection: some View {
         Group {
-            Notice(text: "划词工具栏与功能窗口即将推出。以下偏好在重启后保留。")
+            Notice(text: "松开鼠标后显示工具栏；快捷键立即处理选区。关闭跟随后会记住结果窗口位置，置顶窗口可并行保留。")
             U4Card {
                 Picker("出现方式", selection: $settings.selection.trigger) {
                     Text("划词即出").tag(SelectionSettings.Trigger.selection)
@@ -210,6 +210,8 @@ struct ShellSettingsView: View {
                         Spacer()
                         Button { settings.selection.toolbarActions.swapAt(index, index - 1) } label: { Image(systemName: "arrow.up") }
                             .disabled(index == 0).accessibilityLabel("上移操作")
+                        Button { settings.selection.toolbarActions.swapAt(index, index + 1) } label: { Image(systemName: "arrow.down") }
+                            .disabled(index == settings.selection.toolbarActions.count - 1).accessibilityLabel("下移操作")
                         U4Toggle(title: "启用操作", isOn: Binding(get: { !settings.selection.disabledActions.contains(id) }, set: {
                             settings.selection.disabledActions.removeAll { $0 == id }
                             if !$0 { settings.selection.disabledActions.append(id) }

@@ -25,7 +25,7 @@ import RoarkTPlatform
     @ObservationIgnored private let verified: (AIConnectionSettings, String) -> Bool
     @ObservationIgnored private let allowed: () -> Bool
     @ObservationIgnored private let recognize: ((Data) async throws -> String)?
-    @ObservationIgnored private let sendImage: (AIConnectionSettings, String, Data) async throws -> String
+    @ObservationIgnored private let sendImage: ((AIConnectionSettings, String, Data) async throws -> String)?
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var protection: Task<Void, Never>?
     @ObservationIgnored private var generation = 0
@@ -38,14 +38,7 @@ import RoarkTPlatform
          verified: @escaping (AIConnectionSettings, String) -> Bool,
          allowed: @escaping () -> Bool = { SecureInput.status() == .allowed },
          recognize: ((Data) async throws -> String)? = nil,
-         sendImage: @escaping (AIConnectionSettings, String, Data) async throws -> String = { connection, model, data in
-             let key = try Keychain().get(account: connection.id) ?? ""
-             let service = ScreenshotAIService(client: AIClient(connection: connection),
-                 recognize: { try await OCR().recognize($0).text },
-                 isAllowed: { SecureInput.status() == .allowed })
-             return try await service.run(action: .explain, png: data, model: model,
-                 imageCapabilityVerified: true, apiKey: key)
-         }) {
+         sendImage: ((AIConnectionSettings, String, Data) async throws -> String)? = nil) {
         self.image = image; self.origin = origin; self.settings = settings; self.verified = verified
         self.ocrLanguages = settings().screenshot.ocrLanguages
         self.allowed = allowed; self.recognize = recognize; self.sendImage = sendImage
@@ -136,18 +129,19 @@ import RoarkTPlatform
         performText(OperationRequest(session: OperationSession(snapshot: snapshot), template: template, settings: config))
     }
     var visionModel: String? {
-        let connection = settings().ai
-        let model = connection.visionModel ?? (connection.defaultModelSupportsImages ? connection.defaultModel : "")
+        guard let route = try? AIProviderRouting.resolve(settings(), task: .image) else { return nil }
+        let connection = route.connection
+        let model = route.model
         guard !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, verified(connection, model) else { return nil }
         return model
     }
     func prepareImage() {
         guard check(), let model = visionModel else { notice = "当前连接的图片能力尚未验证可用，请配置并测试视觉模型。"; return }
-        cancel(); pendingConnection = settings().ai; pendingModel = model; confirmingImage = true
+        cancel(); pendingConnection = try? AIProviderRouting.resolve(settings(), task: .image).connection; pendingModel = model; confirmingImage = true
     }
     func confirmImage() {
         guard check(), confirmingImage, let connection = pendingConnection, let model = pendingModel,
-              connection == settings().ai, model == visionModel, let data = png() else {
+              connection == (try? AIProviderRouting.resolve(settings(), task: .image).connection), model == visionModel, let data = png() else {
             confirmingImage = false; notice = "连接或模型已变化，请重新预览并确认。"; return
         }
         cancel(); let current = generation; busy = true; result = ""; engine = model; notice = nil
@@ -155,12 +149,23 @@ import RoarkTPlatform
             guard let self else { return }
             do {
                 // Confirmation and task execution can be separated by a settings/key change.
-                guard self.check(current), connection == self.settings().ai, model == self.visionModel else {
+                guard self.check(current), connection == (try? AIProviderRouting.resolve(self.settings(), task: .image).connection), model == self.visionModel else {
                     self.busy = false
                     self.notice = "连接、模型或密钥测试状态已变化，请重新预览并确认。"
                     return
                 }
-                let answer = try await self.sendImage(connection, model, data)
+                let answer: String
+                if let sendImage = self.sendImage { answer = try await sendImage(connection, model, data) }
+                else {
+                    let key = try Keychain().get(account: connection.id) ?? ""
+                    let service = ScreenshotAIService(client: AIClient(connection: connection),
+                        recognize: { try await OCR().recognize($0).text }, isAllowed: { SecureInput.status() == .allowed })
+                    let fallbackVerified = connection.fallbackModel.map { self.verified(connection, $0) } ?? false
+                    answer = try await service.run(action: .explain, png: data,
+                        correctedText: self.ocrFinished ? self.text : nil, model: model, imageCapabilityVerified: true,
+                        apiKey: key, fallbackImageCapabilityVerified: fallbackVerified,
+                        onModel: { [weak self] actual in await self?.updateModel(actual, generation: current) })
+                }
                 guard !Task.isCancelled, self.check(current) else { return }
                 self.result = answer; self.busy = false
                 if answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -172,13 +177,17 @@ import RoarkTPlatform
                         source: .init(pid: ProcessInfo.processInfo.processIdentifier, applicationName: self.origin), method: .screenshotOCR)
                     let session = OperationSession(snapshot: snapshot,
                         turns: [OperationTurn(question: "请用中文解释这张图片。", answer: answer)])
-                    self.imageCompleted(OperationResult(session: session, templateID: template.id, text: answer, engine: model), template)
+                    self.imageCompleted(OperationResult(session: session, templateID: template.id, text: answer, engine: self.engine), template)
                 }
             } catch {
                 guard !Task.isCancelled, self.check(current) else { return }
                 self.busy = false; self.notice = Self.message(.ai(error as? AIClientError ?? .network))
             }
         }
+    }
+    private func updateModel(_ model: String, generation: Int) {
+        guard check(generation), !Task.isCancelled else { return }
+        engine = model
     }
     static let imageTemplate = OperationTemplate(id: "screenshot-image-explanation", name: "图片理解", icon: "photo",
         prompt: "请根据已完成的图片文字解释回答问题。你无法查看原图；需要图片细节时请说明并请用户重新打开图片。")
