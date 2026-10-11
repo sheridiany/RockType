@@ -2,7 +2,7 @@
 
 - 阶段：M6
 - 覆盖需求：FR-E3、FR-E8、NFR-2
-- 状态：InProgress（E-1/E-2 代码及自动化完成；AppDelegate 接线、E-3/E-4 与真实验收未完成）
+- 状态：InProgress（E-1/E-2/E-3 代码及自动化完成，AppDelegate 已接线；E-4 真实安装验收未完成）
 - 依赖：SPEC-001 翻译服务、SPEC-004 AI 连接、SPEC-005 操作引擎与模板、SPEC-003 候选窗
 
 ## 范围
@@ -22,8 +22,8 @@
 | # | 任务 | 执行 | 状态 |
 | --- | --- | --- | --- |
 | E-1 | XPC 协议新增 `configureAI`、`rewriteCandidate`；服务实现（内存配置、取消、超时、错误码、鉴权） | pi-xpc | E-1 代码与自动化通过；真实安装鉴权待 Claude 验收 |
-| E-2 | 主 App 下发配置：启动、AI 设置/模板/密钥变化、退出清空；设置中输入法 AI 开关与快捷键项 | pi-xpc | E-2 代码与自动化通过；AppDelegate 接线及 UI 验收待 Claude |
-| E-3 | 输入法侧：触发键、请求、译文栏 AI 状态、Tab 上屏、作废规则 | pi-ime（M1 合并后） | 未开始 |
+| E-2 | 主 App 下发配置：启动、AI 设置/模板/密钥变化、退出清空；设置中输入法 AI 开关与快捷键项 | pi-xpc | E-2 代码与自动化通过；R3-IME 已接 AppDelegate，真实 UI 验收待人工 |
+| E-3 | 输入法侧：触发键、请求、译文栏 AI 状态、Tab 上屏、作废规则 | pi-ime | R3-IME 实现与自动化通过；真实试打待人工，见 [证据](evidence/014-R3-IME.md) |
 | E-4 | 验收 | Claude + 用户 | 未开始 |
 
 **文件所有权（E-1、E-2）**：`Shared/XPCProtocol/`、`Services/TranslationService/`、`Core/Settings`（只新增字段）、`App/Features/InputAI/`、设置快捷键分区中新增一项、对应 `Tests/`。`AppDelegate` 接线提供 `start()/stop()` 由 Claude 集成。
@@ -78,6 +78,12 @@
 
 ## 问题
 
-- 待 Claude 集成 AppDelegate 生命周期并从 main 做安装/签名鉴权、真实端点、按键 P95、三动作 Tab 上屏、Secure Input/密码框与浅深色 UI/键盘/VoiceOver 验收。
+- R3-IME 已接入 AppDelegate 生命周期；待从 main 安装后做真实签名鉴权、端点、按键 P95、三动作 Tab 上屏、Secure Input/密码框与浅深色 UI/键盘/VoiceOver 验收。
 - 钥匙串事件接口为 macOS 现有但已标记 deprecated 的 `SecKeychainAddCallback`；注册失败有重读兜底。隔离条目的新增、更换、删除已自动验证；仍待真实 App 连接和钥匙串锁定/解锁走查。
-- E-3 需决定未配置 AI 时隐藏入口的状态来源：目前协议提供请求时的明确 `notConfigured` 错误，InputSettings 只同步用户开关，不同步密钥是否存在。若要在首次触发前准确隐藏入口，应由 Claude 确认增加无内容的可用性查询或运行时状态同步；不得让输入法读钥匙串。
+- R3-IME 采用明确开关与显式快捷键：关闭时不拦截 AI 快捷键、不显示 AI 入口；已开启但服务未配置时显示“未配置 AI”及设置提示。输入法不读钥匙串，也不凭开关声称密钥可用；没有新增可用性查询协议。
+
+### R3-IME 接线与 E-3（2026-10-11）
+
+- 全拼/双拼的真实 librime 确认默认 `⌥Tab` 未占用且不改变输入；三动作采用同一输入会话的递增 generation，未完成/失败结果不能上屏，Esc 仅退出 AI 并恢复普通候选翻译。
+- AI 快照包含已确认前缀与当前高亮候选，部分候选的 AI 上屏保留未转换后缀，不重复提交前缀；请求不进入普通译文缓存。AppDelegate 在正常启动/退出接入 InputAIController，Gallery 不启动它。
+- 本轮详细测试、分段防抖测量及人工验收清单见 [014-R3-IME](evidence/014-R3-IME.md)。未改 `App/Features/InputAI` 内部，未安装或启动 worktree 输入法。

@@ -34,7 +34,7 @@ run() {
   "$temporary/check" "$temporary/shared" "$temporary/$profile" "$temporary/build" "$schema" "$action"
 }
 for schema in roarkt roarkt_flypy; do
-  for action in samples domain homophones shift shift-prefix english translation; do
+  for action in samples domain homophones shift shift-prefix english translation input-ai; do
     run "$schema-$action" "$schema" "$action"
   done
   run "$schema-learning" "$schema" baseline

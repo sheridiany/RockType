@@ -119,7 +119,7 @@ final class RoarkTTranslationClient: @unchecked Sendable {
   private struct Pending {
     let generation: Int64
     let completion: Completion
-    let request: CandidateTranslationRequest
+    let request: CandidateTranslationRequest?
     let timeout: DispatchWorkItem
   }
 
@@ -267,6 +267,47 @@ final class RoarkTTranslationClient: @unchecked Sendable {
     }
   }
 
+  /// Explicit AI bypasses ordinary translation debounce, technical-word protection and cache.
+  /// It shares the connection/session generation namespace and cancellation with translation.
+  func rewrite(sessionID: String, generation: Int64, source: String, action: RoarkTInputAIAction,
+               timeout seconds: TimeInterval, completion: @escaping Completion) {
+    assertMainQueue()
+    cancel(sessionID: sessionID, throughGeneration: generation - 1)
+    guard !isSecureInputEnabled() else {
+      clearCache(); completion(.failure(CandidateTranslationFailure.cancelled)); return
+    }
+    guard !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, source.utf8.count <= 131_072 else {
+      completion(.failure(CandidateTranslationFailure.invalidRequest)); return
+    }
+    let timeout = DispatchWorkItem { [weak self] in
+      guard let self, self.pending[sessionID]?.generation == generation else { return }
+      self.cancellationProxy()?.cancel(sessionID: sessionID, throughGeneration: generation)
+      self.finish(sessionID: sessionID, generation: generation, result: .failure(CandidateTranslationFailure.timedOut))
+    }
+    pending[sessionID] = Pending(generation: generation, completion: completion, request: nil, timeout: timeout)
+    DispatchQueue.main.asyncAfter(deadline: .now() + (seconds.isFinite ? min(120, max(0.1, seconds)) : 30), execute: timeout)
+    guard let proxy = proxy(errorHandler: { [weak self] error in
+      DispatchQueue.main.async { self?.finish(sessionID: sessionID, generation: generation, result: .failure(error)) }
+    }) as? RoarkTInputAIXPCProtocol else {
+      finish(sessionID: sessionID, generation: generation, result: .failure(CandidateTranslationFailure.serviceUnavailable)); return
+    }
+    let weakClient = WeakReference(self)
+    proxy.rewriteCandidate(sessionID: sessionID, generation: generation, text: source, action: action.rawValue) {
+      returnedGeneration, returnedSource, text, error in
+      DispatchQueue.main.async {
+        guard let self = weakClient.value else { return }
+        if let error { self.finish(sessionID: sessionID, generation: generation, result: .failure(error)); return }
+        guard returnedGeneration == generation, returnedSource == source, let text,
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.utf8.count <= 131_072 else {
+          self.finish(sessionID: sessionID, generation: generation, result: .failure(CandidateTranslationFailure.invalidResponse)); return
+        }
+        self.finish(sessionID: sessionID, generation: generation, result: .success(.init(
+          generation: generation, direction: "ai", sourceText: source, translatedText: text)))
+      }
+    }
+    scheduleIdleDisconnect()
+  }
+
   func recordControllerInput() {
     assertMainQueue()
     guard !isSecureInputEnabled(), now() >= nextControllerReport else { return }
@@ -361,7 +402,7 @@ final class RoarkTTranslationClient: @unchecked Sendable {
   private func makeConnection() -> NSXPCConnection {
     let connection = NSXPCConnection(machServiceName: ROARKT_TRANSLATION_SERVICE_NAME, options: [])
     connection.setCodeSigningRequirement(Identifiers.codeRequirement(for: ROARKT_TRANSLATION_SERVICE_NAME))
-    connection.remoteObjectInterface = NSXPCInterface(with: RoarkTTranslationXPCProtocol.self)
+    connection.remoteObjectInterface = NSXPCInterface(with: RoarkTInputAIXPCProtocol.self)
     let token = UUID()
     connectionToken = token
     connection.interruptionHandler = { [weak self] in
@@ -419,9 +460,9 @@ final class RoarkTTranslationClient: @unchecked Sendable {
       request.completion(.failure(CandidateTranslationFailure.cancelled))
       return
     }
-    if case let .success(response) = result,
-       request.request.accepts(source: response.sourceText, direction: response.direction) {
-      cache.insert(response.translatedText, for: request.request, now: now())
+    if case let .success(response) = result, let candidate = request.request,
+       candidate.accepts(source: response.sourceText, direction: response.direction) {
+      cache.insert(response.translatedText, for: candidate, now: now())
     }
     scheduleCacheExpiry()
     scheduleIdleDisconnect()

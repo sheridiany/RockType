@@ -52,7 +52,8 @@ final class TranslationCoordinator {
                 if self?.latestGenerations[key] == generation { self?.tasks[key] = nil }
             }
             do {
-                try await Task.sleep(for: .milliseconds(120))
+                // The IME coalesces uncached candidates before sending (80ms).
+                // Do not add another debounce after the XPC boundary.
                 try Task.checkCancellation()
                 let translated = try await backend.translate(request.sourceText, direction: request.direction)
                 try Task.checkCancellation()
