@@ -1,3 +1,4 @@
+#if DEBUG
 import SwiftUI
 
 struct SelectionToolbarView: View {
@@ -40,3 +41,5 @@ struct SelectionToolbarView: View {
         }
     }
 }
+
+#endif

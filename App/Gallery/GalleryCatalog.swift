@@ -1,3 +1,4 @@
+#if DEBUG
 import SwiftUI
 
 /// One entry per surface/state. Both the window and PNG renderer consume this catalog.
@@ -35,3 +36,5 @@ struct GalleryPreview: View {
             .environment(\.designReduceMotion, reduceMotion)
     }
 }
+
+#endif

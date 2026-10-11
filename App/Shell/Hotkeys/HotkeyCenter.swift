@@ -57,7 +57,7 @@ import RoarkTPlatform
     @ObservationIgnored private let readSettings: @MainActor () -> ShortcutSettings
     @ObservationIgnored private let writeSettings: @MainActor (ShortcutSettings) -> Void
     @ObservationIgnored private let showSettings: @MainActor () -> Void
-    @ObservationIgnored private let comingSoon: @MainActor (Action) -> Void
+    @ObservationIgnored private let unavailableAction: @MainActor (Action) -> Void
     @ObservationIgnored private let selection: @MainActor (ShortcutAction) -> Void
     @ObservationIgnored private let voiceListening: @MainActor (Bool) -> Bool
     @ObservationIgnored private var voiceEnabled = false
@@ -72,14 +72,14 @@ import RoarkTPlatform
     init(read: @escaping @MainActor () -> ShortcutSettings,
          write: @escaping @MainActor (ShortcutSettings) -> Void,
          showSettings: @escaping @MainActor () -> Void,
-         comingSoon: @escaping @MainActor (Action) -> Void = { _ in },
+         unavailableAction: @escaping @MainActor (Action) -> Void = { _ in },
          selection: @escaping @MainActor (ShortcutAction) -> Void = { _ in },
          registrar: (any HotkeyRegistering)? = nil,
          allowed: @escaping @MainActor () -> Bool = { SecureInput.status() == .allowed },
          trusted: @escaping @MainActor () -> Bool = { Accessibility.isTrusted() },
          voiceListening: @escaping @MainActor (Bool) -> Bool = { _ in true }) {
         self.readSettings = read; self.writeSettings = write; self.showSettings = showSettings
-        self.comingSoon = comingSoon; self.selection = selection
+        self.unavailableAction = unavailableAction; self.selection = selection
         self.registrar = registrar ?? SystemHotkeyRegistrar()
         self.allowed = allowed; self.trusted = trusted; self.voiceListening = voiceListening
         settings = read()
@@ -181,7 +181,7 @@ import RoarkTPlatform
                     self.selection(core)
                 } else {
                     self.notice = "\(action.title)即将推出；当前仅验证快捷键。"
-                    self.comingSoon(action)
+                    self.unavailableAction(action)
                 }
             }
             do {

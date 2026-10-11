@@ -28,7 +28,7 @@ import RoarkTPlatform
         let prefs = Preferences(), registrar = Registrar()
         let center = HotkeyCenter(read: { prefs.settings }, write: { prefs.settings = $0 },
                                   showSettings: { prefs.settingsOpened += 1 },
-                                  comingSoon: { prefs.actions.append($0) }, selection: { prefs.selections.append($0) }, registrar: registrar,
+                                  unavailableAction: { prefs.actions.append($0) }, selection: { prefs.selections.append($0) }, registrar: registrar,
                                   allowed: { prefs.allowed }, trusted: { prefs.trusted },
                                   voiceListening: { prefs.voiceEnabled = $0; return true })
         var screenshots = 0

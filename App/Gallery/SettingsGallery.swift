@@ -1,3 +1,4 @@
+#if DEBUG
 import SwiftUI
 
 @MainActor
@@ -23,3 +24,5 @@ enum SettingsGallery {
         }
     }
 }
+
+#endif

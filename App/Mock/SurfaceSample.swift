@@ -1,3 +1,4 @@
+#if DEBUG
 // Synthetic, deterministic data for SPEC-002 surfaces 1–5. No system reads.
 struct SurfaceSample<Value: Sendable>: Identifiable, Sendable {
     let id: String
@@ -40,3 +41,5 @@ enum SurfaceSampleText {
     static let imageLines = ["Preview — synthetic example", "Error: preview service is already running", "Stop the previous preview and try again."]
     static let ocr = imageLines.joined(separator: "\n")
 }
+
+#endif

@@ -1,3 +1,4 @@
+#if DEBUG
 import SwiftUI
 
 /// Full-screen capture prototype. The desktop is synthetic; no screen API is used.
@@ -321,3 +322,5 @@ enum ScreenshotPlacement {
         return CGRect(x: left, y: top, width: right - left, height: bottom - top)
     }
 }
+
+#endif

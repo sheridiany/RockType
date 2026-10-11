@@ -1,3 +1,4 @@
+#if DEBUG
 import AppKit
 import SwiftUI
 
@@ -82,3 +83,5 @@ private struct GalleryView: View {
         .preferredColorScheme(theme.colorScheme)
     }
 }
+
+#endif
