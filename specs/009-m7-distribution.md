@@ -31,7 +31,7 @@
 | --- | --- | --- | --- |
 | R-1 | `scripts/build-installer.sh`、pre/postinstall、pkg 产出（未公证也可本地安装测试） | pi-surfaces | 已实现；安装待人工验证 |
 | R-2 | `scripts/notarize.sh`（无凭据时清晰报错退出） | pi-surfaces | 已实现；真实公证待凭据 |
-| R-3 | 卸载流程接到设置 → 关于 | pi-surfaces | 未开始 |
+| R-3 | 卸载流程接到设置 → 关于 | pi-surfaces | 已实现；授权与真实卸载待人工验证 |
 | R-4 | Sparkle 2 集成、appcast 脚本、设置 → 关于 中“检查更新” | pi-surfaces | 未开始 |
 | R-5 | 第三方声明与许可证文件核对 | pi-surfaces | 未开始 |
 | R-6 | 干净账户安装 → 引导 → 卸载 验收 | 用户 + Claude | 未开始 |
@@ -65,3 +65,10 @@
 - `scripts/notarize.sh` 使用钥匙串 profile，校验包团队、提交并等待，明确要求 `Accepted` 后再 staple、validate 和 Gatekeeper 安装评估。
 - `scripts/test.sh` 通过；隔离脚本测试覆盖缺 profile、Invalid 不 staple、Accepted 才 staple/validate。直接不带 `ROARKT_NOTARY_PROFILE` 运行清晰退出，符合预期。
 - 真实公证未运行：未提供 profile，不创建或导出凭据，不声称通过 Gatekeeper。
+
+### R-3 验收证据（2026-10-11）
+
+- 生产设置关于页接入确认对话框，默认保留数据。限定从 `/Applications/RoarkT.app` 发起；停用自己的输入源、等待输入法退出、注销登录项，管理员仅执行固定程序路径的删除和服务 bootout。其他 GUI 账户未退出时拒绝程序删除。
+- 勾选清理时预先复制用户权限的工具，待主 App 退出后删除设置/模型、RoarkT 方案与独立学习数据、当前用户 AI 钥匙串条目；保留共享词典、其他方案、无归属标记的 custom.yaml。不执行用户提供的 root 脚本。
+- `scripts/test.sh` 通过（119 Swift tests）；隔离目录验证保留共享数据、重复清理、拒绝符号链接跳转；独立清理工具 `swiftc` 编译通过。未执行真实删除、管理员弹窗和退出后清理，待人工验证。
+- 平台限制：TIS 无公开 unregister API，执行 disable + 移除输入法 bundle 后提示注销并重新登录。需要 Claude 确认这作为“移除输入源注册”的验收口径。

@@ -24,6 +24,7 @@ cp Installer/com.roarkist.roarkt.translation.plist "$root/Library/LaunchAgents/"
 ditto Installer/scripts "$work/scripts"
 xcrun swiftc -swift-version 6 -parse-as-library -O Core/Identifiers.swift Installer/tools/SessionControl.swift -o "$work/scripts/RoarkTSessionControl"
 xcrun swiftc -swift-version 6 -parse-as-library -O Core/Identifiers.swift Installer/tools/RegisterInputSource.swift -o "$app/Contents/Helpers/RoarkTRegisterInputSource"
+xcrun swiftc -swift-version 6 -parse-as-library -O Core/Identifiers.swift App/Features/Uninstall/UninstallData.swift Installer/tools/CleanupUserData.swift -o "$app/Contents/Helpers/RoarkTCleanupUserData"
 for bundle in "$app" "$input"; do
   mkdir -p "$bundle/Contents/Resources/Licenses"
   ditto LICENSES "$bundle/Contents/Resources/Licenses"
