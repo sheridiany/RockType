@@ -42,6 +42,15 @@ if launchctl print "$domain/$label" >/dev/null 2>&1; then
   launchctl bootout "$domain/$label"
 fi
 install -m 644 "$temporary" "$agent"
-launchctl bootstrap "$domain" "$agent"
+# bootout returns before launchd has released the label; bootstrap too early fails with EIO (5).
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+  launchctl print "$domain/$label" >/dev/null 2>&1 || break
+  sleep 0.5
+done
+for attempt in 1 2 3; do
+  launchctl bootstrap "$domain" "$agent" && break
+  [[ $attempt == 3 ]] && exit 1
+  sleep 1
+done
 "$registrar" register "$app"
 print 'Installed and registered RockType / RockType Shuangpin. Add and select them in System Settings.'
