@@ -9,7 +9,7 @@ import sys
 import tempfile
 
 sys.dont_write_bytecode = True
-from personal_common import add_rime_directory_argument, Refusal, require, plain, safe_tree, run, locked, backup, digest, database_lock
+from personal_common import build_simplifier, simplify_words, add_rime_directory_argument, Refusal, require, plain, safe_tree, run, locked, backup, digest, database_lock
 
 DB = 'roarkt_zh.userdb'
 
@@ -58,8 +58,6 @@ def main():
     add_rime_directory_argument(parser)
     parser.add_argument('--offline', action='store_true', help='confirm input method and settings writer are stopped')
     parser.add_argument('--manager', help='absolute rime_dict_manager executable')
-    parser.add_argument('--opencc', help='absolute OpenCC executable')
-    parser.add_argument('--t2s-config', help='absolute OpenCC t2s.json')
     parser.add_argument('--rollback', help='backup ID from successful migration')
     args = parser.parse_args()
     os.umask(0o077)
@@ -75,9 +73,9 @@ def main():
         with database_lock(lock_path):
             if args.rollback:
                 rollback(target, args.rollback); return
-            require(args.manager and args.opencc and args.t2s_config, 'manager, OpenCC and t2s config required')
-            tool, converter, config = map(plain, (args.manager, args.opencc, args.t2s_config))
-            require(tool.is_file() and converter.is_file() and config.name == 't2s.json', 'invalid tool/config')
+            require(args.manager, 'manager required')
+            tool = plain(args.manager)
+            require(tool.is_file(), 'invalid manager')
             before = digest(database)
             saved = backup(target, 'simplified')
             original = saved / 'original'
@@ -101,12 +99,7 @@ def main():
                 exported = work / 'export.txt'
                 manager(tool, source, '-e', exported)
                 rows = entries(exported)
-                phrases = work / 'phrases.txt'
-                phrases.write_text(''.join(word + '\n' for word, code in rows))
-                converted = work / 'converted.txt'
-                run([converter, '-c', config, '-i', phrases, '-o', converted], cwd=config.parent)
-                words = converted.read_text().splitlines()
-                require(len(words) == len(rows), 'conversion row mismatch')
+                words = simplify_words(build_simplifier(work), (word for word, code in rows))
                 merged = defaultdict(int)
                 changed = 0
                 for ((word, code), count), simplified in zip(rows.items(), words):
