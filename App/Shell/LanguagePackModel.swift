@@ -10,10 +10,10 @@ final class LanguagePackModel {
             switch self {
             case .unchecked: "尚未检查中英语言包。"
             case .checking: "正在检查简体中文与英文两个方向的语言包…"
-            case .installed: "简体中文 ↔ English 语言包已就绪。"
+            case .installed: "简体中文与英语语言包已就绪。"
             case .available: "中英翻译受支持；点击“准备语言包”后，由系统确认并下载。"
-            case .unsupported: "系统暂不支持中英语言包，可使用静态词条，或配置 AI 后使用。"
-            case .legacy: "动态候选翻译需要 macOS 26。当前系统使用静态词条；AI 需另行配置并显式启用。"
+            case .unsupported: "系统暂不支持中英语言包。候选翻译可使用本地词条，其他 AI 功能需先配置连接。"
+            case .legacy: "动态候选翻译需要 macOS 26。当前系统使用本地词条；输入法 AI 需配置连接并在设置中启用。"
             case .failed: "语言包准备未完成或已取消，可检查网络后重试。"
             }
         }

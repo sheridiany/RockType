@@ -69,7 +69,7 @@ import RoarkTPlatform
         requesting = kind; message = nil
         defer { requesting = nil; refresh() }
         do { try await requestAccess(kind) }
-        catch { message = "无法请求该权限，请打开系统设置；麦克风请求需主 App 配置用途说明。" }
+        catch { message = "无法申请权限。请在“系统设置”的“隐私与安全性”中检查 RockType 的权限。" }
     }
 
     func openSettings(_ kind: Permissions.Kind) {

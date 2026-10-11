@@ -19,7 +19,7 @@ import RoarkTCore
 
     static func validation(_ template: OperationTemplate) -> String? {
         if template.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "请填写模板名称。" }
-        if NSImage(systemSymbolName: template.icon, accessibilityDescription: nil) == nil { return "请选择有效的 SF Symbols 图标。" }
+        if NSImage(systemSymbolName: template.icon, accessibilityDescription: nil) == nil { return "图标名称无效，请填写有效的 SF Symbols 名称。" }
         if template.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "请填写提示词。" }
         if OperationTemplate.defaults.contains(where: { $0.id == template.id }), template.input != .text {
             return "内置模板用于文字输入。图片操作请新建自定义模板。"
