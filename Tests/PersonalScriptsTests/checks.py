@@ -453,6 +453,39 @@ class MigrationTests(unittest.TestCase):
         self.assertEqual(digest(self.target / 'roarkt_zh.userdb'), before)
         self.assertEqual(len(list((self.target / 'roarkt-backups').iterdir())), 1)
 
+    def test_logs_directory_is_excluded_and_left_untouched(self):
+        logs = self.target / 'logs'; logs.mkdir()
+        (logs / 'synthetic.log').write_text('synthetic log only\n')
+        (logs / 'rime.squirrel.INFO').symlink_to('synthetic.log')
+        (logs / 'rime.squirrel.ERROR').symlink_to('missing.log')
+        before = digest(self.target / 'roarkt_zh.userdb')
+        result = invoke('migrate_userdb.py', self.args)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        token = result.stdout.split('backup_id=')[1].strip()
+        saved = self.target / 'roarkt-backups' / token / 'original'
+        self.assertFalse((saved / 'logs').exists())
+        self.assertEqual((saved / 'settings.yaml').read_text(), 'synthetic: true\n')
+        result = invoke('migrate_userdb.py', ['--rime-dir', self.target, '--offline', '--rollback', token])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(digest(self.target / 'roarkt_zh.userdb'), before)
+        self.assertEqual((logs / 'synthetic.log').read_text(), 'synthetic log only\n')
+        self.assertEqual(os.readlink(logs / 'rime.squirrel.INFO'), 'synthetic.log')
+        self.assertEqual(os.readlink(logs / 'rime.squirrel.ERROR'), 'missing.log')
+
+    def test_logs_symlink_or_nested_nonregular_member_still_refused(self):
+        outside = self.base / 'outside-logs'; outside.mkdir()
+        (self.target / 'logs').symlink_to(outside, target_is_directory=True)
+        before = digest(self.target / 'roarkt_zh.userdb')
+        result = invoke('migrate_userdb.py', self.args)
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(digest(self.target / 'roarkt_zh.userdb'), before)
+        (self.target / 'logs').unlink()
+        nested = self.target / 'data/logs'; nested.mkdir(parents=True)
+        (nested / 'linked').symlink_to(self.seed)
+        result = invoke('migrate_userdb.py', self.args)
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(digest(self.target / 'roarkt_zh.userdb'), before)
+
     def test_live_database_and_profile_symlink_refused(self):
         with (self.target / 'roarkt_zh.userdb/LOCK').open('r+') as lock:
             fcntl.lockf(lock, fcntl.LOCK_EX)

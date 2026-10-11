@@ -51,7 +51,7 @@ python3 scripts/personal/build-personal-dict.py \
 
 **主词库全简体后执行**：等待 SPEC-011 D / W-6 合并并部署全简体主词库，再由 Claude 在授权的离线窗口处理用户 userdb。本次开发仅用临时数据库验证，不提前操作真实学习数据。
 
-只处理当前 `roarkt_zh.userdb`，不搜索或读取任何旧产品数据。备份整个指定 Rime 目录（排除备份目录自身及脚本锁），保存到 `roarkt-backups/<UTC时间>-simplified/original/`，不覆盖已有备份。禁止在线迁移；脚本通过独立进程持有 LevelDB POSIX 锁，并检测备份及发布前数据库是否变化。
+只处理当前 `roarkt_zh.userdb`，不搜索或读取任何旧产品数据。备份指定 Rime 目录的用户数据（排除备份目录自身、脚本锁及顶层真实 `logs/` 目录），保存到 `roarkt-backups/<UTC时间>-simplified/original/`，不覆盖已有备份。日志目录内的 librime 符号链接随日志一起排除，不读取、不复制也不修改。若 `logs` 本身是符号链接，或其他目录含非常规成员，仍拒绝；不会泛化为允许符号链接。禁止在线迁移；脚本通过独立进程持有 LevelDB POSIX 锁，并检测备份及发布前数据库是否变化。
 
 ```sh
 scripts/personal/migrate-userdb-simplified.sh \

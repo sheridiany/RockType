@@ -40,6 +40,7 @@
 | W-2 | 引入白霜词库并调整两套方案，回归 RimeChecks | pi-ui | 白霜已撤回；采用 C 原主词库/原设置，回归通过 |
 | W-3 | AI / 开发中文词库与英文扩充，评测校准权重 | pi-ui | 已完成 C 校准：日常 78、整句 17、开发 29、AI 57，总计 181/200 |
 | W-4 | 简体空间去重、中英文质量筛选、ICU 学习词迁移及回归测试 | pi-platform | 附加 translator/显式拼音真实包回归通过；词条质量与 IMK 试打待人工验收 |
+| W-4a | 学习词迁移备份排除顶层日志目录 | pi-platform | 完成；专项及全量通过 |
 | W-5 | Claude 在本机执行个人层脚本、安装、用户试打 | Claude + 用户 | 未开始 |
 
 **文件所有权**：pi-ui：`Rime/`、`THIRD_PARTY_NOTICES.md`、`LICENSES/`、`scripts/eval-candidates.sh`、`Tests/InputMethodTests/Fixtures/`、评测相关测试；pi-platform：`scripts/personal/`、其测试、`.gitignore` 一行。两人都不改 `InputMethod/sources`（pi-ime 正在恢复 RoType 视觉）。
@@ -294,3 +295,10 @@ A/B 与先前保存结果、重建 C 与新保存结果的三个 `cmp` 均退出
 - `Tests/PersonalScriptsTests/packaged_checks.py` 经现有 SPM 包装接入 `scripts/test.sh`，必须使用当前 worktree 的 `scripts/build.sh` 产物。无个人层/中英文个人层/仅英文/空个人层均在临时 profile 部署；对照主 table 尺寸和字节、无 Encode failure、全拼/双拼的常用词首选、个人中文和英文实际候选。未写用户目录、未安装/注册/启动输入法。
 - 最终 `scripts/build.sh` **退出 0**；`scripts/test.sh` **退出 0**，个人脚本 20 项检查全部通过。真实包中的中文主 table 为 **13,032,304 字节**，英文主 table 为 **814,612 字节**；四种 profile 对照尺寸和全部字节一致。全拼 `shuju/yonghu/gongsi` 与对应双拼查询首选均与无个人层基线一致；个人中文/英文在两种方案下均查到，无 Encode failure。
 - 证据位于 `.build/personal-deployment-evidence/`：`red.log` / `red.exit` 为故障复现（1），`final-build.log` / `.exit` 为完整构建（0），`verified-tests.log` / `.exit` 为最终全量验证（0）。`git diff --check` 通过。真实 IMK 试打仍待 Claude/用户验收。
+
+### W-4a：迁移备份排除顶层日志目录
+
+- 合成回归复现真实故障：顶层 `logs/` 内的 librime 日志符号链接触发 `nonregular backup member`，迁移 CLI 退出 2、回归测试退出 1。
+- 修复仅排除 profile 顶层真实 `logs/` 目录。日志内容及普通/断裂日志链接不读取、不复制、不修改；`logs` 本身为符号链接时仍拒绝，其他目录（包括嵌套 `data/logs`）中的符号链接仍拒绝。其余用户数据完整备份规则保持原样。
+- 临时真实 librime/ICU 测试验证：迁移与回滚成功，数据库摘要恢复一致，备份不含日志目录，其他设置文件在备份中，日志文件及两个符号链接原样保留；另两种非日志符号链接场景被拒绝且数据库摘要不变。专项退出 **0**。
+- 全量 `scripts/test.sh` **退出 0**：171 项 Swift Testing，个人脚本包含 22 项检查，真实包部署对照再次通过。证据：`.build/personal-deployment-evidence/logs-tests.log` / `logs-tests.exit`。`git diff --check` 通过。用户已自行完成真实迁移，本任务没有重复执行，也未访问或修改真实 profile。

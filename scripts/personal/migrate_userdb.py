@@ -80,9 +80,11 @@ def main():
             saved = backup(target, 'simplified')
             original = saved / 'original'
             original.mkdir()
-            # Complete profile snapshot, excluding backups and this script's lock.
+            # Profile data snapshot; root logs are disposable runtime output.
             for item in target.iterdir():
                 if item.name in ('roarkt-backups', '.roarkt-personal.lock'):
+                    continue
+                if item.name == 'logs' and not item.is_symlink() and item.is_dir():
                     continue
                 plain(item)
                 if item.is_dir():
