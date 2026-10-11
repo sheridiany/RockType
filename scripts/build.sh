@@ -35,11 +35,11 @@ for dependency in librime plum Sparkle; do
   }
 done
 xcodebuild -project "$repo_dir/InputMethod/Squirrel.xcodeproj" -scheme Squirrel \
-  -configuration Release -derivedDataPath "$repo_dir/build/ime" \
+  -configuration Release -derivedDataPath "$repo_dir/.build/ime" \
   ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build
 input_app="$repo_dir/dist/RoarkT Input.app"
 rm -rf "$input_app"
-ditto "$repo_dir/build/ime/Build/Products/Release/RoarkT Input.app" "$input_app"
+ditto "$repo_dir/.build/ime/Build/Products/Release/RoarkT Input.app" "$input_app"
 # Sign nested executables/libraries before the bundle (without --deep signing).
 for binary in "$input_app/Contents/Frameworks/"*.dylib(N) \
     "$input_app/Contents/Frameworks/rime-plugins/"*.dylib(N) \

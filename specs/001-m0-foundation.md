@@ -28,7 +28,7 @@
 | --- | --- | --- | --- |
 | T1 | Rime 方案迁移 | pi | 完成（Claude 已验收 2026-10-11） |
 | T2 | 翻译 XPC 协议与服务迁移 | pi | 完成（Claude 已验收 2026-10-11；服务测试已并入根 Package.swift） |
-| T3 | 输入法迁移与开发安装 | pi | 完成（待验收；根测试脚本的词库误报需 Claude 处理） |
+| T3 | 输入法迁移与开发安装 | pi | 完成（待验收） |
 | T4 | 端到端验收 | Claude | 未开始 |
 
 ### T1 Rime 方案迁移
@@ -82,9 +82,9 @@
 
 | 检查 | 结果 | 证据 / 限制 |
 | --- | --- | --- |
-| `scripts/build.sh` | 通过 | Swift 6 Release 编译、主 App / 服务 / 输入法 / 注册工具签名及 bundle `codesign --verify --strict --deep` 成功。仅保留 Xcode 的“无 AppIntents 依赖，跳过 metadata”提示。 |
+| `scripts/build.sh` | 通过 | Swift 6 Release 编译、主 App / 服务 / 输入法 / 注册工具签名及 bundle `codesign --verify --strict --deep` 成功。Xcode 的“无 AppIntents 依赖，跳过 metadata”及 SwiftPM 未打包 `Core/Voice/LICENSE.md` 的提示不影响构建。 |
 | 签名身份 | 通过 | `codesign -dv 'dist/RoarkT Input.app'`：Identifier `com.roarkist.inputmethod.RoarkT`，TeamIdentifier `DF7J2VBQD8`；服务 Identifier `com.roarkist.roarkt.translation`，同 Team ID。 |
-| `scripts/test.sh` | **失败：词库守卫误报** | Swift Testing **38/38 通过**，Rime 三方案临时部署通过；末尾 grep 把上游词库中的“巴洛克”“夏洛克”等普通词条识别成旧产品。命中 `InputMethod/librime/data/minimal/essay.txt`、`InputMethod/data/plum/essay.txt`、`InputMethod/data/plum/terra_pinyin.dict.yaml`，以及构建后 SharedSupport 中的两份词库副本。保留原始词库与固定子模块提交，未篡改自然语言词条。`scripts/test.sh` 不在 T3 所有权内，需 Claude 调整产品标识判定和第三方词库/构建产物扫描边界。 |
+| `scripts/test.sh` | **通过** | Claude 授权修订后仅新增排除 `InputMethod/data/`、`librime/`、`plum/`、`Sparkle/` 四个上游树；Xcode 输出放到已排除的 `.build/ime`。38 项 Swift 测试、Rime 三方案部署、守卫全部通过。临时在 `InputMethod/sources/` 放入旧标识后测试按预期失败，删除检查文件后重跑全部通过。 |
 | `InputMethod/scripts/test-ticket.sh` | 通过 | 实际 ticket 类型的重放拒绝、应用/光标/activation 变化、取消、过期、deadline、NaN、后请求替代前请求；实际填入策略的空文本/控制字符/缺失应用拒绝。 |
 | 产品源码旧标识检查 | 通过 | 对 git 跟踪的 `InputMethod` 文件排除上游词库、许可证及上游 README 后，旧产品标识 grep 无结果；不递归 gitlink。共享头只引用，不复制。 |
 | Plist / shell 语法 | 通过 | `plutil -lint` 检查 Info.plist、entitlements、pbxproj；`zsh -n scripts/build.sh scripts/install-dev.sh scripts/uninstall-dev.sh`；`bash -n InputMethod/scripts/package-rime.sh InputMethod/scripts/test-ticket.sh`。 |
@@ -94,11 +94,13 @@
 | 不静默启用/选择 | **通过** | TIS 查询得到两源正确中文显示名，均 `enabled=false`、`selected=false`。安装后的 bundle 深度签名校验通过。 |
 | 真实键盘、候选翻译、语音端点真实 XPC 往返、密码框、macOS 14 运行 | 待人工 / T4 验证 | 不自动选择输入源；编译、服务单测和 ticket 测试不能替代真实 IMK/语音填入验收。 |
 
-交接给 Claude：调整根测试脚本的词库误报（本任务没有该文件所有权）并复跑；执行 T4。当前保留 `~/Library/Input Methods/RoarkT Input.app` 与 `~/Library/LaunchAgents/com.roarkist.roarkt.translation.plist` 供验收，输入源未启用/选中，Rime 用户数据未修改。LaunchAgent 指向此 worktree 的 `dist/`，合并后需从目标 checkout 重新构建/安装；在此之前不要删除此 worktree。
+交接给 Claude：词库守卫误报已按授权修复；执行 T4。当前保留 `~/Library/Input Methods/RoarkT Input.app` 与 `~/Library/LaunchAgents/com.roarkist.roarkt.translation.plist` 供验收，输入源未启用/选中，Rime 用户数据未修改。LaunchAgent 指向此 worktree 的 `dist/`，合并后需从目标 checkout 重新构建/安装；在此之前不要删除此 worktree。
 
 #### Claude 合并前修订
 
 1. **共享源码：完成（待验收）**。删除输入法翻译校验副本；Xcode 直接引用 Core 的翻译校验、标识符、语音 ticket 与填入策略；ticket 检查入口同步路径。`scripts/build.sh` 构建及签名通过；`swift build`、`InputMethod/scripts/test-ticket.sh` 通过；`scripts/test.sh` 中 38 项测试与 Rime 部署通过，旧词库守卫失败由修订 2 处理。
+
+2. **守卫误报：完成（待验收）**。精确排除指定四个上游树，其他排除规则和 Rime 专用检查不变。Xcode 产物迁至原本已排除的 `.build/ime`，清理本任务旧 `build/ime` 产物。`scripts/test.sh` 全部通过；临时源码旧标识反例被拒，清理后重跑通过；`scripts/build.sh` 签名构建通过。
 
 ### T4 端到端验收（Claude）
 
@@ -109,7 +111,7 @@
 | 项 | 方法 | 结果 | 证据 |
 | --- | --- | --- | --- |
 | 骨架构建 | `swift build`、`scripts/test.sh`、`scripts/build.sh` | 通过 | 2026-10-11 Claude 本机运行 |
-| 无旧标识 | `scripts/test.sh` 守卫 | 失败（词库误报） | T3 产品源码检查通过；上游词库自然语言词条误报，见 T3 证据。 |
+| 无旧标识 | `scripts/test.sh` 守卫 | 通过 | 按 Claude 授权排除指定四个上游树；产品源码反例检查仍能拦截。 |
 | Rime 部署 | `scripts/test-rime.sh` | 通过 | 2026-10-11：`scripts/test.sh` 调用 `scripts/test-rime.sh`，临时目录部署 `roarkt` / `roarkt_flypy` / `roarkt_en` 成功，生成 `roarkt_zh.table.bin`、`roarkt_zh.prism.bin`、`roarkt_flypy.prism.bin`、`roarkt_en.table.bin`、`roarkt_en.prism.bin`。`grep -ri rotype Rime/` 无结果。未验证真实键盘打字（属 T3/T4）。Claude 复核：重跑通过；4 个未迁入 Lua 均为旧版退休空壳，方案未引用。已知问题：部署器暂借 `../RoType`，T3 后改用 `InputMethod/bin`。 |
 | XPC 鉴权：输入法可翻译、伪造客户端被拒 | 服务测试 + 手工 | 未运行 | |
 | 输入源注册 | `install-dev.sh` 后列出输入源 | 通过 | 2026-10-11 T3：全拼/小鹤均可查询、显示名正确、未启用/选中；卸载和重新安装通过。 |
