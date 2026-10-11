@@ -23,8 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store: store,
         permissions: { [unowned self] in AnyView(PermissionCenterView(center: self.permissions)) },
         aiConnection: { [unowned self] in
-            AnyView(ShellConnectionView(model: self.connection,
-                settings: Binding(get: { self.store.settings.ai }, set: { self.store.settings.ai = $0 })))
+            AnyView(OnboardingConnectionRoot(store: self.store, connection: self.connection))
         },
         showSettings: { [weak self] in self?.showSettings() })
     private lazy var settingsWindow: SettingsWindowController = {
@@ -66,10 +65,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        onboarding.applicationShouldHandleReopen()
+        if CommandLine.arguments.contains("--gallery") { gallery.show(); return false }
+        return onboarding.applicationShouldHandleReopen()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        if CommandLine.arguments.contains("--gallery") { clock.stop(); panel.stop(); return }
         connection.cancel()
         hotkeys.stop()
         comingSoon.stop()
@@ -177,4 +178,10 @@ private struct LiveMenuRoot: View {
             .preferredColorScheme(store.settings.general.appearance == .system ? nil :
                 store.settings.general.appearance == .dark ? .dark : .light)
     }
+}
+
+private struct OnboardingConnectionRoot: View {
+    @Bindable var store: SettingsStore
+    let connection: ShellConnectionModel
+    var body: some View { ShellConnectionView(model: connection, settings: $store.settings.ai) }
 }

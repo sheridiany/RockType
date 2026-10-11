@@ -10,6 +10,7 @@ struct ShellSettingsView: View {
     let persistenceMessage: String
     let exportDiagnostics: () -> Void
     @State var section: SettingsSection = .general
+    @State private var language = LanguagePackModel()
     @State private var templateID = "translate"
     @Environment(\.colorScheme) private var scheme
     private var p: Tokens.Palette { Tokens.palette(scheme) }
@@ -113,7 +114,7 @@ struct ShellSettingsView: View {
     }
     private var input: some View {
         Group {
-            Notice(text: "配置已保存；输入法进程的设置同步等待集成验收。")
+            Notice(text: "当前只保存偏好，尚未同步到输入法进程。")
             U4Card {
                 Picker("默认方案", selection: $settings.input.scheme) {
                     Text("全拼").tag(InputSettings.Scheme.pinyin)
@@ -145,7 +146,8 @@ struct ShellSettingsView: View {
                 field("翻译模型（空为默认）", optional($settings.translation.model))
                 toggle("候选翻译允许使用 AI", $settings.translation.allowCandidateAI)
             }
-            Notice(text: "语言包状态由首次引导检查。动态离线翻译需 macOS 26；候选静态词条按原文精确匹配。划词与截图翻译即将推出。")
+            U4Card { LanguagePackStepView(model: language) }
+            Notice(text: "动态离线翻译需 macOS 26；候选静态词条按原文精确匹配。划词与截图翻译即将推出。")
         }
     }
     private var voice: some View {
@@ -277,7 +279,7 @@ struct ShellSettingsView: View {
                 Text("macOS 14 及以上 · Apple Silicon")
                 U4Rule()
                 Text("主 App：MIT · 输入法：GPL v3，按进程隔离。")
-                Text("自动更新与卸载入口将在分发阶段提供。")
+                Text("自动更新与卸载即将推出。")
             }
             Button("导出诊断…", action: exportDiagnostics)
         }

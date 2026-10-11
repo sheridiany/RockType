@@ -144,7 +144,7 @@ struct OnboardingShellView: View {
     }
 }
 
-private struct LanguagePackStepView: View {
+struct LanguagePackStepView: View {
     let model: LanguagePackModel
     @State private var preparing = false
     @State private var direction = 0
