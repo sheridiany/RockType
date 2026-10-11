@@ -21,6 +21,28 @@ import AVFoundation
         }
     }
 
+    public enum RequestFailure: Error { case missingMicrophoneUsageDescription }
+
+    /// Never call from polling or startup. Authorization belongs to the signed main app.
+    public static func request(_ permission: Kind) async throws {
+        switch permission {
+        case .accessibility:
+            _ = Accessibility.isTrusted(prompt: true)
+        case .screenRecording:
+            _ = CGRequestScreenCaptureAccess()
+        case .microphone:
+            guard let description = Bundle.main.object(forInfoDictionaryKey: "NSMicrophoneUsageDescription") as? String,
+                  !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw RequestFailure.missingMicrophoneUsageDescription
+            }
+            if status(for: .microphone) == .notDetermined {
+                _ = await AVCaptureDevice.requestAccess(for: .audio)
+            } else if status(for: .microphone) == .denied {
+                _ = openSettings(for: .microphone)
+            }
+        }
+    }
+
     public static func settingsURL(for permission: Kind) -> URL {
         let pane: String
         switch permission {
