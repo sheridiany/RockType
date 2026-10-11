@@ -11,14 +11,7 @@ struct GalleryEntry: Identifiable {
 
 @MainActor
 enum GalleryCatalog {
-    static let entries: [GalleryEntry] = [
-        GalleryEntry(surface: "result", state: "streaming", title: "结果浮窗 · 流式中") {
-            AnyView(ResultExampleView(model: .streaming))
-        },
-        GalleryEntry(surface: "result", state: "done", title: "结果浮窗 · 完成") {
-            AnyView(ResultExampleView(model: .done))
-        },
-    ]
+    static let entries: [GalleryEntry] = PrimarySurfaceEntries.entries
 }
 
 enum GalleryTheme: String, CaseIterable, Identifiable {
