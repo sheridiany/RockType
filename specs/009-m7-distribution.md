@@ -53,3 +53,9 @@
 - R-1：安装脚本、固定路径应用退出工具、签名 product pkg 构建已实现。`scripts/test.sh` 通过；实际安装与重启输入法待 R-6 人工验证。安装使用规格规定的系统 LaunchAgent 路径。
 
 ## 问题
+
+### R-1 补充验收（2026-10-11）
+
+- 修复 productbuild 已有 `hostArchitectures` 时生成重复 XML 属性的问题；签名 pkg 已产出，`pkgutil --check-signature` 通过（DF7J2VBQD8）。
+- `scripts/test.sh` 通过（116 Swift tests、Rime 部署、外壳检查）；修正前置提交遗留的旧快捷键处理器断言，旧处理器应不再触发动作。
+- 未执行本机安装、切换输入源或升级，仍待 R-6 干净账户验证。

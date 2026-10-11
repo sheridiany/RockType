@@ -59,7 +59,7 @@ pkgbuild --root "$root" --component-plist "$work/components.plist" --scripts "$w
   --sign "$installer_identity" "$work/component.pkg"
 # A product archive supports Sparkle's guided package installation.
 productbuild --synthesize --package "$work/component.pkg" "$work/Distribution.xml"
-sed -i '' 's/<options /<options hostArchitectures="arm64" /' "$work/Distribution.xml"
+sed -E -i '' 's/ hostArchitectures="[^"]*"//g; s/<options /<options hostArchitectures="arm64" /' "$work/Distribution.xml"
 output="$repo_dir/dist/RoarkT-$version-macOS-arm64.pkg"
 productbuild --distribution "$work/Distribution.xml" --package-path "$work" --sign "$installer_identity" "$output"
 pkgutil --check-signature "$output"
