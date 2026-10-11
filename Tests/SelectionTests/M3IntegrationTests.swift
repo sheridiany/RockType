@@ -7,25 +7,44 @@ import RoarkTCore
     var requests: [OperationRequest] = []
     var streams: [AsyncStream<OperationEvent>.Continuation] = []
     var stops = 0
+    private let completionDelay: Duration
+    private var deliveries: [Task<Void, Never>] = []
+    init(completionDelay: Duration) { self.completionDelay = completionDelay }
     func start() {}
-    func stop() { stops += 1 }
+    func stop() {
+        stops += 1
+        deliveries.forEach { $0.cancel() }
+        deliveries.removeAll()
+    }
     func cancel() {}
     func run(_ request: OperationRequest) -> AsyncStream<OperationEvent> {
         requests.append(request)
         return AsyncStream { streams.append($0) }
     }
-    func complete(_ index: Int, text: String = "Synthetic answer") -> OperationResult {
+    func complete(_ index: Int, text: String = "Synthetic answer") throws -> OperationResult {
+        try #require(requests.indices.contains(index) && streams.indices.contains(index),
+                     "A request and its event stream must exist before completing it")
         let request = requests[index]
         let session = OperationSession(id: request.session.id, snapshot: request.session.snapshot,
             turns: request.session.turns + [.init(question: request.question ?? "", answer: text)])
         let result = OperationResult(session: session, templateID: request.template.id, text: text, engine: "Synthetic model")
-        streams[index].yield(.completed(result))
+        let stream = streams[index]
+        if completionDelay == .zero {
+            stream.yield(.completed(result))
+        } else {
+            deliveries.append(Task { @MainActor [completionDelay] in
+                do { try await Task.sleep(for: completionDelay) } catch { return }
+                stream.yield(.completed(result))
+            })
+        }
         return result
     }
 }
 
 @Suite(.serialized) @MainActor struct M3IntegrationTests {
-    @Test func toolbarStreamsIntoWindowAndRecentResultsWithFollowUpAndPrivacy() async throws {
+    // A delayed completion reproduces the former fixed-yield race deterministically.
+    @Test(arguments: [Duration.zero, .milliseconds(25)])
+    func toolbarStreamsIntoWindowAndRecentResultsWithFollowUpAndPrivacy(completionDelay: Duration) async throws {
         _ = NSApplication.shared
         var settings = AppSettings.defaults
         var configured = true
@@ -36,7 +55,7 @@ import RoarkTCore
         environment.start()
         let operations = SelectionOperationsController(environment: environment, settings: { settings },
             aiConfigured: { configured }, notice: { notices.append($0) }, readable: { readable }, makeRunner: {
-                let runner = IntegrationRunner(); runners.append(runner); return runner
+                let runner = IntegrationRunner(completionDelay: completionDelay); runners.append(runner); return runner
             })
         defer { operations.stop(); environment.stop() }
         let selection = SelectionController(settings: { settings },
@@ -48,36 +67,47 @@ import RoarkTCore
         selection.performAction("summarize", captured: captured, fromToolbar: true)
         let first = try #require(runners.first)
         let window = try #require(operations.window)
-        #expect(window.isVisible && first.requests.count == 1)
+        try #require(window.isVisible && first.requests.count == 1 && first.streams.count == 1)
         first.streams[0].yield(.delta("Synthetic partial"))
-        await settle()
-        #expect(window.state.answer == "Synthetic partial" && window.state.phase == .streaming)
-        let result = first.complete(0)
-        await settle()
-        #expect(window.state.phase == .done && environment.recent.results == [result])
+        try await waitFor("Partial answer is consumed") {
+            window.state.answer == "Synthetic partial" && window.state.phase == .streaming
+        }
+        let result = try first.complete(0)
+        try await waitFor("Completion is consumed before asking a follow-up") {
+            window.state.phase == .done && environment.recent.results == [result]
+        }
         settings.selection.assistantModel = "new-model"
         operations.settingsChanged()
         window.state.question = "Synthetic follow-up"
         window.ask()
+        try #require(first.requests.count == 2 && first.streams.count == 2)
         #expect(first.requests[1].session == result.session)
         #expect(first.requests[1].settings.selection.assistantModel == "new-model")
         settings.privacy.keepRecentResultsInMemory = false
         operations.settingsChanged()
-        _ = first.complete(1)
-        await settle()
-        #expect(environment.recent.results.isEmpty)
+        let privateResult = try first.complete(1)
+        try await waitFor("Private completion is consumed without adding recent results") {
+            window.state.phase == .done && window.state.session == privateResult.session
+                && environment.recent.results.isEmpty
+        }
         settings.privacy.keepRecentResultsInMemory = true
         window.state.question = "Synthetic second follow-up"; window.ask()
-        let latest = first.complete(2)
-        await settle()
-        #expect(environment.recent.results == [latest])
+        try #require(first.requests.count == 3 && first.streams.count == 3)
+        let latest = try first.complete(2)
+        try await waitFor("Second follow-up reaches recent results") {
+            window.state.phase == .done && environment.recent.results == [latest]
+        }
         operations.reopen(latest)
-        #expect(first.stops > 0 && runners.count == 2 && runners[1].requests.isEmpty)
+        try #require(first.stops > 0 && runners.count == 2)
+        #expect(runners[1].requests.isEmpty)
         #expect(operations.window?.state.session == latest.session && operations.window?.state.answer == latest.text)
         operations.clearCurrentContent()
         #expect(operations.window == nil && environment.recent.results.isEmpty)
-        first.streams[2].yield(.delta("late"))
-        await settle()
+        // The completed stream has no consumer; asserting termination avoids
+        // a timed negative assertion that could pass before a late event runs.
+        if case .terminated = first.streams[2].yield(.delta("late")) {} else {
+            Issue.record("Completed event stream must reject late events")
+        }
         #expect(environment.recent.results.isEmpty)
 
         configured = false
@@ -88,16 +118,25 @@ import RoarkTCore
         #expect(actions.filter { ["explain", "summarize", "polish"].contains($0.id) }.allSatisfy { !$0.enabled })
         settings.translation.engine = .ai
         selection.performAction("translate", captured: captured, fromToolbar: true)
-        #expect(runners.count == 3 && runners[2].requests[0].settings.translation.engine == .offlineFirst)
+        try #require(runners.count == 3)
+        try #require(runners[2].requests.count == 1 && runners[2].streams.count == 1)
+        #expect(runners[2].requests[0].settings.translation.engine == .offlineFirst)
         runners[2].streams[0].yield(.failed(.unavailable))
-        await settle()
-        #expect(notices.last?.contains("服务") == true)
+        try await waitFor("Failure feedback is consumed") {
+            notices.last?.contains("服务") == true
+        }
         readable = false
         selection.performAction("translate", captured: captured, fromToolbar: true)
         #expect(runners.count == 3)
     }
 
-    private func settle() async {
-        for _ in 0..<30 { await Task.yield() }
+    private func waitFor(_ reason: String, condition: () -> Bool) async throws {
+        let deadline = ContinuousClock.now + .seconds(5)
+        while !condition() && ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        // Abort the test on timeout: a failed precondition must never flow into
+        // a request-array subscript or another action requiring completed state.
+        try #require(condition(), Comment(rawValue: reason))
     }
 }

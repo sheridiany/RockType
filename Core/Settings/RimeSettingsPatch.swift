@@ -9,6 +9,7 @@ public enum RimeSettingsPatch {
     public static func yaml(for scheme: InputSettings.Scheme, settings: InputSettings) -> String {
         let shift = settings.shiftTogglesLanguage ? "commit_code" : "noop"
         var lines = [marker, "patch:",
+            "  __include: roarkt_personal.patch:/patch?",
             "  \"ascii_composer/switch_key/Shift_L\": \(shift)",
             "  \"ascii_composer/switch_key/Shift_R\": \(shift)",
             "  \"english/enable_completion\": \(settings.englishCompletion)"]
