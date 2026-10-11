@@ -92,8 +92,7 @@ import RoarkTPlatform
             self.savePanel = nil
             guard response == .OK, self.check(), let url = panel.url, let image = self.image else { return }
             do {
-                guard let data = NSBitmapImageRep(cgImage: image).representation(using: format == .png ? .png : .jpeg,
-                    properties: format == .jpeg ? [.compressionFactor: 0.9] : [:]) else { throw PlatformReadError.writeFailed }
+                guard let data = ScreenshotExport.encode(image, jpeg: format == .jpeg) else { throw PlatformReadError.writeFailed }
                 try data.write(to: url, options: .atomic); self.notice = "图片已保存"
             } catch { self.notice = "无法保存图片，请选择其他位置后重试。" }
         }

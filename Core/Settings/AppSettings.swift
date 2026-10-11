@@ -105,6 +105,8 @@ public struct ScreenshotSettings: Codable, Equatable, Sendable {
     public var saveDirectory: String? = nil
     /// Missing in existing settings: each tool uses its own built-in default.
     public var annotationStyles: [String: ScreenshotAnnotationStyle]? = nil
+    /// nil keeps the default rounded output when loading settings written before this option.
+    public var roundedCorners: Bool? = nil
     public init() {}
 }
 
