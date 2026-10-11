@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(RoarkTCore)
+import RoarkTCore
+#endif
 
 /// Shared with the standalone cleanup helper. Never follows a symlinked Rime directory.
 enum UninstallData {
@@ -17,7 +20,7 @@ enum UninstallData {
                 throw CocoaError(.fileWriteNoPermission)
             }
         }
-        let appData = support.appendingPathComponent("RockType", isDirectory: true)
+        let appData = support.appendingPathComponent(Identifiers.applicationSupportFolder, isDirectory: true)
         if fm.fileExists(atPath: appData.path) { try fm.removeItem(at: appData) }
         let rime = library.appendingPathComponent("Rime", isDirectory: true)
         guard fm.fileExists(atPath: rime.path) else { return }

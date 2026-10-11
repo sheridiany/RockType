@@ -19,7 +19,7 @@ struct CleanupUserData {
         }
         catch {
             // No content or user paths in logs. Surface failures after the main app has quit.
-            let script = NSAppleScript(source: "display alert \"RoarkT 数据清理未完成\" message \"程序已卸载；请手动检查 RoarkT 设置目录。其他输入法文件已保留。\"")
+            let script = NSAppleScript(source: "display alert \"RockType 数据清理未完成\" message \"程序已卸载；请手动检查 RockType 设置目录。其他输入法文件已保留。\"")
             var error: NSDictionary?
             script?.executeAndReturnError(&error)
             exit(1)

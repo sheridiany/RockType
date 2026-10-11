@@ -6,21 +6,21 @@
 
 ## 范围
 
-一个签名、公证的 `RoarkT-<版本>-macOS-arm64.pkg`；安装、首次运行、卸载、Sparkle 自动更新可用。参考 `../RoType/scripts/build-installer.sh`、`notarize-installer.sh`、`Installer/scripts/*`（只读），但**不兼容旧产品**：删除旧版本退休、升级迁移、语音退休、HIToolbox 规范化等逻辑。
+一个签名、公证的 `RockType-<版本>-macOS-arm64.pkg`；安装、首次运行、卸载、Sparkle 自动更新可用。参考 `../RoType/scripts/build-installer.sh`、`notarize-installer.sh`、`Installer/scripts/*`（只读），但**不兼容旧产品**：删除旧版本退休、升级迁移、语音退休、HIToolbox 规范化等逻辑。
 
 ## 安装布局（见 docs/architecture.md）
 
 | 产物 | 位置 |
 | --- | --- |
-| `RoarkT.app`（含翻译服务、语音 worker） | `/Applications/` |
-| `RoarkT Input.app` | `/Library/Input Methods/` |
-| 翻译服务 LaunchAgent | `/Library/LaunchAgents/com.roarkist.roarkt.translation.plist`，程序路径 `/Applications/RoarkT.app/Contents/Helpers/RoarkTTranslationService` |
+| `RockType.app`（含翻译服务、语音 worker） | `/Applications/` |
+| `RockType Input.app` | `/Library/Input Methods/` |
+| 翻译服务 LaunchAgent | `/Library/LaunchAgents/com.roarkist.roarkt.translation.plist`，程序路径 `/Applications/RockType.app/Contents/Helpers/RoarkTTranslationService` |
 
 ## 规则
 
 - postinstall：以登录用户身份 `TISRegisterInputSource` 注册（`launchctl asuser`），加载 LaunchAgent，启动主 App（首次引导会处理“添加输入源”）。**不 enable/select 输入源**，不写 HIToolbox 偏好，不重启系统代理（见 RoType 研究文档）。
-- 升级（同为 RoarkT）：退出旧输入法与主 App 进程后替换，保留用户数据（`~/Library/Rime`、`Application Support/RoarkT`、语音模型、钥匙串）。
-- 卸载：设置 → 关于 → “卸载 RoarkT…”（已有入口）：确认对话 → 停用并移除输入源注册、bootout LaunchAgent、删除三处程序文件（需管理员授权，用 `NSAppleScript` 的 `with administrator privileges` 或 SMJobBless 以外的最简可靠方式）；勾选“同时删除我的数据”时再删除用户数据（Rime 中仅删 roarkt 相关文件与 RoarkT 生成的 custom.yaml）。
+- 升级（同为 RockType）：退出旧输入法与主 App 进程后替换，保留用户数据（`~/Library/Rime`、`Application Support/RoarkT`、语音模型、钥匙串）。
+- 卸载：设置 → 关于 → “卸载 RockType…”（已有入口）：确认对话 → 停用并移除输入源注册、bootout LaunchAgent、删除三处程序文件（需管理员授权，用 `NSAppleScript` 的 `with administrator privileges` 或 SMJobBless 以外的最简可靠方式）；勾选“同时删除我的数据”时再删除用户数据（Rime 中仅删 roarkt 相关文件与 RockType 生成的 custom.yaml）。
 - 公证：`notarytool submit --wait` + `stapler staple`；凭据用钥匙串 profile（名称经环境变量 `ROARKT_NOTARY_PROFILE` 传入），脚本不含任何凭据。
 - Sparkle：主 App 集成 Sparkle 2（SPM 依赖，固定版本），`SUFeedURL` 指向 GitHub Releases 上的 appcast（URL 用占位常量，待用户确定仓库）；EdDSA 公钥写入 Info.plist，私钥只在用户钥匙串；`scripts/make-appcast.sh` 生成 appcast。更新后需重启输入法进程（安装后脚本处理）。输入法自身不再内嵌 Sparkle 更新逻辑（若 InputMethod 中仍有，移除其更新入口，子模块可保留）。
 - 第三方声明：`THIRD_PARTY_NOTICES.md` 完整覆盖 librime、plum、Squirrel（GPL）、MLX 等；pkg 内附 `Licenses/`；附 GPL 源码获取说明。
@@ -42,7 +42,7 @@
 ### R-7 官网
 
 - 以 `../RoType/website/` 为参考（只读），沿用其原则：纯静态 HTML/CSS、无 JS 框架、无外部字体与分析脚本、跟随系统浅深色、尊重减少动态效果。
-- 内容改为 RoarkT：一个产品的四个能力（双语输入法与候选翻译、本地语音、划词 AI、截图 OCR），各配图；隐私说明页（本地优先、只有显式 AI 动作发送内容、密钥只在钥匙串）；更新日志页；下载按钮指向占位常量（GitHub Releases，待用户确定仓库）；GPL 源码获取说明。
+- 内容改为 RockType：一个产品的四个能力（双语输入法与候选翻译、本地语音、划词 AI、截图 OCR），各配图；隐私说明页（本地优先、只有显式 AI 动作发送内容、密钥只在钥匙串）；更新日志页；下载按钮指向占位常量（GitHub Releases，待用户确定仓库）；GPL 源码获取说明。
 - 产品图：用 `scripts/render-gallery.sh` 产出的 Gallery PNG（候选窗、结果浮窗、截图编辑器、语音 HUD、设置），注明“界面示意”；不得伪造实机截图。
 - 视觉风格对齐 D0 Tokens（靛蓝强调色、灰底白卡），不照搬 RoType 的黑白灰。
 - 测试：`Tests/Website/` 下用 Python 标准库（`html.parser`）检查链接、图片存在与 alt、无外部脚本；接入 `scripts/test.sh`。不依赖 playwright。
@@ -65,6 +65,8 @@
 - R-1：安装脚本、固定路径应用退出工具、签名 product pkg 构建已实现。`scripts/test.sh` 通过；实际安装与重启输入法待 R-6 人工验证。安装使用规格规定的系统 LaunchAgent 路径。
 
 ## 验收证据
+
+以下早期记录保留当时的产物名称与校验和。当前产品名和产物路径以文末 RockType 更名补验为准；内部设置目录、模块和标识符保持不变。
 
 ### R-1 补充验收（2026-10-11）
 
@@ -115,3 +117,12 @@
 3. 确认 TIS 无公开 unregister API 时，以停用 + 删除 bundle + 注销登录清缓存作为注册移除验收。取消授权或中途失败可能已停用输入源/登录项，人工验收需覆盖重试。
 4. 核实预编译 librime / Lua / Octagram / Predict 的完整构建来源与静态依赖，及 essay 数据的精确修订；现有源码无法证明全部二进制来源。建议取得原构建记录，或从固定源码重建后发布。`LICENSES/GPL-SOURCE.md` 已列对应源码包材料；正式源代码下载 URL 和源码包尚未发布，NFR-9 不标记完成。
 5. 本实现遵循 SPEC-009 的 `/Library/LaunchAgents/` 系统位置；架构表仍写 `~/Library/LaunchAgents/`，请统一文档口径。
+
+### RockType 更名补验（2026-10-11）
+
+- 本 worktree 已快进合入 main `9b197ce`。补齐分发包名、公证脚本默认路径、appcast 标题、清理失败提示及随包源码说明的 RockType 命名，更新本产品 MIT 许可证文件名；原第三方版权署名保持原样。
+- 修复重命名时误改卸载数据目录的问题：主 App 与独立清理工具均读取 `Identifiers.applicationSupportFolder`，遵守“只改显示名，内部目录保持不变”。测试验证实际设置目录被清理、与显示名同名的其他目录不被误删；生成的 Rime custom 配置使用新标记。
+- `scripts/test.sh` **通过**：151 Swift tests / 4 suites，另含隔离 IME、Rime 能力与外壳检查。独立清理工具编译、脚本语法和 `git diff --check` **通过**。
+- `scripts/build.sh` **通过**：两个签名 App 的可执行文件分别为 `RockType` 与 `RockType Input`，`codesign --verify --deep --strict` **通过**；voice XPC smoke **通过**。
+- 本轮未安装、未注册输入法、未加载 LaunchAgent，未启动主 App 或输入法。发布配置、真实公证、自动更新、卸载及源码来源核验仍按上述未完成项由 Claude 验收。
+- `scripts/build-installer.sh`、`pkgutil --check-signature` **通过**：新产物 `dist/RockType-0.1.0-macOS-arm64.pkg`。仅展开检查，两个 App 的严格签名、可执行文件名、许可证逐文件比对均 **通过**。SHA-256：`073196404fc079cc1cf44efcf788c4af7cd757c5323e6a0124515c4e32acd03e`。
