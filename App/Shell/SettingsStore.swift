@@ -32,6 +32,9 @@ final class SettingsStore {
             let loaded = try persistence.load()
             settings = loaded.settings
             loadStatus = loaded.status
+            // Regenerate the app-owned Rime patches from saved preferences at launch, so a new
+            // app version's patch format reaches existing users; unchanged files are not rewritten.
+            if loaded.status == .loaded { inputMethodSyncMessage = inputMethodSync?.publish(loaded.settings) }
         } catch {
             settings = .defaults
             readFailed = true

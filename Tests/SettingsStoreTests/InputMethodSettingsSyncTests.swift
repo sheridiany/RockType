@@ -57,3 +57,22 @@ import RoarkTCore
     #expect(store.inputMethodSyncMessage == nil)
     #expect(signals.contains(InputMethodSettingsNotification.redeploy))
 }
+
+@MainActor @Test func launchRegeneratesOutdatedAppOwnedPatches() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let persistence = SettingsPersistence(fileURL: directory.appendingPathComponent("settings.json"))
+    try persistence.save(.defaults)
+    let rime = directory.appendingPathComponent("Rime")
+    try FileManager.default.createDirectory(at: rime, withIntermediateDirectories: true)
+    let file = rime.appendingPathComponent("roarkt.custom.yaml")
+    try Data((RimeSettingsPatch.marker + "\npatch:\n  __include: roarkt_personal.patch:/patch?\n").utf8).write(to: file)
+    var signals: [Notification.Name] = []
+    let sync = InputMethodSettingsSynchronizer(writer: .init(directory: rime)) { signals.append($0) }
+    _ = SettingsStore(persistence: persistence, inputMethodSync: sync)
+    #expect(try String(contentsOf: file, encoding: .utf8) == RimeSettingsPatch.yaml(for: .pinyin, settings: AppSettings.defaults.input))
+    #expect(signals.contains(InputMethodSettingsNotification.redeploy))
+    signals.removeAll()
+    _ = SettingsStore(persistence: persistence, inputMethodSync: sync)
+    #expect(!signals.contains(InputMethodSettingsNotification.redeploy), "Unchanged patches must not rebuild Rime")
+}
