@@ -7,8 +7,8 @@ struct SelectionToolbarView: View {
     @State private var selectedAction: SurfaceAction?
     var body: some View {
         let p = Tokens.palette(scheme)
-        VStack(alignment: .leading, spacing: Tokens.Space.sm) {
-            if model.isVisible {
+        if model.isVisible {
+            VStack(alignment: .leading, spacing: Tokens.Space.sm) {
                 HStack(spacing: Tokens.Space.xs) {
                     Image(systemName: "square.stack.3d.up.fill")
                         .foregroundStyle(p.accent).padding(.horizontal, Tokens.Space.sm)
@@ -34,12 +34,9 @@ struct SelectionToolbarView: View {
                     Notice(text: "解释和总结需要配置 AI；本地翻译、搜索和复制仍可用。", tone: .warn)
                 }
                 if let selectedAction { Notice(text: "已选择" + selectedAction.title) }
-            } else {
-                // Gallery explanation only: no selectable content or actionable toolbar.
-                Notice(text: "当前为安全输入区域，划词工具栏已隐藏。不会读取或处理内容。")
             }
+            .frame(width: model.compact ? Tokens.Size.menuWidth : Tokens.Size.resultWidth)
+            .accessibilityLabel("划词工具栏 · " + model.state.title)
         }
-        .frame(width: model.compact ? Tokens.Size.menuWidth : Tokens.Size.resultWidth)
-        .accessibilityLabel("划词工具栏 · " + model.state.title)
     }
 }

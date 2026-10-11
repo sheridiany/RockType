@@ -61,7 +61,7 @@ struct ImagePreviewView: View {
                     Button("配置视觉模型") { feedback = "视觉模型配置入口已选中" }
                         .buttonStyle(DesignButtonStyle(variant: .secondary))
                 case .ocrRunning:
-                    StatusLine(status: .connecting, detail: "正在本机识别文字 · 未上传")
+                    Label("本机识别中…", systemImage: "text.viewfinder").foregroundStyle(p.accent)
                     Button("取消识别") { model.state = .preview; feedback = "已取消识别" }
                         .buttonStyle(DesignButtonStyle(variant: .ghost))
                 case .ocrEmpty:
