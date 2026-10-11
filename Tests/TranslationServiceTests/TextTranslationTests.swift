@@ -177,15 +177,25 @@ private final class Listener: NSObject, NSXPCListenerDelegate, @unchecked Sendab
     let delegate = Listener(service)
     let listener = NSXPCListener.anonymous(); listener.delegate = delegate; listener.resume()
     defer { delegate.invalidateConnections(); listener.invalidate() }
-    let client = TextTranslationXPCClient(timeout: .milliseconds(150), makeConnection: {
-        NSXPCConnection(listenerEndpoint: listener.endpoint)
+    var connections = 0
+    // The backend holds the first reply until explicitly released, so timeout
+    // does not depend on racing two sleeps. Allow real XPC ample scheduling time.
+    let client = TextTranslationXPCClient(timeout: .seconds(5), makeConnection: {
+        connections += 1
+        return NSXPCConnection(listenerEndpoint: listener.endpoint)
     })
+    defer { client.stop(); backend.release() }
     await #expect(throws: TextTranslationXPCClient.Failure.timedOut) {
         try await client.translate(sessionID: UUID(), generation: 1, text: "slow", target: "en")
     }
+    // Prove the request reached the held backend, rather than timing out on setup.
+    try #require(backend.held != nil)
+    #expect(backend.calls == 1)
+    #expect(connections == 1)
     backend.release()
     #expect(try await client.translate(sessionID: UUID(), generation: 1, text: "Synthetic", target: "en") == "Synthetic translation")
-    client.stop()
+    #expect(backend.calls == 2)
+    #expect(connections == 2)
 }
 
 @Test @MainActor func xpcInterruptionFailsPendingAndNextCallReconnects() async throws {
