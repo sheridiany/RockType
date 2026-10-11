@@ -168,6 +168,14 @@ struct RimeChecks {
         ("huidiao", "hvdn", "毁掉"), ("tongshi", "tsui", "同时"),
         ("duandian", "drdm", "断电"), ("liantiao", "lmtn", "链条"),
         ("xiecheng", "xpig", "写成"), ("xiancheng", "xmig", "县城"),
+        ("bianyi", "bmyi", "便宜"), ("biancheng", "bmig", "变成"),
+        // Independent contexts: collaboration collocations must distinguish 再 from 在.
+        ("wozhengzaitaolun", "wovgzdtcly", "我正在讨论"),
+        ("zaijiancha", "zdjmia", "再检查"),
+        ("xuexibiancheng", "xtxibmig", "学习编程"),
+        ("bianyicuowu", "bmyicowu", "编译错误"),
+        ("jiekouliantiao", "jpkzlmtn", "接口联调"),
+        ("xianchengdiaodu", "xmigdndu", "线程调度"),
       ] {
         input(args[4] == "roarkt_flypy" ? flypy : pinyin)
         require(page().words.first == expected, "everyday homophone first: \(expected), got \(page().words)")
