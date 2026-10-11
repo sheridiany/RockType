@@ -102,6 +102,7 @@ struct LiveResultWindowView: View {
         case .accessibility: "直接读取"
         case .copyFallback: "复制回退"
         case .paste: "粘贴"
+        case .screenshotOCR: "截图 OCR"
         case nil: ""
         }
     }

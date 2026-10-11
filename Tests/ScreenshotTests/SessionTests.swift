@@ -20,7 +20,7 @@ final class SessionTests: XCTestCase {
             space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
         return try XCTUnwrap(ctx.makeImage())
     }
-    @MainActor func testTranslationUsesEditedOCRAndSettings() async throws {
+    @MainActor func testTextOperationsUseEditedOCRMethodAndSettings() async throws {
         var settings = AppSettings.defaults
         settings.translation.targetLanguage = "fr"
         let runner = RecordingRunner()
@@ -30,9 +30,13 @@ final class SessionTests: XCTestCase {
         for _ in 0..<100 where !session.ocrFinished { await Task.yield() }
         XCTAssertTrue(session.ocrFinished)
         session.text = "Corrected synthetic text"
-        session.runText(templateID: "translate")
-        XCTAssertEqual(runner.requests.first?.session.snapshot.text, "Corrected synthetic text")
-        XCTAssertEqual(runner.requests.first?.settings.translation.targetLanguage, "fr")
+        for templateID in ["translate", "summarize"] {
+            session.runText(templateID: templateID)
+            XCTAssertEqual(runner.requests.last?.template.id, templateID)
+            XCTAssertEqual(runner.requests.last?.session.snapshot.text, "Corrected synthetic text")
+            XCTAssertEqual(runner.requests.last?.session.snapshot.method, .screenshotOCR)
+            XCTAssertEqual(runner.requests.last?.settings.translation.targetLanguage, "fr")
+        }
         session.close()
     }
     @MainActor func testImageRequiresVerifiedCapabilityAndExplicitConfirmation() async throws {
