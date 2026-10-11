@@ -93,6 +93,7 @@ struct SessionTests {
     verifyPropertyReaderAndPage()
     verifyTabDecision()
     verifySecureCacheBoundary()
+    verifyDebounceAndTechnicalProtection()
     verifyClientReuse()
     verifyCache()
     verifyCompositionBoundaries()
@@ -271,6 +272,48 @@ struct SessionTests {
     secure = false
     translate(5)
     precondition(transport.requests == 3, "entering secure input clears reusable text")
+    client.invalidate()
+  }
+
+  static func verifyDebounceAndTechnicalProtection() {
+    let transport = TranslationTransport()
+    var secure = false
+    let client = RoarkTTranslationClient(proxyProvider: { transport }, isSecureInputEnabled: { secure })
+    let phrase = try! CandidateTranslationRequest(rawInput: "hello'world", sourceText: "hello world", identity: "0:11:0", scope: .whole)
+    var received: [Int64] = []
+    func send(_ generation: Int64) {
+      client.translateDebounced(sessionID: "debounce", generation: generation, request: phrase, delay: 0.01) {
+        if case .success(let result) = $0 { received.append(result.generation) }
+      }
+    }
+    send(1); send(2); send(3)
+    precondition(transport.requests == 0, "keystrokes return before uncached XPC")
+    RunLoop.current.run(until: Date().addingTimeInterval(0.08))
+    precondition(transport.requests == 1, "only the settled phrase reaches XPC")
+    transport.respond(text: "你好世界"); drainReplies()
+    precondition(received == [3], "superseded generations cannot reply")
+    send(4)
+    precondition(received == [3, 4] && transport.requests == 1, "phrase cache hits bypass debounce")
+    client.invalidate()
+    send(5); client.cancel(sessionID: "debounce", throughGeneration: 5)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.08))
+    precondition(transport.requests == 1, "cancel removes queued dispatch")
+    send(6); secure = true
+    RunLoop.current.run(until: Date().addingTimeInterval(0.08))
+    precondition(transport.requests == 1 && received == [3, 4], "security is rechecked after debounce")
+    secure = false
+    for text in ["SwiftUI", "OpenAI", "URLSession", "loadUser", "user_id", "main.swift", "fetch()", "API", "C++", "C#", "安装Docker", "使用API调用", "修复 loadUser 的问题"] {
+      precondition(RoarkTCandidateSnapshot.preservesTechnicalText(text))
+      let request = try! CandidateTranslationRequest(rawInput: "test", sourceText: text, identity: "0:4:0", scope: .whole)
+      var preserved: String?
+      client.translateDebounced(sessionID: "code", generation: 1, request: request) {
+        if case .success(let result) = $0 { preserved = result.translatedText }
+      }
+      precondition(preserved == text && transport.requests == 1, "technical text stays local and exact")
+    }
+    for text in ["Hello", "hello world", "你好", "今天下午开会"] {
+      precondition(!RoarkTCandidateSnapshot.preservesTechnicalText(text), "ordinary prose still translates")
+    }
     client.invalidate()
   }
 

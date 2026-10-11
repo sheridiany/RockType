@@ -752,6 +752,11 @@ private extension SquirrelInputController {
       updateTranslationPanel()
       return
     }
+    if RoarkTCandidateSnapshot.preservesTechnicalText(snapshot.source) {
+      candidateTranslation.receive(snapshot.source, for: request, direction: candidateRequest.direction.rawValue)
+      updateTranslationPanel()
+      return
+    }
     if #unavailable(macOS 26.0) {
       candidateTranslation.fail(.requiresMacOS26, for: request)
       updateTranslationPanel()
@@ -761,7 +766,7 @@ private extension SquirrelInputController {
     // snapshot above was verified. Async replies must refresh Rime again.
     var replyIsSynchronous = true
     defer { replyIsSynchronous = false }
-    translationClient.translate(sessionID: translationSessionID, generation: request.generation,
+    translationClient.translateDebounced(sessionID: translationSessionID, generation: request.generation,
                                 request: candidateRequest) { [weak self] result in
       guard let self, self.candidateTranslation.ticket == request else { return }
       if !replyIsSynchronous {
