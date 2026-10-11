@@ -1,536 +1,367 @@
-//
-//  SquirrelPanel.swift
-//  Squirrel
-//
-//  Created by Leo Liu on 5/10/24.
-//
-
+// SPDX-License-Identifier: GPL-3.0-or-later
 import AppKit
+import QuartzCore
+
+/// D0 constants copied from App/DesignSystem/Tokens.swift and U4Primitives.swift.
+/// The GPL input method does not import or link the MIT App target.
+enum RoarkTPanelDesign {
+  static let padding: CGFloat = 12  // Space.md
+  static let gap: CGFloat = 4  // Space.xs
+  static let row: CGFloat = 36  // Size.row
+  static let width: CGFloat = 420  // U4.candidateWidth
+  static let radius: CGFloat = 12  // Radius.window
+  static func color(_ light: UInt32, _ dark: UInt32) -> NSColor {
+    NSColor(name: nil) { appearance in
+      let value = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
+      return NSColor(
+        srgbRed: CGFloat((value >> 16) & 255) / 255,
+        green: CGFloat((value >> 8) & 255) / 255, blue: CGFloat(value & 255) / 255, alpha: 1)
+    }
+  }
+  static let canvas = color(0xfcfcfd, 0x202126)
+  static let foreground = color(0x1c1c21, 0xededf1)
+  static let secondary = color(0x4b4b53, 0xb9b9c1)
+  static let tertiary = color(0x85858d, 0x9c9ca6)
+  static let accent = color(0x4f46e5, 0xa5b4fc)
+  static let accentSoft = color(0xeeedfd, 0x2b2c47)
+  static let onAccent = color(0xffffff, 0x14142a)
+  static let line = NSColor(name: nil) { appearance in
+    (appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? NSColor.white : .black)
+      .withAlphaComponent(0.07)
+  }
+  static func surface(_ rect: NSRect) {
+    let path = NSBezierPath(
+      roundedRect: rect.insetBy(dx: 0.25, dy: 0.25), xRadius: radius, yRadius: radius)
+    canvas.setFill()
+    path.fill()
+    line.setStroke()
+    path.lineWidth = 0.5
+    path.stroke()  // Size.hairline
+  }
+  static func text(
+    _ value: String, in rect: NSRect, size: CGFloat = 13, color: NSColor,
+    weight: NSFont.Weight = .regular
+  ) {
+    let paragraph = NSMutableParagraphStyle()
+    paragraph.lineBreakMode = .byTruncatingTail
+    (value as NSString).draw(
+      in: rect,
+      withAttributes: [
+        .font: NSFont.systemFont(ofSize: size, weight: weight),
+        .foregroundColor: color, .paragraphStyle: paragraph,
+      ])
+  }
+  static func place(size: NSSize, caret: NSRect, screen: NSRect) -> NSRect {
+    let size = NSSize(width: min(size.width, screen.width), height: min(size.height, screen.height))
+    let below = caret.minY - gap - size.height
+    return NSRect(
+      x: min(max(caret.minX, screen.minX), screen.maxX - size.width),
+      y: min(
+        max(below >= screen.minY ? below : caret.maxY + gap, screen.minY), screen.maxY - size.height
+      ),
+      width: size.width, height: size.height)
+  }
+}
 
 final class SquirrelPanel: NSPanel {
-  private let view: SquirrelView
-  private let back: NSVisualEffectView
+  private let view = RoarkTCandidateView(frame: .zero)
   private let translationPanel = RoarkTTranslationPanel()
   var inputController: SquirrelInputController?
-
   var position: NSRect
-  private var screenRect: NSRect = .zero
-  private var maxHeight: CGFloat = 0
-
-  private var statusMessage: String = ""
+  private var presentation = 0
+  private var statusMessage = ""
   private var statusTimer: Timer?
-
-  private var preedit: String = ""
-  private var selRange: NSRange = .empty
-  private var caretPos: Int = 0
-  private var candidates: [String] = .init()
-  private var comments: [String] = .init()
-  private var labels: [String] = .init()
-  private var index: Int = 0
-  private var cursorIndex: Int = 0
-  private var scrollDirection: CGVector = .zero
-  private var scrollTime: Date = .distantPast
-  private var page: Int = 0
-  private var lastPage: Bool = true
-  private var pagingUp: Bool?
+  private var pressedIndex: Int?
+  private var scrollTime = Date.distantPast
+  private var scrollDelta: CGFloat = 0
   private var contextMenuClick = false
+  var vertical: Bool { false }
+  var linear: Bool { true }
+  var inlinePreedit: Bool { false }
+  var inlineCandidate: Bool { false }
 
   init(position: NSRect) {
     self.position = position
-    self.view = SquirrelView(frame: position)
-    self.back = NSVisualEffectView()
-    super.init(contentRect: position, styleMask: .nonactivatingPanel, backing: .buffered, defer: true)
-    self.level = .init(Int(CGShieldingWindowLevel()))
-    self.hasShadow = true
-    self.isOpaque = false
-    self.backgroundColor = .clear
-    back.blendingMode = .behindWindow
-    back.material = .hudWindow
-    back.state = .active
-    back.wantsLayer = true
-    back.layer?.mask = view.shape
-    let contentView = NSView()
-    contentView.addSubview(back)
-    contentView.addSubview(view)
-    contentView.addSubview(view.textView)
-    self.contentView = contentView
+    super.init(
+      contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered,
+      defer: false)
+    level = .init(Int(CGShieldingWindowLevel()))
+    hasShadow = true
+    isOpaque = false
+    backgroundColor = .clear
+    hidesOnDeactivate = false
+    collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+    contentView = view
+    view.onSelect = { [weak self] index in _ = self?.inputController?.selectCandidate(index) }
   }
+  override var canBecomeKey: Bool { false }
+  override var canBecomeMain: Bool { false }
 
-  // Render the production panel without registering an IMK server, opening a
-  // user's Rime directory, or taking keyboard focus. Exits automatically.
-  static func preview(configurationPath: String, dark: Bool) {
-    let app = NSApplication.shared
-    app.setActivationPolicy(.accessory)
-    app.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
-    let config = SquirrelConfig()
-    guard let yaml = try? String(contentsOfFile: configurationPath, encoding: .utf8),
-          config.load(yaml: yaml), let screen = NSScreen.main else { return }
-    let panel = SquirrelPanel(position: NSRect(x: screen.frame.midX - 260, y: screen.frame.maxY - 260,
-                                             width: 1, height: 20))
-    panel.load(config: config, forDarkMode: false)
-    panel.load(config: config, forDarkMode: true)
-    let candidates = ["点", "·", "店", "电", "垫"]
-    panel.update(preedit: "", selRange: .empty, caretPos: 0, candidates: candidates,
-                 comments: Array(repeating: "", count: candidates.count), labels: (1...candidates.count).map(String.init),
-                 highlighted: 0, page: 0, lastPage: false, update: true)
-    var state = RoarkTCandidateTranslationSession()
-    let request = state.observe(.init(rawInput: "dian", source: "点", identity: "0:4:0", scope: "whole"))!
-    state.receive("Point", for: request, direction: "zh-en")
-    panel.updateTranslation(state)
-    let bounds = panel.frame.union(panel.translationPanel.frame).insetBy(dx: -12, dy: -12)
-    print("preview bounds: \(Int(bounds.minX)),\(Int(screen.frame.maxY - bounds.maxY)),\(Int(bounds.width)),\(Int(bounds.height))")
-    fflush(stdout)
-    DispatchQueue.main.asyncAfter(deadline: .now() + 12) { panel.hide(); Foundation.exit(EXIT_SUCCESS) }
-    app.run()
-  }
-
-  var vertical: Bool {
-    view.currentTheme.vertical
-  }
-  var inlinePreedit: Bool {
-    view.currentTheme.inlinePreedit
-  }
-  var inlineCandidate: Bool {
-    view.currentTheme.inlineCandidate
-  }
-
-  // swiftlint:disable:next cyclomatic_complexity
-  override func sendEvent(_ event: NSEvent) {
-    if handleLearningMenu(event) { return }
-    switch event.type {
-    case .leftMouseDown:
-      let (index, _, pagingUp) =  view.click(at: mousePosition())
-      if let pagingUp {
-        self.pagingUp = pagingUp
-      } else {
-        self.pagingUp = nil
-      }
-      if let index, index >= 0 && index < candidates.count {
-        self.index = index
-      }
-    case .leftMouseUp:
-      let (index, preeditIndex, pagingUp) = view.click(at: mousePosition())
-
-      if let pagingUp, pagingUp == self.pagingUp {
-        _ = inputController?.page(up: pagingUp)
-      } else {
-        self.pagingUp = nil
-      }
-      if let preeditIndex, preeditIndex >= 0 && preeditIndex < preedit.utf16.count {
-        if preeditIndex < caretPos {
-          _ = inputController?.moveCaret(forward: true)
-        } else if preeditIndex > caretPos {
-          _ = inputController?.moveCaret(forward: false)
-        }
-      }
-      if let index, index == self.index && index >= 0 && index < candidates.count {
-        _ = inputController?.selectCandidate(index)
-      }
-    case .mouseEntered:
-      acceptsMouseMovedEvents = true
-    case .mouseExited:
-      acceptsMouseMovedEvents = false
-      if cursorIndex != index {
-        update(preedit: preedit, selRange: selRange, caretPos: caretPos, candidates: candidates, comments: comments, labels: labels, highlighted: index, page: page, lastPage: lastPage, update: false)
-      }
-      pagingUp = nil
-    case .mouseMoved:
-      let (index, _, _) = view.click(at: mousePosition())
-      if let index = index, cursorIndex != index && index >= 0 && index < candidates.count {
-        inputController?.highlightCandidate(index)
-      }
-    case .scrollWheel:
-      if event.phase == .began {
-        scrollDirection = .zero
-        // Scrollboard span
-      } else if event.phase == .ended || (event.phase == .init(rawValue: 0) && event.momentumPhase != .init(rawValue: 0)) {
-        if abs(scrollDirection.dx) > abs(scrollDirection.dy) && abs(scrollDirection.dx) > 10 {
-          _ = inputController?.page(up: (scrollDirection.dx < 0) == vertical)
-        } else if abs(scrollDirection.dx) < abs(scrollDirection.dy) && abs(scrollDirection.dy) > 10 {
-          _ = inputController?.page(up: scrollDirection.dy > 0)
-        }
-        scrollDirection = .zero
-        // Mouse scroll wheel
-      } else if event.phase == .init(rawValue: 0) && event.momentumPhase == .init(rawValue: 0) {
-        if scrollTime.timeIntervalSinceNow < -1 {
-          scrollDirection = .zero
-        }
-        scrollTime = .now
-        if (scrollDirection.dy >= 0 && event.scrollingDeltaY > 0) || (scrollDirection.dy <= 0 && event.scrollingDeltaY < 0) {
-          scrollDirection.dy += event.scrollingDeltaY
-        } else {
-          scrollDirection = .zero
-        }
-        if abs(scrollDirection.dy) > 10 {
-          _ = inputController?.page(up: scrollDirection.dy > 0)
-          scrollDirection = .zero
-        }
-      } else {
-        scrollDirection.dx += event.scrollingDeltaX
-        scrollDirection.dy += event.scrollingDeltaY
-      }
-    default:
-      break
-    }
-    super.sendEvent(event)
-  }
+  // D0 is the product appearance; schema-specific colors/layout no longer override it.
+  func load(config: SquirrelConfig, forDarkMode isDark: Bool) { view.needsDisplay = true }
 
   func hide() {
+    presentation += 1
+    alphaValue = 1
     translationPanel.orderOut(nil)
     statusTimer?.invalidate()
     statusTimer = nil
+    pressedIndex = nil
     orderOut(nil)
-    maxHeight = 0
   }
 
-  // Main function to add attributes to text output from librime
-  // swiftlint:disable:next cyclomatic_complexity function_parameter_count
-  func update(preedit: String, selRange: NSRange, caretPos: Int, candidates: [String], comments: [String], labels: [String], highlighted index: Int, page: Int, lastPage: Bool, update: Bool) {
-    if update {
-      self.preedit = preedit
-      self.selRange = selRange
-      self.caretPos = caretPos
-      self.candidates = candidates
-      self.comments = comments
-      self.labels = labels
-      self.index = index
-      self.page = page
-      self.lastPage = lastPage
-    }
-    cursorIndex = index
-
-    if !candidates.isEmpty || !preedit.isEmpty {
-      statusMessage = ""
-      statusTimer?.invalidate()
-      statusTimer = nil
-    } else {
+  func update(
+    preedit: String, selRange: NSRange, caretPos: Int, candidates: [String], comments: [String],
+    labels: [String], highlighted index: Int, page: Int, lastPage: Bool, update: Bool
+  ) {
+    if candidates.isEmpty && preedit.isEmpty {
       if !statusMessage.isEmpty {
-        show(status: statusMessage)
+        presentation += 1
+        view.preedit = statusMessage
+        view.candidates = []
+        view.statusOnly = true
         statusMessage = ""
+        show()
+        let animate = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        alphaValue = animate ? 0 : 1
+        NSAnimationContext.runAnimationGroup { context in
+          context.duration = animate ? 0.14 : 0  // Tokens.Motion.appear
+          context.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.8, 0.2, 1)
+          animator().alphaValue = 1
+        }
+        statusTimer?.invalidate()
+        statusTimer = Timer.scheduledTimer(withTimeInterval: 1.2, repeats: false) { [weak self] _ in
+          MainActor.assumeIsolated { self?.dismissStatus() }
+        }
       } else if statusTimer == nil {
         hide()
       }
       return
     }
-
-    let theme = view.currentTheme
-    currentScreen()
-
-    let text = NSMutableAttributedString()
-    let preeditRange: NSRange
-    let highlightedPreeditRange: NSRange
-
-    // preedit
-    if !preedit.isEmpty {
-      preeditRange = NSRange(location: 0, length: preedit.utf16.count)
-      highlightedPreeditRange = selRange
-
-      let line = NSMutableAttributedString(string: preedit)
-      line.addAttributes(theme.preeditAttrs, range: preeditRange)
-      line.addAttributes(theme.preeditHighlightedAttrs, range: selRange)
-      text.append(line)
-
-      text.addAttribute(.paragraphStyle, value: theme.preeditParagraphStyle, range: NSRange(location: 0, length: text.length))
-      if !candidates.isEmpty {
-        text.append(NSAttributedString(string: "\n", attributes: theme.preeditAttrs))
-      }
-    } else {
-      preeditRange = .empty
-      highlightedPreeditRange = .empty
-    }
-
-    // candidates
-    var candidateRanges = [NSRange]()
-    for i in 0..<candidates.count {
-      let attrs = i == index ? theme.highlightedAttrs : theme.attrs
-      let labelAttrs = i == index ? theme.labelHighlightedAttrs : theme.labelAttrs
-      let commentAttrs = i == index ? theme.commentHighlightedAttrs : theme.commentAttrs
-
-      let label = if theme.candidateFormat.contains(/\[label\]/) {
-        if labels.count > 1 && i < labels.count {
-          labels[i]
-        } else if labels.count == 1 && i < labels.first!.count {
-          // custom: A. B. C...
-          String(labels.first![labels.first!.index(labels.first!.startIndex, offsetBy: i)])
-        } else {
-          // default: 1. 2. 3...
-          "\(i+1)"
-        }
-      } else {
-        ""
-      }
-
-      let candidate = candidates[i].precomposedStringWithCanonicalMapping
-      let comment = comments[i].precomposedStringWithCanonicalMapping
-
-      let line = NSMutableAttributedString(string: theme.candidateFormat, attributes: labelAttrs)
-      for range in line.string.ranges(of: /\[candidate\]/) {
-        let convertedRange = convert(range: range, in: line.string)
-        line.addAttributes(attrs, range: convertedRange)
-        if candidate.count <= 5 {
-          line.addAttribute(.noBreak, value: true, range: NSRange(location: convertedRange.location+1, length: convertedRange.length-1))
-        }
-      }
-      for range in line.string.ranges(of: /\[comment\]/) {
-        line.addAttributes(commentAttrs, range: convert(range: range, in: line.string))
-      }
-      line.mutableString.replaceOccurrences(of: "[label]", with: label, range: NSRange(location: 0, length: line.length))
-      let labeledLine = line.copy() as! NSAttributedString
-      line.mutableString.replaceOccurrences(of: "[candidate]", with: candidate, range: NSRange(location: 0, length: line.length))
-      line.mutableString.replaceOccurrences(of: "[comment]", with: comment, range: NSRange(location: 0, length: line.length))
-
-      if line.length <= 10 {
-        line.addAttribute(.noBreak, value: true, range: NSRange(location: 1, length: line.length-1))
-      }
-
-      let lineSeparator = NSAttributedString(string: linear ? "  " : "\n", attributes: attrs)
-      if i > 0 {
-        text.append(lineSeparator)
-      }
-      let str = lineSeparator.mutableCopy() as! NSMutableAttributedString
-      if vertical {
-        str.addAttribute(.verticalGlyphForm, value: 1, range: NSRange(location: 0, length: str.length))
-      }
-      view.separatorWidth = str.boundingRect(with: .zero).width
-
-      let paragraphStyleCandidate = (i == 0 ? theme.firstParagraphStyle : theme.paragraphStyle).mutableCopy() as! NSMutableParagraphStyle
-      if linear {
-        paragraphStyleCandidate.paragraphSpacingBefore -= theme.linespace
-        paragraphStyleCandidate.lineSpacing = theme.linespace
-      }
-      if !linear, let labelEnd = labeledLine.string.firstMatch(of: /\[(candidate|comment)\]/)?.range.lowerBound {
-        let labelString = labeledLine.attributedSubstring(from: NSRange(location: 0, length: labelEnd.utf16Offset(in: labeledLine.string)))
-        let labelWidth = labelString.boundingRect(with: .zero, options: [.usesLineFragmentOrigin]).width
-        paragraphStyleCandidate.headIndent = labelWidth
-      }
-      line.addAttribute(.paragraphStyle, value: paragraphStyleCandidate, range: NSRange(location: 0, length: line.length))
-
-      candidateRanges.append(NSRange(location: text.length, length: line.length))
-      text.append(line)
-    }
-
-    // text done!
-    view.textView.textContentStorage?.attributedString = text
-    view.textView.setLayoutOrientation(vertical ? .vertical : .horizontal)
-    view.drawView(candidateRanges: candidateRanges, hilightedIndex: index, preeditRange: preeditRange, highlightedPreeditRange: highlightedPreeditRange, canPageUp: page > 0, canPageDown: !lastPage)
+    presentation += 1
+    alphaValue = 1
+    statusTimer?.invalidate()
+    statusTimer = nil
+    statusMessage = ""
+    // A newly selected candidate must never leave the previous translation visible.
+    translationPanel.orderOut(nil)
+    view.statusOnly = false
+    view.preedit = preedit
+    view.candidates = Array(candidates.prefix(5))
+    view.selected = index
+    view.needsDisplay = true
     show()
+  }
+
+  private func dismissStatus() {
+    let current = presentation
+    NSAnimationContext.runAnimationGroup { context in
+      context.duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.08
+      context.timingFunction = CAMediaTimingFunction(name: .linear)  // Tokens.Motion.disappear
+      animator().alphaValue = 0
+    } completionHandler: { [weak self] in
+      MainActor.assumeIsolated {
+        guard let self, self.presentation == current else { return }
+        self.hide()
+      }
+    }
   }
 
   func updateStatus(long longMessage: String, short shortMessage: String) {
-    let theme = view.currentTheme
-    switch theme.statusMessageType {
-    case .mix:
-      statusMessage = shortMessage.isEmpty ? longMessage : shortMessage
-    case .long:
-      statusMessage = longMessage
-    case .short:
-      if !shortMessage.isEmpty {
-        statusMessage = shortMessage
-      } else if let initial = longMessage.first {
-        statusMessage = String(initial)
-      } else {
-        statusMessage = ""
-      }
-    }
+    statusMessage = longMessage.isEmpty ? shortMessage : longMessage
   }
 
-  func load(config: SquirrelConfig, forDarkMode isDark: Bool) {
-    if isDark {
-      view.darkTheme = SquirrelTheme()
-      view.darkTheme.load(config: config, dark: true)
-    } else {
-      view.lightTheme = SquirrelTheme()
-      view.lightTheme.load(config: config, dark: isDark)
-    }
-  }
-}
-
-extension SquirrelPanel {
   func updateTranslation(_ state: RoarkTCandidateTranslationSession) {
-    translationPanel.onActivate = { [weak self] in self?.inputController?.performTranslationAction() }
-    let theme = view.currentTheme
-    let style = RoarkTTranslationPanel.Style(background: theme.backgroundColor, border: theme.borderColor,
-      highlight: theme.highlightedBackColor, candidate: theme.attrs, comment: theme.commentAttrs,
-      label: theme.labelAttrs, cornerRadius: theme.cornerRadius,
-      shortcutCornerRadius: theme.hilitedCornerRadius, alpha: theme.alpha)
-    translationPanel.show(state, beside: self, style: style)
+    translationPanel.onActivate = { [weak self] in self?.inputController?.performTranslationAction()
+    }
+    translationPanel.show(state, beside: self)
   }
 
-  var linear: Bool { view.currentTheme.linear }
+  private func show() {
+    let screen = NSScreen.screens.first { $0.frame.contains(position.origin) } ?? NSScreen.main
+    guard let screen else { return }
+    appearance = NSApp.effectiveAppearance
+    setFrame(
+      RoarkTPanelDesign.place(
+        size: NSSize(
+          width: view.statusOnly
+            ? min(420, max(100, CGFloat(view.preedit.count) * 14 + 68)) : RoarkTPanelDesign.width,
+          height: view.statusOnly ? 48 : 83),
+        caret: position, screen: screen.visibleFrame), display: true)
+    view.needsDisplay = true
+    orderFront(nil)
+  }
 
-  private func handleLearningMenu(_ event: NSEvent) -> Bool {
-    if event.type == .leftMouseDown { contextMenuClick = false }
-    if event.type == .rightMouseDown || (event.type == .leftMouseDown && event.modifierFlags.contains(.control)) {
+  override func sendEvent(_ event: NSEvent) {
+    let point = view.convert(convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)
+    let index = view.candidate(at: point)
+    if event.type == .rightMouseDown
+      || (event.type == .leftMouseDown && event.modifierFlags.contains(.control))
+    {
       contextMenuClick = event.type == .leftMouseDown
-      let (index, _, _) = view.click(at: mousePosition())
       if let index, let menu = inputController?.learningMenu(for: index) {
         NSMenu.popUpContextMenu(menu, with: event, for: view)
       }
-      return true
+      return
     }
-    if event.type == .leftMouseUp && contextMenuClick {
+    switch event.type {
+    case .leftMouseDown:
       contextMenuClick = false
-      return true
+      pressedIndex = index
+    case .leftMouseUp:
+      if contextMenuClick {
+        contextMenuClick = false
+        return
+      }
+      if let index, pressedIndex == index { _ = inputController?.selectCandidate(index) }
+      pressedIndex = nil
+    case .mouseEntered: acceptsMouseMovedEvents = true
+    case .mouseExited: acceptsMouseMovedEvents = false
+    case .mouseMoved:
+      if let index, index != view.selected { inputController?.highlightCandidate(index) }
+    case .scrollWheel:
+      if scrollTime.timeIntervalSinceNow < -0.4 { scrollDelta = 0 }
+      scrollTime = .now
+      scrollDelta +=
+        abs(event.scrollingDeltaY) >= abs(event.scrollingDeltaX)
+        ? event.scrollingDeltaY : event.scrollingDeltaX
+      if abs(scrollDelta) > 10 {
+        _ = inputController?.page(up: scrollDelta > 0)
+        scrollDelta = 0
+      }
+    default: break
     }
-    return false
+    super.sendEvent(event)
+  }
+
+  // The existing preview entry point renders actual production surfaces offscreen.
+  static func preview(configurationPath: String, dark: Bool) {
+    let app = NSApplication.shared
+    app.setActivationPolicy(.accessory)
+    app.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+    let panel = SquirrelPanel(position: NSRect(x: 100, y: 500, width: 1, height: 20))
+    panel.update(
+      preedit: "ni hao", selRange: .empty, caretPos: 6, candidates: ["你好", "你", "拟好", "妮", "呢"],
+      comments: [], labels: [], highlighted: 0, page: 0, lastPage: false, update: true)
+    var state = RoarkTCandidateTranslationSession()
+    let request = state.observe(
+      .init(rawInput: "nihao", source: "你好", identity: "0:5:0", scope: "whole"))!
+    state.receive("Hello", for: request, direction: "zh-en")
+    panel.updateTranslation(state)
+    // Optional destination is a directory, supplied by the rendering test harness.
+    if let output = ProcessInfo.processInfo.environment["ROARKT_PREVIEW_OUTPUT"] {
+      for (name, window) in [
+        ("candidate", panel as NSPanel), ("translation", panel.translationPanel as NSPanel),
+      ] {
+        if let view = window.contentView,
+          let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds)
+        {
+          view.cacheDisplay(in: view.bounds, to: bitmap)
+          if let png = bitmap.representation(using: .png, properties: [:]) {
+            try? png.write(
+              to: URL(fileURLWithPath: output).appendingPathComponent(
+                "\(name)-\(dark ? "dark" : "light").png"))
+          }
+        }
+      }
+      panel.hide()
+      return
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 12) {
+      panel.hide()
+      Foundation.exit(EXIT_SUCCESS)
+    }
+    app.run()
   }
 }
 
-private extension SquirrelPanel {
-  func mousePosition() -> NSPoint {
-    var point = NSEvent.mouseLocation
-    point = self.convertPoint(fromScreen: point)
-    return view.convert(point, from: nil)
+private final class RoarkTCandidateView: NSView {
+  var onSelect: ((Int) -> Void)?
+  var preedit = ""
+  var candidates: [String] = []
+  var selected = 0
+  var statusOnly = false
+  private var tracking: NSTrackingArea?
+  override var isFlipped: Bool { true }
+  override func isAccessibilityElement() -> Bool { true }
+  override func accessibilityRole() -> NSAccessibility.Role? { .group }
+  override func accessibilityLabel() -> String? { statusOnly ? preedit : "候选，" + preedit }
+  override func accessibilityChildren() -> [Any]? {
+    candidateRects.enumerated().map { index, rect in
+      let element = CandidateAccessibilityElement()
+      element.setAccessibilityParent(self)
+      element.setAccessibilityRole(.button)
+      element.setAccessibilityLabel("候选 \(index + 1)，\(candidates[index])")
+      element.setAccessibilitySelected(index == selected)
+      element.setAccessibilityFrame(window?.convertToScreen(convert(rect, to: nil)) ?? .zero)
+      element.press = { [weak self] in self?.onSelect?(index) }
+      return element
+    }
   }
-
-  func currentScreen() {
-    if let screen = NSScreen.main {
-      screenRect = screen.frame
+  override func updateTrackingAreas() {
+    super.updateTrackingAreas()
+    if let tracking { removeTrackingArea(tracking) }
+    tracking = NSTrackingArea(
+      rect: bounds, options: [.activeAlways, .mouseEnteredAndExited, .mouseMoved], owner: self)
+    addTrackingArea(tracking!)
+  }
+  private var candidateRects: [NSRect] {
+    let available = max(0, bounds.width - 24 - CGFloat(max(0, candidates.count - 1)) * 4)
+    let widths = candidates.enumerated().map { index, text in
+      ceil((text as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 13)]).width)
+        + 28
     }
-    for screen in NSScreen.screens where screen.frame.contains(position.origin) {
-      screenRect = screen.frame
-      break
+    // Keep ordinary words at natural width; cap long phrases so all five remain reachable.
+    var remaining = available
+    var sizes = Array(repeating: CGFloat(0), count: widths.count)
+    for i in widths.indices.sorted(by: { widths[$0] < widths[$1] }) {
+      sizes[i] = min(widths[i], remaining / CGFloat(widths.count - sizes.filter { $0 > 0 }.count))
+      remaining -= sizes[i]
+    }
+    var x: CGFloat = 12
+    return sizes.map { width in
+      defer { x += width + 4 }
+      return NSRect(x: x, y: 35, width: width, height: 36)
     }
   }
-
-  func maxTextWidth() -> CGFloat {
-    let theme = view.currentTheme
-    let font: NSFont = theme.font
-    let fontScale = font.pointSize / 12
-    let textWidthRatio = min(1, 1 / (vertical ? 4 : 3) + fontScale / 12)
-    let maxWidth = if vertical {
-      screenRect.height * textWidthRatio - theme.edgeInset.height * 2
-    } else {
-      screenRect.width * textWidthRatio - theme.edgeInset.width * 2
+  func candidate(at point: NSPoint) -> Int? { candidateRects.firstIndex { $0.contains(point) } }
+  override func draw(_ dirtyRect: NSRect) {
+    RoarkTPanelDesign.surface(bounds)
+    if statusOnly {
+      RoarkTPanelDesign.accentSoft.setFill()
+      NSBezierPath(roundedRect: NSRect(x: 4, y: 4, width: 40, height: 40), xRadius: 10, yRadius: 10)
+        .fill()
+      RoarkTPanelDesign.text(
+        "中", in: NSRect(x: 15, y: 13, width: 20, height: 22), size: 17,
+        color: RoarkTPanelDesign.accent, weight: .semibold)
+      RoarkTPanelDesign.text(
+        preedit, in: NSRect(x: 52, y: 16, width: bounds.width - 64, height: 18),
+        color: RoarkTPanelDesign.foreground, weight: .medium)
+      return
     }
-    return maxWidth
-  }
-
-  // Get the window size, the windows will be the dirtyRect in
-  // SquirrelView.drawRect
-  // swiftlint:disable:next cyclomatic_complexity
-  func show() {
-    currentScreen()
-    let theme = view.currentTheme
-    if theme.native || view.darkTheme.available {
-      self.appearance = NSApp.effectiveAppearance
-    } else {
-      // user configured only a light theme, set window appearance to light.
-      self.appearance = NSAppearance(named: .aqua)
-    }
-
-    // Break line if the text is too long, based on screen size.
-    let textWidth = maxTextWidth()
-    let maxTextHeight = vertical ? screenRect.width - theme.edgeInset.width * 2 : screenRect.height - theme.edgeInset.height * 2
-    view.textContainer.size = NSSize(width: textWidth, height: maxTextHeight)
-
-    var panelRect = NSRect.zero
-    // in vertical mode, the width and height are interchanged
-    var contentRect = view.contentRect
-    if theme.memorizeSize && (vertical && position.midY / screenRect.height < 0.5) ||
-        (vertical && position.minX + max(contentRect.width, maxHeight) + theme.edgeInset.width * 2 > screenRect.maxX) {
-      if contentRect.width >= maxHeight {
-        maxHeight = contentRect.width
-      } else {
-        contentRect.size.width = maxHeight
-        view.textContainer.size = NSSize(width: maxHeight, height: maxTextHeight)
+    RoarkTPanelDesign.text(
+      preedit, in: NSRect(x: 12, y: 12, width: bounds.width - 24, height: 16),
+      size: 12, color: RoarkTPanelDesign.secondary)
+    for (i, rect) in candidateRects.enumerated() {
+      if i == selected {
+        RoarkTPanelDesign.accent.setFill()
+        NSBezierPath(roundedRect: rect, xRadius: 7, yRadius: 7).fill()  // Radius.control
       }
-    }
-
-    if vertical {
-      panelRect.size = NSSize(width: min(0.95 * screenRect.width, contentRect.height + theme.edgeInset.height * 2),
-                              height: min(0.95 * screenRect.height, contentRect.width + theme.edgeInset.width * 2) + theme.pagingOffset)
-
-      // To avoid jumping up and down while typing, use the lower screen when
-      // typing on upper, and vice versa
-      if position.midY / screenRect.height >= 0.5 {
-        panelRect.origin.y = position.minY - SquirrelTheme.offsetHeight - panelRect.height + theme.pagingOffset
-      } else {
-        panelRect.origin.y = position.maxY + SquirrelTheme.offsetHeight
-      }
-      // Make the first candidate fixed at the left of cursor
-      panelRect.origin.x = position.minX - panelRect.width - SquirrelTheme.offsetHeight
-      if view.preeditRange.length > 0, let preeditTextRange = view.convert(range: view.preeditRange) {
-        let preeditRect = view.contentRect(range: preeditTextRange)
-        panelRect.origin.x += preeditRect.height + theme.edgeInset.width
-      }
-    } else {
-      panelRect.size = NSSize(width: min(0.95 * screenRect.width, contentRect.width + theme.edgeInset.width * 2),
-                              height: min(0.95 * screenRect.height, contentRect.height + theme.edgeInset.height * 2))
-      panelRect.size.width += theme.pagingOffset
-      panelRect.origin = NSPoint(x: position.minX - theme.pagingOffset, y: position.minY - SquirrelTheme.offsetHeight - panelRect.height)
-    }
-    if panelRect.maxX > screenRect.maxX {
-      panelRect.origin.x = screenRect.maxX - panelRect.width
-    }
-    if panelRect.minX < screenRect.minX {
-      panelRect.origin.x = screenRect.minX
-    }
-    if panelRect.minY < screenRect.minY {
-      if vertical {
-        panelRect.origin.y = screenRect.minY
-      } else {
-        panelRect.origin.y = position.maxY + SquirrelTheme.offsetHeight
-      }
-    }
-    if panelRect.maxY > screenRect.maxY {
-      panelRect.origin.y = screenRect.maxY - panelRect.height
-    }
-    if panelRect.minY < screenRect.minY {
-      panelRect.origin.y = screenRect.minY
-    }
-    self.setFrame(panelRect, display: true)
-
-    // rotate the view, the core in vertical mode!
-    if vertical {
-      contentView!.boundsRotation = -90
-      contentView!.setBoundsOrigin(NSPoint(x: 0, y: panelRect.width))
-    } else {
-      contentView!.boundsRotation = 0
-      contentView!.setBoundsOrigin(.zero)
-    }
-    view.textView.boundsRotation = 0
-    view.textView.setBoundsOrigin(.zero)
-
-    view.frame = contentView!.bounds
-    view.textView.frame = contentView!.bounds
-    view.textView.frame.size.width -= theme.pagingOffset
-    view.textView.frame.origin.x += theme.pagingOffset
-    view.textView.textContainerInset = theme.edgeInset
-
-    if theme.translucency {
-      back.frame = contentView!.bounds
-      back.frame.size.width += theme.pagingOffset
-      back.appearance = NSApp.effectiveAppearance
-      back.isHidden = false
-    } else {
-      back.isHidden = true
-    }
-    alphaValue = theme.alpha
-    invalidateShadow()
-    orderFront(nil)
-    // voila!
-  }
-
-  func show(status message: String) {
-    let theme = view.currentTheme
-    let text = NSMutableAttributedString(string: message, attributes: theme.attrs)
-    text.addAttribute(.paragraphStyle, value: theme.paragraphStyle, range: NSRange(location: 0, length: text.length))
-    view.textContentStorage.attributedString = text
-    view.textView.setLayoutOrientation(vertical ? .vertical : .horizontal)
-    view.drawView(candidateRanges: [NSRange(location: 0, length: text.length)], hilightedIndex: -1,
-                  preeditRange: .empty, highlightedPreeditRange: .empty, canPageUp: false, canPageDown: false)
-    show()
-
-    statusTimer?.invalidate()
-    statusTimer = Timer.scheduledTimer(withTimeInterval: SquirrelTheme.showStatusDuration, repeats: false) { _ in
-      MainActor.assumeIsolated { self.hide() }
+      RoarkTPanelDesign.text(
+        "\(i + 1)", in: NSRect(x: rect.minX + 8, y: rect.minY + 11, width: 8, height: 14),
+        size: 11, color: i == selected ? RoarkTPanelDesign.onAccent : RoarkTPanelDesign.tertiary)
+      RoarkTPanelDesign.text(
+        candidates[i],
+        in: NSRect(x: rect.minX + 20, y: rect.minY + 9, width: max(0, rect.width - 28), height: 18),
+        color: i == selected ? RoarkTPanelDesign.onAccent : RoarkTPanelDesign.foreground)
     }
   }
+}
 
-  func convert(range: Range<String.Index>, in string: String) -> NSRange {
-    let startPos = range.lowerBound.utf16Offset(in: string)
-    let endPos = range.upperBound.utf16Offset(in: string)
-    return NSRange(location: startPos, length: endPos - startPos)
+private final class CandidateAccessibilityElement: NSAccessibilityElement {
+  var press: (() -> Void)?
+  override func accessibilityPerformPress() -> Bool {
+    press?()
+    return true
   }
 }
