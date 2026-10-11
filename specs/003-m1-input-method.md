@@ -87,3 +87,14 @@
 - 合并后再次执行 `scripts/test.sh`，124 个 Swift Testing 测试、Rime 部署/能力、session/修饰键/面板、AppShell 检查通过。
 - 规则生效后不从 worktree 启动输入法，不运行安装/卸载/注册、不加载 LaunchAgent。本任务从未安装、注册输入法或加载 LaunchAgent；早期预览进程已退出。
 - 后续图片复现仅运行 `scripts/test-ime.sh` 的独立测试程序：编译实际面板，但不创建 IMK server、不访问用户 Rime 目录。安装版验证统一由 Claude 从 main 执行。
+
+## RoType 视觉恢复
+
+用户明确指定旧产品视觉为输入法的新验收基线，优先于本规格原 I-1/D0 视觉要求；I-1/I-2 的行为修正继续保留。旧源码实际只读路径为主仓库同级 `RoType`（本 worktree 中为 `../../RoType`）。
+
+### 任务与验收证据
+
+- [x] 菜单图标：迁移原 22×16pt、4.5pt 圆角、透明 R 镂空生成器与像素测试、SystemRendererProbe、截图比较工具；两输入源共六个图标键改为 `roarktMenuTemplate.pdf`；构建在签名前生成 Bundle 资源。
+- 图标验证：`scripts/test.sh` 通过（真实退出码 0）；系统 renderer 输出 44×32px / 22×16pt，R 字高 8pt。PNG：`.build/ime-evidence/menu-icon-system.png`。安装后真实系统菜单仍待 Claude 验证。
+- [ ] 恢复中英圆形提示、候选窗/译文栏/方案提示与旧配色。
+- [ ] 完成逐文件资源盘点、完整构建与离屏对照。

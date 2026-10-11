@@ -40,7 +40,7 @@
 					<string>R</string>
 				</dict>
 				<key>tsInputModeAlternateMenuIconFileKey</key>
-				<string>rime.pdf</string>
+				<string>roarktMenuTemplate.pdf</string>
 				<key>tsInputModeCharacterRepertoireKey</key>
 				<array>
 					<string>Hans</string>
@@ -52,9 +52,9 @@
 				<key>tsInputModeKeyEquivalentModifiersKey</key>
 				<integer>4608</integer>
 				<key>tsInputModeMenuIconFileKey</key>
-				<string>rime.pdf</string>
+				<string>roarktMenuTemplate.pdf</string>
 				<key>tsInputModePaletteIconFileKey</key>
-				<string>rime.pdf</string>
+				<string>roarktMenuTemplate.pdf</string>
 				<key>tsInputModePrimaryInScriptKey</key>
 				<true/>
 				<key>tsInputModeScriptKey</key>
@@ -76,7 +76,7 @@
 					<string>R</string>
 				</dict>
 				<key>tsInputModeAlternateMenuIconFileKey</key>
-				<string>rime.pdf</string>
+				<string>roarktMenuTemplate.pdf</string>
 				<key>tsInputModeCharacterRepertoireKey</key>
 				<array>
 					<string>Hans</string>
@@ -88,9 +88,9 @@
 				<key>tsInputModeKeyEquivalentModifiersKey</key>
 				<integer>4608</integer>
 				<key>tsInputModeMenuIconFileKey</key>
-				<string>rime.pdf</string>
+				<string>roarktMenuTemplate.pdf</string>
 				<key>tsInputModePaletteIconFileKey</key>
-				<string>rime.pdf</string>
+				<string>roarktMenuTemplate.pdf</string>
 				<key>tsInputModePrimaryInScriptKey</key>
 				<false/>
 				<key>tsInputModeScriptKey</key>

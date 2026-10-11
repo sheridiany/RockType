@@ -14,6 +14,8 @@ let package = Package(
         .package(url: "https://github.com/sparkle-project/Sparkle.git", exact: "2.8.0"),
     ],
     targets: [
+        .testTarget(name: "MenuIconTests", path: "Tests/MenuIcon",
+                    exclude: ["test-menu-icon.swift", "SystemRendererProbe.m", "CompareScreenshot.swift"]),
         .target(
             name: "RoarkTXPCProtocol",
             path: "Shared/XPCProtocol",
