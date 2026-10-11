@@ -1,0 +1,12 @@
+#!/bin/bash
+set -euo pipefail
+script_dir=$(cd "$(dirname "$0")" && pwd)
+source "$script_dir/session-common.sh"
+while IFS= read -r uid; do
+  [[ -n "$uid" ]] || continue
+  # Quit only our installed applications, preserving settings and Rime learning.
+  run_as_user "$uid" "$script_dir/RoarkTSessionControl"
+  if /bin/launchctl print "gui/$uid/$service" >/dev/null 2>&1; then
+    /bin/launchctl bootout "gui/$uid/$service"
+  fi
+done < <(active_uids)

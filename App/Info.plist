@@ -31,6 +31,14 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>按住 Fn 时录音，在本机识别后填入当前输入框。</string>
+	<key>SUFeedURL</key>
+	<string>https://github.com/REPLACE_OWNER/REPLACE_REPOSITORY/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>REPLACE_WITH_ED25519_PUBLIC_KEY</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUAutomaticallyUpdate</key>
+	<false/>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 Roarkist</string>
 </dict>

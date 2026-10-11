@@ -244,7 +244,8 @@ struct ShellSettingsView: View {
                 Text("macOS 14 及以上 · Apple Silicon")
                 U4Rule()
                 Text("主 App：MIT · 输入法：GPL v3，按进程隔离。")
-                Text("自动更新与卸载即将推出。")
+                UpdateSettingsView()
+                Button("卸载 RoarkT…") { UninstallController.confirm() }
             }
             Button("导出诊断…", action: exportDiagnostics)
         }
