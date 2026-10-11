@@ -2,7 +2,7 @@
 
 - 阶段：M4
 - 覆盖需求：FR-D1–D7
-- 状态：Ready
+- 状态：InProgress
 - 依赖：SPEC-004（`⌃1` 快捷键、屏幕录制权限）、SPEC-005 M3-1（操作引擎、翻译路由）、SPEC-010（OCR、Placement、ScreenGeometry、Clipboard）、D0 U3 截图编辑器与图片预览
 
 ## 范围
@@ -26,7 +26,7 @@
 
 | # | 任务 | 执行 | 状态 |
 | --- | --- | --- | --- |
-| D-1 | 捕获、遮罩窗口、选区与调整、Esc 取消、⌃1 接入 | pi-xpc | 未开始 |
+| D-1 | 捕获、遮罩窗口、选区与调整、Esc 取消、⌃1 接入 | pi-xpc | 已实现，待集成与人工验收 |
 | D-2 | 标注工具与原始分辨率合成、撤销 | pi-xpc | 未开始 |
 | D-3 | 完成/保存、OCR、翻译、图片理解 | pi-xpc | 未开始 |
 | D-4 | 剪贴板图片与拖入图片入口 | pi-xpc | 未开始 |
@@ -48,5 +48,7 @@
 | `scripts/test.sh`、`scripts/build.sh`、`scripts/render-gallery.sh` | 命令 | 未运行 | |
 
 ## 进度
+
+- D-1：ScreenCaptureKit 单次内存捕获，排除自身应用；每屏独立遮罩、8 手柄、方向键/Shift 微调、像素尺寸、Esc 取消与迟到捕获丢弃。HotkeyCenter.screenshotAction 供 Claude 接线。`scripts/test.sh` 通过（几何、取消与快捷键回归）；真实多屏、权限及焦点待人工验证。
 
 ## 问题
