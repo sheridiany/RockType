@@ -32,15 +32,19 @@ import RoarkTPlatform
                                   allowed: { prefs.allowed }, trusted: { prefs.trusted },
                                   voiceListening: { prefs.voiceEnabled = $0; return true })
         var screenshots = 0
+        var groups: [HotkeyCenter.Action] = []
+        center.screenshotGroupAction = { groups.append($0) }
         center.screenshotAction = { screenshots += 1 }
         center.start()
-        precondition(registrar.registered.count == 3 && prefs.voiceEnabled)
+        precondition(registrar.registered.count == 7 && prefs.voiceEnabled)
         registrar.handlers.forEach { $0() }
         // M4 screenshot runs the real capture; M3-6 forwards selection actions. Nothing is "coming soon".
         precondition(screenshots == 1 && prefs.actions.isEmpty && prefs.selections == [.translateSelection, .summarizeSelection])
+        precondition(groups == [.screenshotHistory, .togglePins, .closePins, .nextPin])
         prefs.allowed = false
         registrar.handlers.forEach { $0() }
         precondition(screenshots == 1 && prefs.actions.isEmpty && prefs.selections.count == 2, "Secure Input must suppress every action")
+        precondition(groups.count == 4, "Protected input must suppress all screenshot group shortcuts")
         prefs.allowed = true
         let staleAction = registrar.handlers.first
         let replacement = Shortcut(key: "k", modifiers: [.command, .option])
@@ -54,7 +58,7 @@ import RoarkTPlatform
         precondition(registrar.registered.contains(Shortcut(key: "j", modifiers: .control)))
         center.set(Shortcut(key: "T", modifiers: [.control, .option]), for: .screenshot)
         precondition(center.statuses[.screenshot] == .conflict && center.statuses[.translateSelection] == .conflict)
-        precondition(registrar.registered.count == 1)
+        precondition(registrar.registered.count == 5)
         center.restoreDefault(for: .screenshot)
         precondition(center.statuses[.screenshot] == .registered && center.statuses[.translateSelection] == .registered)
         registrar.conflict = Shortcut.defaults[.screenshot]; center.retry()
@@ -71,7 +75,7 @@ import RoarkTPlatform
         for _ in 0..<10 { await Task.yield() }
         precondition(registrar.registered.isEmpty, "Settings observation must not end recording")
         center.cancelRecording()
-        precondition(registrar.registered.count == 4)
+        precondition(registrar.registered.count == 8)
         registrar.handlers.last?(); precondition(prefs.settingsOpened == 1)
         center.set(Shortcut(key: "a", modifiers: .shift), for: .screenshot)
         precondition(center.statuses[.screenshot] == .unsupported)

@@ -13,6 +13,11 @@ public enum Identifiers {
     public static let keychainService = "com.roarkist.roarkt.ai"
     public static let applicationSupportFolder = "RoarkT"
 
+    /// Opt-in screenshot archive; separate from the internal settings directory.
+    public static func screenshotHistoryDirectory(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> URL {
+        home.appendingPathComponent("Library/Application Support/RockType/ScreenshotHistory", isDirectory: true)
+    }
+
     /// Private Rime profile; callers may inject a temporary home for verification.
     public static func rimeUserDirectory(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> URL {
         home.appendingPathComponent("Library/Application Support", isDirectory: true)

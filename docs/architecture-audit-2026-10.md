@@ -55,6 +55,10 @@ P0 是正式发布前门槛，P1 是后续结构整理优先项，P2 是可独�
 
 本轮实际变更与验证结果见 [R2-ARCH 验收证据](../specs/evidence/014-R2-ARCH.md)。
 
+## R4-SURF 后续处理（2026-10-11）
+
+2026-10-11 R4-SURF：A04 剩余包装已删除，ScreenshotCoordinator 直接构造 Features 的 ScreenshotPreviewContent；Surfaces/ImagePreviewView.swift 仅含 DEBUG 原型。截图历史与贴图群组证据见 [R4-SURF](../specs/evidence/014-R4-SURF.md)。
+
 ## R4-UI 后续处理（2026-10-11）
 
 A02/A03/A04/A15 的 UI 部分已处理：正式导航移入 Shell，正式图片预览不再初始化 Mock，Gallery/Mock/原型及入口使用完整 DEBUG 边界，长期组件和通知控制器改为职责名称。未修改 ScreenshotCoordinator；A15 的 Platform 占位项仍归 pi-platform。原审计表保留审计时快照，当前边界与验证见 [架构](architecture.md) 和 [R4-UI 证据](../specs/evidence/014-R4-UI.md)。

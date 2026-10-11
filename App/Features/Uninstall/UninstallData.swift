@@ -15,13 +15,15 @@ enum UninstallData {
             }
         }
         let appData = support.appendingPathComponent(Identifiers.applicationSupportFolder, isDirectory: true)
+        let screenshots = Identifiers.screenshotHistoryDirectory(home: home)
         let rime = Identifiers.rimeUserDirectory(home: home)
         // Check before deleting anything: the private Rime profile lives inside appData.
-        for directory in [appData, rime.deletingLastPathComponent(), rime] {
+        for directory in [appData, rime.deletingLastPathComponent(), rime, screenshots.deletingLastPathComponent(), screenshots] {
             if (try? directory.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true {
                 throw CocoaError(.fileWriteNoPermission)
             }
         }
+        if fm.fileExists(atPath: screenshots.path) { try fm.removeItem(at: screenshots) }
         if fm.fileExists(atPath: rime.path) { try fm.removeItem(at: rime) }
         if fm.fileExists(atPath: appData.path) { try fm.removeItem(at: appData) }
     }

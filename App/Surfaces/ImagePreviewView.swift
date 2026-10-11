@@ -1,11 +1,5 @@
 import SwiftUI
 
-/// Production preview wrapper. No prototype state or synthetic image is initialized.
-struct ImagePreviewView: View {
-    let session: ScreenshotSession
-    var body: some View { ScreenshotPreviewContent(session: session) }
-}
-
 #if DEBUG
 
 struct ImagePreviewPrototype: View {

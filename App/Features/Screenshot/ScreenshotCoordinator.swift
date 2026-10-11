@@ -8,6 +8,12 @@ import os
 /// Retain in AppDelegate, call start/stop, and bind HotkeyCenter.screenshotAction to capture().
 @MainActor final class ScreenshotCoordinator {
     private var running = false
+    private let suppliedHistory: ScreenshotHistory?
+    private(set) lazy var history = suppliedHistory ?? ScreenshotHistory(allowed: { [weak self] in self?.allowed() ?? false })
+    private lazy var historyPanel = ScreenshotHistoryPanelController(history: history,
+        allowed: { [weak self] in self?.allowed() ?? false },
+        open: { [weak self] entry in self?.openHistory(entry) },
+        action: { [weak self] entry, action in self?.historyAction(entry, action: action) })
     private var generation = 0
     private lazy var importer: ScreenshotImportController = {
         let importer = ScreenshotImportController(allowed: allowed)
@@ -63,10 +69,12 @@ import os
 
     init(captureFrames: @escaping () async throws -> [ScreenCapture.Frame] = { try await ScreenCapture.capture() },
          allowed: (() -> Bool)? = nil,
+         history: ScreenshotHistory? = nil,
          elementQuery: CaptureElementQuery = CaptureElementQuery(),
          saveAs: ScreenshotSaveAsController? = nil,
          readClipboard: @escaping () throws -> Data? = { try Clipboard.shared.readPNG() },
          presentPreview: @escaping (NSPanel) -> Void = { panel in panel.center(); panel.orderFrontRegardless() }) {
+        self.suppliedHistory = history
         self.captureFrames = captureFrames
         self.allowed = allowed ?? { SecureInput.status() == .allowed }
         self.captureAllowed = allowed ?? { ScreenCapture.isReadable }
@@ -79,6 +87,8 @@ import os
     func start() {
         guard !running else { return }
         running = true
+        history.onNotice = { [weak self] in self?.onNotice($0) }
+        history.start(readSettings().screenshot)
         PinnedImageController.shared.onAction = { [weak self] image, action in
             guard let self, self.running, self.allowed() else { return }
             self.openImage(image, origin: action == .translate ? "贴图 · 核对文字后点击翻译" : "贴图")
@@ -91,7 +101,7 @@ import os
         ScreenCapture.startWarming()
         warmupTask = Task { await OCR.prewarm() }
     }
-    func stop() { running = false; warmupTask?.cancel(); warmupTask = nil; ScreenCapture.stopWarming(); cancel(); closePreview(); PinnedImageController.shared.closeAll() }
+    func stop() { running = false; historyPanel.close(); history.stop(); warmupTask?.cancel(); warmupTask = nil; ScreenCapture.stopWarming(); cancel(); closePreview(); PinnedImageController.shared.closeAll() }
     func cancel() {
         generation += 1
         elementQuery.cancel(); elementSnapshot = nil
@@ -112,7 +122,7 @@ import os
     func capture() {
         guard running, captureAllowed() else { return }
         let started = CACurrentMediaTime()
-        cancel(); closePreview()
+        cancel(); closePreview(); historyPanel.close()
         let current = generation
         captureDesktopTop = NSScreen.screens.first?.frame.maxY ?? 0
         let mouse = NSEvent.mouseLocation
@@ -201,6 +211,7 @@ import os
                 do {
                     try ScreenshotOutput.shared.copyImage(image)
                     self.lastSelection = (displayID, view.selection)
+                    self.history.record(image)
                     self.cancel(); self.onSelection(image)
                 } catch { view.showNotice("无法复制图片，请重试。") }
             }
@@ -209,6 +220,7 @@ import os
                 let url: URL
                 do { url = try ScreenshotOutput.shared.save(image) }
                 catch { view.showNotice("保存失败，请检查截图保存目录及写入权限。") ; return }
+                self.history.record(image)
                 self.lastSelection = (displayID, view.selection)
                 do { try ScreenshotOutput.shared.copyPath(url); self.cancel() }
                 catch { view.showNotice("PNG 已保存，但路径复制失败。") }
@@ -226,6 +238,7 @@ import os
                 // Restore hidden windows before giving the new pin keyboard focus.
                 self.cancel()
                 if PinnedImageController.shared.pin(image, at: rect) {
+                    self.history.record(image)
                     self.lastSelection = (displayID, selection)
                 } else { self.onNotice("无法贴图，请检查安全输入状态和显示器。") }
             }
@@ -240,14 +253,14 @@ import os
             view.onOCRCopy = { [weak self, weak view] image in
                 guard let self else { return }
                 guard self.allowed() else { view?.showNotice("OCR 暂不可用，请检查辅助功能权限与安全输入状态。"); return }
-                self.cancel(); self.openImage(image, origin: "截图")
+                self.cancel(); self.openImage(image, origin: "截图", historyID: self.history.record(image))
                 self.session?.runOCR(copyAfter: true)
             }
             view.onPreview = { [weak self, weak view] image in
                 guard let self, let view, self.captureAllowed() else { return }
                 guard self.allowed() else { view.showNotice("预览暂不可用，请检查辅助功能权限与安全输入状态。"); return }
                 self.lastSelection = (displayID, view.selection)
-                self.cancel(); self.openImage(image, origin: "截图")
+                self.cancel(); self.openImage(image, origin: "截图", historyID: self.history.record(image))
             }
             panel.acceptsMouseMovedEvents = true
             let mouse = NSEvent.mouseLocation
@@ -270,6 +283,7 @@ import os
             self.saving = false
             guard self.captureAllowed() else { self.cancel(); return }
             if outcome == .saved {
+                self.history.record(image)
                 self.lastSelection = (displayID, canvas.selection); self.cancel(); return
             }
             self.overlays.resume(focusing: canvas)
@@ -332,12 +346,16 @@ import os
         let old = session; session = nil; old?.close()
         previewPanel?.orderOut(nil); previewPanel?.contentView = nil; previewPanel = nil
     }
-    func openImage(_ image: CGImage, origin: String, complete: Bool = false) {
+    func openImage(_ image: CGImage, origin: String, complete: Bool = false, historyID: UUID? = nil, cachedText: String? = nil) {
         guard running, allowed() else { return }
         closePreview()
         let value = ScreenshotSession(image: image, origin: origin, settings: readSettings,
             verified: imageCapabilityVerified, allowed: allowed, rememberImageConfirmation: rememberImageConfirmation)
         session = value
+        if let historyID {
+            value.onTextChanged = { [weak self] text in self?.history.updateText(text, id: historyID) }
+        }
+        if let cachedText { value.text = cachedText }
         value.onClose = { [weak self] in self?.closePreview() }
         value.configureVision = configureVision
         value.performText = performText
@@ -347,8 +365,37 @@ import os
         let panel = CapturePanel(contentRect: CGRect(x: 0, y: 0, width: ScreenshotPreviewContent.width, height: ScreenshotPreviewContent.height),
             styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.level = .floating; panel.isReleasedWhenClosed = false
-        panel.contentView = NSHostingView(rootView: ImagePreviewView(session: value))
+        panel.contentView = NSHostingView(rootView: ScreenshotPreviewContent(session: value))
         previewPanel = panel; presentPreview(panel)
+    }
+
+    func showHistory() {
+        guard running else { return }
+        guard allowed() else { onNotice("截图历史暂不可用，请检查辅助功能权限与安全输入状态。"); return }
+        cancel(); history.configure(readSettings().screenshot); historyPanel.show()
+    }
+    func clearTransientHistory() { historyPanel.close(); if !history.onDisk { history.clear() } }
+    func openHistory(_ entry: ScreenshotHistoryEntry) {
+        guard running, allowed() else { return }
+        openImage(entry.image, origin: "截图历史", historyID: entry.id, cachedText: entry.text)
+    }
+    func historyAction(_ entry: ScreenshotHistoryEntry, action: ScreenshotHistoryView.Action) {
+        guard running, allowed() else { return }
+        switch action {
+        case .copy:
+            do { try ScreenshotOutput.shared.copyImage(entry.image); onNotice("图片已复制") }
+            catch { onNotice("无法复制图片，请重试。") }
+        case .save:
+            saveAs.present(image: entry.image, format: readSettings().screenshot.format) { [weak self] outcome in
+                if outcome == .failed { self?.onNotice("无法保存图片，请重试或选择其他位置。") }
+            }
+        case .pin:
+            guard let screen = NSScreen.main else { return }
+            let width = min(480, CGFloat(entry.image.width))
+            let size = CGSize(width: width, height: width * CGFloat(entry.image.height) / CGFloat(entry.image.width))
+            let frame = CGRect(x: screen.visibleFrame.midX - size.width / 2, y: screen.visibleFrame.midY - size.height / 2, width: size.width, height: size.height)
+            if !PinnedImageController.shared.pin(entry.image, at: frame) { onNotice("无法贴图，请检查安全输入状态。") }
+        }
     }
 
 }

@@ -12,7 +12,7 @@ enum UninstallController {
         }
         let alert = NSAlert()
         alert.messageText = "卸载 RockType？"
-        alert.informativeText = "将移除主程序、输入法和后台服务，并请求管理员授权。请先切换到其他输入法，退出其他已登录账户。默认保留设置、模型、钥匙串与学习数据。勾选删除数据后，将删除 RockType 的整个独立 Rime 目录，包括自定义配置与学习词库。其他输入法的数据不受影响。"
+        alert.informativeText = "将移除主程序、输入法和后台服务，并请求管理员授权。请先切换到其他输入法，退出其他已登录账户。默认保留设置、模型、钥匙串与学习数据。勾选删除数据后，将删除 RockType 的整个独立 Rime 目录，包括自定义配置与学习词库，并删除已保存的截图历史及 OCR 缓存。其他输入法的数据不受影响。"
         alert.addButton(withTitle: "卸载")
         alert.addButton(withTitle: "取消")
         alert.showsSuppressionButton = true
