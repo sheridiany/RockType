@@ -30,3 +30,17 @@ private final class NotificationCount: @unchecked Sendable {
     func increment() { lock.lock(); defer { lock.unlock() }; count += 1 }
     var value: Int { lock.lock(); defer { lock.unlock() }; return count }
 }
+
+@MainActor @Test func storeDoesNotOverwriteUnreadableOriginal() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    // A directory at the file path produces a read error, not a missing-file recovery.
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let store = SettingsStore(persistence: SettingsPersistence(fileURL: directory))
+    #expect(store.persistenceError != nil)
+    store.settings.general.showBeijingTime = true
+    store.flush()
+    #expect(store.persistenceError != nil)
+    let attributes = try FileManager.default.attributesOfItem(atPath: directory.path)
+    #expect(attributes[.type] as? FileAttributeType == .typeDirectory)
+}

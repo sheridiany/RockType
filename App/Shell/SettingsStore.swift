@@ -18,6 +18,7 @@ final class SettingsStore {
     private(set) var loadStatus: SettingsPersistence.LoadStatus?
     /// Only a fixed message; underlying errors can contain paths or configuration contents.
     private(set) var persistenceError: String?
+    @ObservationIgnored private var readFailed = false
     @ObservationIgnored private let persistence: SettingsPersistence
     @ObservationIgnored private var pendingSave: Task<Void, Never>?
     @ObservationIgnored private var firstPendingChange: ContinuousClock.Instant?
@@ -30,6 +31,7 @@ final class SettingsStore {
             loadStatus = loaded.status
         } catch {
             settings = .defaults
+            readFailed = true
             persistenceError = "无法读取设置，请检查文件访问权限。"
         }
     }
@@ -50,6 +52,7 @@ final class SettingsStore {
         pendingSave?.cancel()
         pendingSave = nil
         firstPendingChange = nil
+        guard !readFailed else { return } // Preserve an unreadable original until the next successful launch.
         do {
             try persistence.save(settings)
             persistenceError = nil

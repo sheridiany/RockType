@@ -103,7 +103,7 @@ public struct AIClient: Sendable {
         guard let endpoint = url.url else { throw AIClientError.configuration }
         let content: Any
         if let imageDataURL {
-            guard connection.defaultModelSupportsImages || selectedModel == connection.visionModel,
+            guard (selectedModel == connection.defaultModel && connection.defaultModelSupportsImages) || selectedModel == connection.visionModel,
                   imageDataURL.hasPrefix("data:image/"), let comma = imageDataURL.firstIndex(of: ","),
                   imageDataURL[..<comma].hasSuffix(";base64"),
                   Data(base64Encoded: String(imageDataURL[imageDataURL.index(after: comma)...])) != nil else {
