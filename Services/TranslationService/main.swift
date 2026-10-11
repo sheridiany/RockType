@@ -1,5 +1,8 @@
 import Foundation
-import RoarkTCore
+import RoarkTXPCProtocol
 
-// Translation XPC service. M0 (SPEC-001 T3) implements the authenticated listener.
-print("RoarkTTranslationService \(Identifiers.translationServiceName)")
+let delegate = TranslationXPCListenerDelegate()
+let listener = NSXPCListener(machServiceName: ROARKT_TRANSLATION_SERVICE_NAME)
+listener.delegate = delegate
+listener.resume()
+RunLoop.current.run()
