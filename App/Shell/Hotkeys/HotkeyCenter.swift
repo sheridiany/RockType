@@ -59,6 +59,7 @@ import RoarkTPlatform
     private(set) var statuses: [Action: Status] = [:]
     private(set) var recording: Action?
     private(set) var notice: String?
+    @ObservationIgnored var screenshotAction: (@MainActor () -> Void)?
     @ObservationIgnored private let registrar: any HotkeyRegistering
     @ObservationIgnored private let readSettings: @MainActor () -> ShortcutSettings
     @ObservationIgnored private let writeSettings: @MainActor (ShortcutSettings) -> Void
@@ -166,7 +167,11 @@ import RoarkTPlatform
                 guard let self, self.running, self.registrationGeneration == generation, self.recording == nil else { return }
                 if action == .showSettings { self.showSettings(); return }
                 guard self.allowed() else { return }
-                if action == .voiceHoldToTalk { self.probe() }
+                if action == .screenshot {
+                    if let screenshotAction = self.screenshotAction { screenshotAction() }
+                    else { self.notice = "截图尚未接入，请重新启动应用。" }
+                }
+                else if action == .voiceHoldToTalk { self.probe() }
                 else {
                     self.notice = "\(action.title)即将推出；当前仅验证快捷键。"
                     self.comingSoon(action)
