@@ -7,13 +7,14 @@ struct SelectionToolbarAction: Identifiable {
     let id: String
     let title: String
     let symbol: String
+    var enabled = true
 
-    static func configured(in settings: AppSettings) -> [Self] {
+    static func configured(in settings: AppSettings, aiConfigured: Bool = true) -> [Self] {
         SelectionPolicy.actions(settings: settings).compactMap { id in
             if id == "search" { return Self(id: id, title: "搜索", symbol: "magnifyingglass") }
             if id == "copy" { return Self(id: id, title: "复制", symbol: "doc.on.doc") }
             guard let template = settings.templates.first(where: { $0.id == id }) else { return nil }
-            return Self(id: id, title: template.name, symbol: template.icon)
+            return Self(id: id, title: template.name, symbol: template.icon, enabled: id == "translate" || aiConfigured)
         }
     }
 }
@@ -57,7 +58,8 @@ struct LiveSelectionToolbar: View {
                     }
                 }
                 .buttonStyle(DesignButtonStyle(variant: .ghost))
-                .accessibilityLabel(action.title).help(action.title)
+                .disabled(!action.enabled)
+                .accessibilityLabel(action.title).help(action.enabled ? action.title : "请前往设置配置 AI 连接")
             }
             if !overflow.isEmpty {
                 if renderingSnapshot {
@@ -66,7 +68,8 @@ struct LiveSelectionToolbar: View {
                 } else {
                     Menu {
                         ForEach(overflow) { action in
-                            Button(action.title, systemImage: action.symbol) { perform(action.id) }
+                            Button(action.enabled ? action.title : action.title + " · 请前往设置配置 AI", systemImage: action.symbol) { perform(action.id) }
+                                .disabled(!action.enabled)
                         }
                     } label: {
                         Image(systemName: "ellipsis")
@@ -93,6 +96,7 @@ private final class SelectionHostingView: NSHostingView<LiveSelectionToolbar> {
                                       styleMask: [.borderless, .nonactivatingPanel],
                                       backing: .buffered, defer: false)
     var isVisible: Bool { panel.isVisible }
+    var frame: CGRect { panel.frame }
     func contains(_ window: NSWindow?) -> Bool { window === panel }
 
     init() {
@@ -106,8 +110,8 @@ private final class SelectionHostingView: NSHostingView<LiveSelectionToolbar> {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
     }
 
-    func show(snapshot: ContentSnapshot, settings: AppSettings, perform: @escaping (String) -> Void) {
-        let actions = SelectionToolbarAction.configured(in: settings)
+    func show(snapshot: ContentSnapshot, settings: AppSettings, aiConfigured: Bool = true, perform: @escaping (String) -> Void) {
+        let actions = SelectionToolbarAction.configured(in: settings, aiConfigured: aiConfigured)
         guard !actions.isEmpty else { hide(); return }
         let height = NSScreen.screens.first?.frame.maxY ?? 0
         let selection = snapshot.selectionRect.map { ScreenGeometry.topLeft($0, primaryHeight: height) }

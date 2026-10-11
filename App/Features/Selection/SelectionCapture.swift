@@ -6,12 +6,14 @@ import RoarkTPlatform
 @MainActor struct CapturedSelection {
     let snapshot: ContentSnapshot
     let isCurrent: @MainActor () -> Bool
+    var returnSource: OperationSource? = nil
 }
 
 @MainActor final class SelectionCapture {
     struct Context {
         let source: ContentSnapshot.Source
         let isCurrent: @MainActor () -> Bool
+        var returnSource: OperationSource? = nil
     }
     struct Reading {
         let status: SelectionReader.Status
@@ -30,7 +32,8 @@ import RoarkTPlatform
     init(allowed: @escaping @MainActor () -> Bool = { SecureInput.status() == .allowed },
          context: @escaping @MainActor () -> Context? = {
              guard let source = SelectionSource() else { return nil }
-             return Context(source: source.source, isCurrent: { source.isCurrent })
+             return Context(source: source.source, isCurrent: { source.isCurrent },
+                            returnSource: OperationSource(source: source.source))
          },
          read: @escaping @MainActor () -> Reading = {
              let result = SelectionReader.read()
@@ -64,7 +67,7 @@ import RoarkTPlatform
         guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw Failure.empty }
         let rect = reading.rect.map { ScreenGeometry.topLeft($0, primaryHeight: primaryHeight()) }
         return CapturedSelection(snapshot: .init(text: text, source: context.source, method: method,
-                                                selectionRect: rect), isCurrent: context.isCurrent)
+                                                selectionRect: rect), isCurrent: context.isCurrent, returnSource: context.returnSource)
     }
 }
 

@@ -12,11 +12,15 @@ final class ComingSoonController {
         guard [.screenshot, .translateSelection, .summarizeSelection].contains(action) else { return }
         // M2's closed diagnostic vocabulary groups unavailable shortcut actions here.
         Task { try? await DiagnosticLog.shared.record(.init(action: .hotkeyRegistration, status: .unavailable)) }
+        show(message: "\(action.title) · 即将推出")
+    }
+
+    func show(message: String) {
         dismissal?.cancel()
         let panel = panel ?? makePanel()
         self.panel = panel
         panel.contentView = NSHostingView(rootView:
-            Notice(text: "\(action.title) · 即将推出").padding(Tokens.Space.md).modifier(DesignSurface()))
+            Notice(text: message).padding(Tokens.Space.md).modifier(DesignSurface()))
         let size = panel.contentView!.fittingSize
         let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
         if let frame = screen?.visibleFrame {

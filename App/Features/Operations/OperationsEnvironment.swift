@@ -16,9 +16,9 @@ public final class OperationsEnvironment {
         runners.removeAll { $0.value == nil }
         recent.clear()
     }
-    public func makeRunner(connectionID: String = "default") -> DefaultOperationRunner {
-        let runner = DefaultOperationRunner(offline: TextTranslationXPCClient(), recent: recent,
-            apiKey: { try Keychain().get(account: connectionID) ?? "" },
+    public func makeRunner(connectionID: String = "default", currentConnectionID: (@MainActor () -> String)? = nil) -> DefaultOperationRunner {
+        let runner = DefaultOperationRunner(offline: TextTranslationXPCClient(),
+            apiKey: { try Keychain().get(account: currentConnectionID?() ?? connectionID) ?? "" },
             isAllowed: { SecureInput.status() == .allowed })
         runners.removeAll { $0.value == nil }; runners.append(WeakRunner(value: runner))
         return runner
