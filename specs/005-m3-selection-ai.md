@@ -29,7 +29,7 @@
 | M3-2 | 翻译服务 `translateText` 与翻译路由（FR-E1 划词路径） | pi-xpc | 完成（待验收） |
 | M3-3 | 划词监听、取词管线、黑白名单、工具栏窗口、快捷键 ⌃⌥T/⌃⌥S 接入（C1–C5） | pi-platform | 未开始 |
 | M3-4 | 结果浮窗窗口与交互、复制并返回、追问、置顶（C12、C13） | pi-surfaces | 完成（待验收） |
-| M3-5 | 设置：操作模板编辑与自定义模板、按功能指定模型（C9、C10、C15 的界面） | pi-surfaces | 未开始 |
+| M3-5 | 设置：操作模板编辑与自定义模板、按功能指定模型（C9、C10、C15 的界面） | pi-surfaces | 完成（待验收） |
 | M3-6 | 集成与验收 | Claude | 未开始 |
 
 **接口先行**：pi-xpc 第一个 commit 只提交 `Core/Operations/` 的公开类型（`ContentSnapshot`、`OperationRequest`、`OperationEvent` 流事件、`OperationRunner` 协议、`RecentResults` 接口）与测试桩，在“进度”节登记 hash；pi-platform 与 pi-surfaces 合并该 commit 后开发，用桩实现自测。
@@ -49,6 +49,9 @@
 | M3-4 流式状态、取消、迟到结果、追问上下文、保护状态、关闭清空、最近结果重试 | Swift Testing | 通过 | `Tests/SurfaceTests/ResultWindowTests.swift`；合成数据、可控事件流，无网络和用户内容 |
 | M3-4 实际视图浅深色、完成态、原文展开与追问 | AppKit 离屏渲染并目视检查 | 通过（静态检查） | `/tmp/roarkt-result-{light,dark}-{done,expanded}.png`；交互、VoiceOver 与设计验收仍待人工 |
 | M3-4 分支测试与构建 | 命令 | 测试通过；完整构建阻塞 | 66 项测试及 Rime 部署通过；主 App/翻译服务构建签名通过；输入法子模块未初始化，完整 `scripts/build.sh` 未通过；Gallery 208 张通过 |
+| M3-5 模板新增/编辑/删除、默认提示词、模型优先级、重启持久化 | Swift Testing + 真实 runner 的合成传输 | 通过 | `Tests/SurfaceTests/TemplateSettingsTests.swift`：验证设置读写、工具栏同步、无效/过期草稿拒绝、新提示词与模型进入真实 DefaultOperationRunner、图片模板文字入口拒绝 |
+| M3-5 模板列表、模型分区与图片模板编辑浅深色 | AppKit 离屏渲染并目视检查 | 静态检查通过；生产接线与交互待验收 | `/tmp/roarkt-m35-{templates,models,image-editor}-{light,dark}.png`；新增 Binding 分区入口，未改非归属 ShellSettingsView |
+| M3-5 分支测试、完整构建、Gallery | 命令 | 通过 | `scripts/test.sh`：98 项 Swift Testing（另含既有 XCTest）、Rime 与旧标识检查通过；`scripts/build.sh`：全部产物构建签名通过；`scripts/render-gallery.sh`：208 张 PNG；不代表真实交互验收 |
 | 真实 AI 端到端（用户提供端点） | 手工 | 待人工验证 | |
 | `scripts/test.sh`、`scripts/build.sh`、`scripts/render-gallery.sh` | 命令 | 测试/渲染通过；完整构建阻塞 | 2026-10-11：test.sh 通过（19 XCTest + 66 Swift Testing，Rime 部署和旧标识扫描通过）；build.sh 主 App/翻译服务 release 编译与签名通过，随后因输入法子模块未初始化退出 1；render-gallery.sh 生成 208 PNG，未作视觉验收。 |
 
@@ -82,6 +85,18 @@ M3-4 检查已按新 AGENTS 规则迁入 `Tests/SurfaceTests/ResultWindowTests.s
 - Claude 接线入口：App 创建一个 `OperationsEnvironment`，启动/退出调用 `start()` / `stop()`；每个结果窗用 `makeRunner(connectionID: settings.ai.id)` 获取独立 runner，关闭时 `stop()`；监听 `run(_:)` 事件，追问使用成功结果的 `session`。“清除当前内容”调用 `clearCurrentContent()` 并清除窗口自身内容；隐私设置关闭最近结果时，Claude 需清空现存最近结果。搜索调用 `search(_:settings:)` 并处理返回 false。
 - 文件边界：未修改 AppDelegate、Package.swift、共享 Tests 或其他 worktree。新行为检查位于归属目录的 `.checks/`；脚本创建临时 Swift 测试包并在结束后清理。它们目前需单独执行，未修改 `scripts/test.sh`。
 - 最终验证命令：`Core/Operations/.checks/run.sh`（11/11）、`Services/TranslationService/.checks/run.sh`（9/9）、`scripts/test.sh`（通过）、`scripts/build.sh`（输入法依赖阻塞）、`scripts/render-gallery.sh`（208 PNG，生成不等于视觉验收）、`git diff --check`（通过）。检查夹具均为合成内容，不含真实选区、用户文件或凭据。构建/图库产物只在本 worktree 的忽略目录中。
+
+### M3-5 交付记录（pi-surfaces，2026-10-11）
+
+- 已合并 main 的真实操作引擎与测试规范，合并时保留 M3-1/M3-2 与 M3-4 双方状态及验收记录。M3-4 独立检查已迁入正式 `RoarkTSurfaceTests`；所有新增测试由 `scripts/test.sh` 运行。
+- 新增 `OperationTemplateSettings` 与 `OperationTemplateEditor`：内置提示词编辑与恢复；自定义模板名称、图标、输入类型、提示词、模型和输出形式；新增自动加入工具栏，删除同时移除启用/排序配置。编辑先保留草稿，保存后一次写入 SettingsStore 的 Binding；取消不更改设置；空名称、无效图标、空提示词、过期草稿不会覆盖已保存内容；内置模板保留文字输入且不能删除。
+- 新增 `OperationModelSettings` / `OperationModelField`：翻译与助手模型、模板覆盖、默认继承、空白模型归一化；下拉只使用当前连接已配置的模型，也可填写该服务商的其他模型 ID。不请求网络，不读取密钥。实际优先级与真实 runner 一致：模板 → 功能 → 连接默认；离线优先成功不使用自定义提示词，界面已明确。
+- 图片模板可以保存，未配置视觉模型时显示引导；已配置仍提示须验证，不冒充已验证。当前 M3 文字快照入口由真实 runner 拒绝图片模板；图片发送与执行仍属 M4。
+- 文件边界：仅在 `App/Shell/ShellSettingsSections.swift` 追加模板/模型分区入口，视图放 `App/Surfaces/`；没有修改输入法说明、侧栏焦点、AppDelegate，也没有修改非归属的 `App/Shell/ShellSettingsView.swift`。main 已把旧模板表单迁到 ShellSettingsView，因此新界面尚待 M3-6 替换该宿主的一处调用；不是生产设置页已接入的声明。
+- M3-6 接线：在 `ShellSettingsView.content` 的 `.templates` 分支使用 `sections.templatesPane(settings: $settings, showAIConnection: { section = .ai })`，替换旧的 `templates` 表单。这个分区已包含按功能模型设置；独立复用可调用 `sections.modelsPane(settings: $settings, showAIConnection: { section = .ai })`。两者直接绑定同一 SettingsStore，持久化与变更通知沿用现有机制，不需要第二套 store 或生命周期对象。
+- 验证：`swift test --filter RoarkTSurfaceTests` 7 项通过，其中 M3-5 五项；真实 DefaultOperationRunner 使用合成 transport，未调用真实网络；临时设置文件验证后清理。AppKit 六张静态预览通过目视检查。`scripts/test.sh` 98 项 Swift Testing 及既有 XCTest、Rime 检查通过；`scripts/build.sh` 全部构建签名通过；`scripts/render-gallery.sh` 208 张通过；`git diff --check` 通过。日志为 `/tmp/roarkt-m35-{tests,release,gallery}.log`。
+- 待人工验证：M3-6 生产设置入口、sheet 新增/取消/保存/删除/恢复、中文输入、VoiceOver、系统字号、窗口缩放和滚动；真实模型权限与图片能力；工具栏新模板的真实点击执行。自动测试不能替代这些验收。
+- Claude 已决定的 M3-4 事项：关闭后提示使用现有 ComingSoonController 或其通用化版本；未聚焦时不截获来源按键，点击浮窗或 key 状态下 ⌘L 追问；真实 runner、最近结果、设置回调由 M3-6 接线；最近结果只复制不猜测返回窗口的保守行为获认可。输入法子模块现已由 Claude 初始化，dist 符号链接保持原样。
 
 ## 问题
 
