@@ -46,7 +46,7 @@ import RoarkTCore
                     self.clear(); self.phase = .failed; self.notice = "安全输入已启用，翻译已停止。"; return
                 }
                 switch event {
-                case .started: break
+                case .started, .thinking: break
                 case .engine(let value): self.engine = value
                 case .delta(let value): self.text += value
                 case .completed(let result):
