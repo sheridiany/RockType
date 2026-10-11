@@ -2,7 +2,7 @@
 
 - 阶段：打磨 P1（输入法）
 - 覆盖需求：FR-A1、FR-A3、FR-A5、NFR-2
-- 状态：InProgress（W-1 基线已建立；W-2/W-3 待实施）
+- 状态：InProgress（W-1/W-2 已实现；W-3 待实施）
 
 ## 目标
 
@@ -37,7 +37,7 @@
 | # | 任务 | 执行 | 状态 |
 | --- | --- | --- | --- |
 | W-1 | 评测集与评测脚本，先跑出现状基线 | pi-ui | 已完成，基线 162/200（81%） |
-| W-2 | 引入白霜词库并调整两套方案，回归 RimeChecks | pi-ui | 未开始 |
+| W-2 | 引入白霜词库并调整两套方案，回归 RimeChecks | pi-ui | 已完成，164/200（82%）；上下文重排取舍见证据 |
 | W-3 | AI / 开发中文词库与英文扩充，评测校准权重 | pi-ui | 未开始 |
 | W-4 | 个人层脚本：学习词简体迁移、个人习惯词表（含临时目录测试） | pi-platform | 未开始 |
 | W-5 | Claude 在本机执行个人层脚本、安装、用户试打 | Claude + 用户 | 未开始 |
@@ -48,7 +48,7 @@
 
 | 项 | 方法 | 结果 | 证据 |
 | --- | --- | --- | --- |
-| 上游许可证核实并随包附带 | 检查 LICENSE 文件与 NOTICES | 未运行 | |
+| 上游许可证核实并随包附带 | 检查 LICENSE 文件与 NOTICES | 通过 | 固定上游版本、逐字复制 GPL-3.0；打包脚本包含许可与声明 |
 | 首选命中率：替换后 ≥ 替换前；AI 条目显著提升 | `scripts/eval-candidates.sh` | 未运行 | |
 | RimeChecks 全部通过（模糊音、简拼、纠错、Shift、英文、学习） | `scripts/test.sh` | 未运行 | |
 | 部署时间与打字延迟无明显退化 | 计时 + 人工 | 未运行 | |
@@ -68,6 +68,22 @@
 
 ## 问题
 
+1. 旧繁体八股文模型与简体词库的已提交上下文重排不匹配（“中国”之后 `shijian` 首选变“事件”）。本次保留模型和造句，关闭两套方案 `contextual_suggestions`；Claude 决定后续是否选用许可明确的简体模型。
+2. 白霜 W-2 首选新增退步包括“哪里→那里、北京→背景、上海→伤害”和两条整句；总指标仍高于基线。不为评测硬调这些日常同音词，请 Claude 与用户试打确认词频偏好。
+3. 仓库禁止旧标识的字面扫描会命中无关专名（如“巴洛克”）。本次按硬规则排除上游 40 条相关词，NOTICES 记录；若希望恢复，需要 Claude 修改该约定/扫描边界。
+
+
 ### W-1 提交前检查
 
 - `zsh scripts/test.sh`：退出码 **0**（含新评测 SPM 测试、原 RimeChecks、面板/session、AppShell）；`git diff --check`：退出码 **0**。完整日志 `.build/dictionary/w1-final-tests.log`。
+
+### W-2 验收证据（2026-10-11）
+
+- 先克隆 `.build/vendor/rime-frost` 并核实实际 `LICENSE`，固定 `64d24e89341aee133c0ad0f09b5f47a695e3d508`。许可 SHA-256 `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`；`cmp` 确认许可、8105、others 与上游逐字一致（退出码 0）。base/ext 只排除命中仓库旧标识的 40 条专名，并加修改声明；不改上游频率，保留完整原文件头。
+- 引入 8105/base/ext/others（约 17MiB）；不引入可选 Tencent 的 34 万多条零权重长尾词，控制体积/部署成本，与上游默认关闭该表一致。不并用雾凇，也不引入万象模型、细胞词库或上游 Lua。
+- 两套方案共用 `roarkt_zh` 与用户词库；关闭 `use_preset_vocabulary`，避免繁体 essay 词条混入；删除繁转简 switch/filter/config，保留 Lua 过滤、模糊音/简拼/纠错 algebra、Shift、英文、候选翻译、五候选与学习行为。
+- 对照上游 speller/translator：保留现有 lowercase alphabet 与 algebra，因 8105 的 `nve/lve/ju/qu/xu/yu` 与现有规则兼容，且设置 patch 按规则位置启停；不引入上游大写/符号拼写、corrector 或注释显示。保留补全/造句/用户词库与 1.2 初始质量；当前 librime 未实现上游 `grammar_penalty`，试验无效后移除。关闭已提交上下文重排，保留 octagram 造句（依据当前 librime `Poet::ContextualWeighted` 与 `MakeSentence` 边界）。
+- 首次 `zsh scripts/test.sh` **失败，退出码 133**：RimeChecks 在连续提交“中国”后 `shijian` 首选错误。临时增加“时间”权重以及 `grammar_penalty` 均未修复，已撤销；关闭 `contextual_suggestions` 后 `bash scripts/test-rime-capabilities.sh` **通过，退出码 0**，没有降低原断言。
+- `scripts/eval-candidates.sh .build/dictionary/frost-context-off .build/dictionary/w2-context-off` **退出码 0**：日常 **75/80 (93.75%)**、AI **41/60 (68.33%)**、开发 **32/40 (80%)**、整句 **16/20 (80%)**，合计 **164/200 (82%)**。一次部署 **2.21s**，按键 P95 **2.109ms**（并行构建负载下，仅记录，不宣称无性能退化）。
+- 资源子目录同步接入 Xcode `package-rime.sh`、两条部署/能力脚本与 settings 部署测试；Xcode 包内同时附 GPL 与第三方声明。没有修改 `InputMethod/sources`。
+- 最终 `zsh scripts/test.sh` **退出码 0**；`xcodebuild -project InputMethod/Squirrel.xcodeproj -scheme Squirrel -configuration Release -derivedDataPath .build/ime ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build` **退出码 0**；`zsh scripts/test-rime.sh --bundle '.build/ime/Build/Products/Release/RoarkT Input.app'` **退出码 0**。仅编译和读取包内资源进行临时部署，未启动/安装/注册输入法。未运行整套签名构建与真实键盘验证。
