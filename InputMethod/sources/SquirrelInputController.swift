@@ -316,6 +316,12 @@ final class SquirrelInputController: IMKInputController, @unchecked Sendable {
       translationClient.activate()
       preedit = ""
       lastModifiers = NSEvent.modifierFlags
+      // Activation has no flagsChanged event; use the session-wide Caps Lock state.
+      if CGEventSource.flagsState(.combinedSessionState).contains(.maskAlphaShift) {
+        lastModifiers.insert(.capsLock)
+      } else {
+        lastModifiers.remove(.capsLock)
+      }
       if let app = client?.bundleIdentifier(), currentApp != app {
         currentApp = app
         updateAppOptions()
@@ -853,6 +859,14 @@ private extension SquirrelInputController {
   func commit(string: String) {
     cancelDynamicTranslation()
     guard let client = client else { return }
+    // Some clients require a marked-text phase even for direct punctuation commits.
+    if session != 0, rimeAPI.get_option(session, "force_marked_text_for_direct_commit"),
+       preedit.isEmpty, !string.isEmpty {
+      let markedText = NSMutableAttributedString(string: string)
+      client.setMarkedText(markedText,
+                           selectionRange: NSRange(location: markedText.length, length: 0),
+                           replacementRange: .empty)
+    }
     client.insertText(string, replacementRange: .empty)
     preedit = ""
     hidePalettes()

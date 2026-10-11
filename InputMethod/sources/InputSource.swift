@@ -128,7 +128,7 @@ final class SquirrelInstaller {
     return result
   }
 
-  private func currentInputSourceID() -> String? {
+  func currentInputSourceID() -> String? {
     let source = TISCopyCurrentKeyboardInputSource().takeRetainedValue()
     let sourceIDRef = TISGetInputSourceProperty(source, kTISPropertyInputSourceID)
     return unsafeBitCast(sourceIDRef, to: CFString?.self) as String?
