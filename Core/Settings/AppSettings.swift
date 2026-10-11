@@ -20,6 +20,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
 public struct GeneralSettings: Codable, Equatable, Sendable {
     public enum Appearance: String, Codable, Sendable { case system, light, dark }
     public var showBeijingTime = false
+    /// Optional so settings written before this field still decode. nil means hidden:
+    /// RockType opens from the input method menu or Launchpad, not from the menu bar.
+    public var menuBarIcon: Bool? = nil
+    /// The status item exists only when asked for; the Beijing clock lives in it.
+    public var showsMenuBarItem: Bool { (menuBarIcon ?? false) || showBeijingTime }
     public var launchAtLogin = false
     public var appearance: Appearance = .system
     public var language = "system"
