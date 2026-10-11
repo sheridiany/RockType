@@ -9,7 +9,7 @@ import sys
 import tempfile
 
 sys.dont_write_bytecode = True
-from personal_common import Refusal, require, plain, safe_tree, run, locked, backup, digest, database_lock
+from personal_common import add_rime_directory_argument, Refusal, require, plain, safe_tree, run, locked, backup, digest, database_lock
 
 DB = 'roarkt_zh.userdb'
 
@@ -55,7 +55,7 @@ def rollback(target, token):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--rime-dir', required=True, help='existing directory; never inferred')
+    add_rime_directory_argument(parser)
     parser.add_argument('--offline', action='store_true', help='confirm input method and settings writer are stopped')
     parser.add_argument('--manager', help='absolute rime_dict_manager executable')
     parser.add_argument('--opencc', help='absolute OpenCC executable')

@@ -2,7 +2,7 @@
 
 仅供用户明确授权后离线执行，不由安装器或主 App 自动调用。脚本不会安装、注册、启动输入法或重新部署。W-4 开发只用合成文本和临时目录；真实用户数据由 Claude 在合并后处理。
 
-两个入口必须显式传入已有的 `--rime-dir`。实际执行前退出输入法及会写 custom 文件的设置程序，再传 `--offline`。不运行脚本替你停止进程。目标及其子项拒绝符号链接；源树不跟随符号链接，排除隐藏目录、`.git`、`.build`、`node_modules`。只输出数字统计、状态及备份 ID，不输出词条、文本、路径或子工具诊断。产物及临时文件在私有目录中，umask 为 077。
+两个入口使用相同的目录优先级：`--rime-dir` 参数 → `ROARKT_RIME_USER_DIR` 环境变量 → `~/Library/Application Support/RoarkT/Rime`。环境变量未设置或为空时使用默认值；目标目录必须已存在，不自动创建或寻找其他目录。路径含空格时须加引号，例如 `export ROARKT_RIME_USER_DIR="$HOME/Library/Application Support/RoarkT/Rime"`。实际执行前退出输入法及会写 custom 文件的设置程序，再传 `--offline`。不运行脚本替你停止进程。目标及其子项拒绝符号链接；源树不跟随符号链接，排除隐藏目录、`.git`、`.build`、`node_modules`。只输出数字统计、状态及备份 ID，不输出词条、文本、路径或子工具诊断。产物及临时文件在私有目录中，umask 为 077。
 
 依赖为开发工具，不打入产品：Python 3.9+（本次 3.13.13）、PyYAML 6.0.3、Xcode command line tools（Swift + 系统 NaturalLanguage）；迁移还需要 `rime_dict_manager` 及 OpenCC CLI。PyYAML LICENSE 已核实为 MIT，librime LICENSE 为 BSD-3-Clause，OpenCC 上游 LICENSE 为 Apache-2.0。未复制任何上游源码进脚本，也未安装额外运行时。
 

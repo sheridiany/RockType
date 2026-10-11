@@ -6,7 +6,7 @@
 
 ## 目标
 
-候选更准、更全：换上词频经过大语料重统计的开源中文词库；补齐 AI / 开发领域词；按用户本人的习惯定制。**产品打包**与**用户个人数据**严格分开：个人词表只写入用户本机 `~/Library/Rime`，不进安装包、不进 git。
+候选更准、更全：换上词频经过大语料重统计的开源中文词库；补齐 AI / 开发领域词；按用户本人的习惯定制。**产品打包**与**用户个人数据**严格分开：个人词表只写入用户本机 `~/Library/Application Support/RoarkT/Rime`，不进安装包、不进 git。
 
 ## 调研结论（2026-10-11）
 
@@ -29,8 +29,8 @@
 
 ## 个人层（只在用户本机，脚本化、可重复执行、可回滚）
 
-5. **学习词迁移为简体**：用户已导入的 RoType 学习词（`roarkt_zh.userdb`，繁体键）在主词库换为简体后需转换：导出 → OpenCC 繁转简（t2s）→ 导入新 userdb。脚本 `scripts/personal/migrate-userdb-simplified.sh`，执行前完整备份到 `~/Library/Rime/roarkt-backups/<时间>/`。由 Claude 在合并后执行，agent 只实现与用临时目录测试。
-6. **个人习惯词表**：脚本 `scripts/personal/build-personal-dict.py`：从用户本机文本中统计高频中文词与英文术语，**来源仅限**用户明确允许的目录（默认 `~/Repos/**/*.md` 与 `~/Repos/**/*.swift` 注释/字符串，排除 `node_modules`、`.build`、`.git`），与主词库比对，产出主词库缺失或排序靠后的词，写 `~/Library/Rime/roarkt_personal.dict.yaml`（文件头注明“个人词表，由 RockType 生成”），通过独立 `roarkt_personal.patch.yaml` 挂载。SPEC-004 设置生成的两份 custom 在 patch 内可选引用它；个人脚本不读写 custom，不覆盖用户手写内容。脚本只输出统计摘要，不打印原文；不读取聊天记录、浏览器、邮件等其他数据。产物不进 git（`.gitignore`）。
+5. **学习词迁移为简体**：用户已导入的 RoType 学习词（`roarkt_zh.userdb`，繁体键）在主词库换为简体后需转换：导出 → OpenCC 繁转简（t2s）→ 导入新 userdb。脚本 `scripts/personal/migrate-userdb-simplified.sh`，执行前完整备份到 `<Rime 用户目录>/roarkt-backups/<时间>/`。由 Claude 在合并后执行，agent 只实现与用临时目录测试。
+6. **个人习惯词表**：脚本 `scripts/personal/build-personal-dict.py`：从用户本机文本中统计高频中文词与英文术语，**来源仅限**用户明确允许的目录（默认 `~/Repos/**/*.md` 与 `~/Repos/**/*.swift` 注释/字符串，排除 `node_modules`、`.build`、`.git`），与主词库比对，产出主词库缺失或排序靠后的词，写 `<Rime 用户目录>/roarkt_personal.dict.yaml`（文件头注明“个人词表，由 RockType 生成”），通过独立 `roarkt_personal.patch.yaml` 挂载。SPEC-004 设置生成的两份 custom 在 patch 内可选引用它；个人脚本不读写 custom，不覆盖用户手写内容。脚本只输出统计摘要，不打印原文；不读取聊天记录、浏览器、邮件等其他数据。产物不进 git（`.gitignore`）。
 
 ## 任务
 
@@ -39,7 +39,7 @@
 | W-1 | 评测集与评测脚本，先跑出现状基线 | pi-ui | 未开始 |
 | W-2 | 引入白霜词库并调整两套方案，回归 RimeChecks | pi-ui | 未开始 |
 | W-3 | AI / 开发中文词库与英文扩充，评测校准权重 | pi-ui | 未开始 |
-| W-4 | 个人层脚本：学习词简体迁移、个人习惯词表（含临时目录测试） | pi-platform | 完成；个人 patch 与设置同步解耦，真实部署测试通过 |
+| W-4 | 个人层脚本：学习词简体迁移、个人习惯词表（含临时目录测试） | pi-platform | 完成；个人 patch 与设置同步解耦，用户目录支持参数/环境变量及独立默认目录 |
 | W-5 | Claude 在本机执行个人层脚本、安装、用户试打 | Claude + 用户 | 未开始 |
 
 **文件所有权**：pi-ui：`Rime/`、`THIRD_PARTY_NOTICES.md`、`LICENSES/`、`scripts/eval-candidates.sh`、`Tests/InputMethodTests/Fixtures/`、评测相关测试；pi-platform：`scripts/personal/`、其测试、`.gitignore` 一行。两人都不改 `InputMethod/sources`（pi-ime 正在恢复 RoType 视觉）。
@@ -94,3 +94,10 @@
 - `Core/Settings/RimeSettingsPatch.swift` 为两套 custom 加入该可选引用。个人脚本移除 custom 解析、合并及所有权标记，仅读写独立个人 patch、中英文词典和英文编译依赖 schema（共 4 文件），回滚不包含 custom。
 - 临时测试调用实际 `RimeSettingsPatchWriter`，验证设置写入不覆盖个人文件；将默认及重写后的设置产物交给真实 librime 部署，两个方案的中文与英文个人词共 8 次候选探测通过。重写后的 Shift/英文补全设置也实际生效。回滚删除个人 patch 后重新部署，两个方案恢复工厂 dictionary；既有 Core 部署测试覆盖全新 profile 中缺少个人 patch 的场景。
 - `swift test --filter personalScriptsInTemporaryDirectories`：退出 0，9 项个人脚本检查通过（删除旧 custom 合并专用测试，替换为解耦及文件归属验证）。`scripts/test.sh`：退出 0。仅临时目录合成数据，无真实 profile 操作。
+
+### W-4 后续：独立 Rime 用户目录
+
+- 两个个人脚本共享目录参数定义，优先级为 `--rime-dir` → `ROARKT_RIME_USER_DIR` → `~/Library/Application Support/RoarkT/Rime`；环境变量为空也使用默认值。仍要求目标目录已存在；离线确认、来源授权、锁、备份及回滚约束保留，不搜索或迁移其他输入法的目录。
+- 新增临时 HOME 下的 CLI 测试：两个入口分别验证默认路径（含空格）、环境覆盖、参数优先于环境、对应目录内执行及回滚；检查未选中的目录和旧 `Library/Rime` 哨兵保持原样。学习词转换使用真实 librime/OpenCC 和合成数据。
+- 验收：完整 `scripts/test.sh` 通过，直接捕获真实退出码 `0`；153 个 Swift Testing 测试通过，其中个人脚本包装执行 11 项临时目录检查。Rime 部署、能力、输入法及 AppShell 检查通过。`git diff --check` 通过。
+- 未验证：真实用户目录操作、安装与试打。Core 单一路径常量由 pi-ime 实现，待其合入 main 后再在当前 worktree 合并对齐。

@@ -19,6 +19,14 @@ def require(ok, reason):
     if not ok:
         raise Refusal(reason)
 
+def add_rime_directory_argument(parser):
+    parser.add_argument(
+        '--rime-dir',
+        default=os.environ.get('ROARKT_RIME_USER_DIR') or str(
+            Path.home() / 'Library/Application Support/RoarkT/Rime'),
+        help='existing target directory (default: ROARKT_RIME_USER_DIR or '
+             '~/Library/Application Support/RoarkT/Rime)')
+
 def plain(path):
     path = Path(os.path.abspath(Path(path).expanduser()))
     # macOS /tmp and /var are system aliases; resolve parent aliases, but reject

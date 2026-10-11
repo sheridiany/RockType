@@ -20,9 +20,9 @@ spec.loader.exec_module(personal)
 from personal_common import Refusal, digest
 
 
-def invoke(script, args):
+def invoke(script, args, env=None):
     return subprocess.run([sys.executable, '-B', str(SCRIPTS / script), *map(str, args)],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, env=env)
 
 
 def command(args, cwd):
@@ -50,6 +50,40 @@ class PersonalTests(unittest.TestCase):
         (self.base / 'outside.md').write_text('SymlinkToken ' * 5)
         (self.source / 'link.md').symlink_to(self.base / 'outside.md')
         self.args = ['--rime-dir', self.target, '--source', self.source, '--dictionary-dir', self.dicts]
+
+    def test_directory_selection(self):
+        home = self.base / 'home'; home.mkdir()
+        default = home / 'Library/Application Support/RoarkT/Rime'
+        default.mkdir(parents=True)
+        legacy = home / 'Library/Rime'; legacy.mkdir()
+        (legacy / 'sentinel').write_text('untouched')
+        legacy_before = digest(legacy)
+        override = self.base / 'environment profile'; override.mkdir()
+        env = {**os.environ, 'HOME': str(home), 'ROARKT_RIME_USER_DIR': ''}
+        for mode, target in [('default', default), ('environment', override), ('argument', self.target)]:
+            with self.subTest(mode=mode):
+                if mode == 'default':
+                    env.pop('ROARKT_RIME_USER_DIR', None)
+                else:
+                    env['ROARKT_RIME_USER_DIR'] = str(override)
+                args = self.args[2:] + ['--apply', '--offline']
+                if mode == 'argument':
+                    args += ['--rime-dir', target]
+                before = {p: digest(p) for p in [default, override, self.target] if p != target}
+                result = invoke('build-personal-dict.py', args, env)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertTrue((target / 'roarkt_personal.patch.yaml').is_file())
+                self.assertEqual(before, {p: digest(p) for p in before})
+                token = result.stdout.split('backup_id=')[1].split(';')[0]
+                rollback = ['--rollback', token, '--apply', '--offline']
+                if mode == 'argument':
+                    rollback += ['--rime-dir', target]
+                if mode == 'default':
+                    env['ROARKT_RIME_USER_DIR'] = ''
+                result = invoke('build-personal-dict.py', rollback, env)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertFalse((target / 'roarkt_personal.patch.yaml').exists())
+        self.assertEqual(digest(legacy), legacy_before)
 
     def test_source_lexer(self):
         text = personal.swift_text('let CodeToken = 0\n/* outer /* inner */ tail */\nlet a = #"raw word"#\nlet b = """multi\nline"""\nlet c = "skip \\(SecretCode)"')
@@ -205,6 +239,43 @@ class MigrationTests(unittest.TestCase):
         self.seed.write_text('發現\tfa xian\t7\n发现\tfa xian\t3\n頭髮\ttou fa\t5\n')
         command([self.manager, '-i', 'roarkt_zh', self.seed], self.target)
         (self.target / 'settings.yaml').write_text('synthetic: true\n')
+
+    def test_directory_selection(self):
+        home = self.base / 'home'; home.mkdir()
+        default = home / 'Library/Application Support/RoarkT/Rime'
+        default.mkdir(parents=True)
+        legacy = home / 'Library/Rime'; legacy.mkdir()
+        (legacy / 'sentinel').write_text('untouched')
+        legacy_before = digest(legacy)
+        override = self.base / 'environment profile'; override.mkdir()
+        for target in [default, override]:
+            shutil.copytree(self.target / 'roarkt_zh.userdb', target / 'roarkt_zh.userdb')
+        env = {**os.environ, 'HOME': str(home)}
+        for mode, target in [('default', default), ('environment', override), ('argument', self.target)]:
+            with self.subTest(mode=mode):
+                if mode == 'default':
+                    env.pop('ROARKT_RIME_USER_DIR', None)
+                else:
+                    env['ROARKT_RIME_USER_DIR'] = str(override)
+                args = self.args[2:]
+                if mode == 'argument':
+                    args += ['--rime-dir', target]
+                before = {p: digest(p) for p in [default, override, self.target] if p != target}
+                database_before = digest(target / 'roarkt_zh.userdb')
+                result = invoke('migrate_userdb.py', args, env)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn('changed=2', result.stdout)
+                self.assertEqual(before, {p: digest(p) for p in before})
+                token = result.stdout.split('backup_id=')[1].strip()
+                rollback = ['--offline', '--rollback', token]
+                if mode == 'argument':
+                    rollback += ['--rime-dir', target]
+                if mode == 'default':
+                    env['ROARKT_RIME_USER_DIR'] = ''
+                result = invoke('migrate_userdb.py', rollback, env)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(digest(target / 'roarkt_zh.userdb'), database_before)
+        self.assertEqual(digest(legacy), legacy_before)
 
     def test_real_conversion_collision_repeat_and_rollback(self):
         before = digest(self.target / 'roarkt_zh.userdb')

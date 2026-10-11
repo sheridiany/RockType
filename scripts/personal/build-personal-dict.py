@@ -10,7 +10,7 @@ import sys
 import tempfile
 
 sys.dont_write_bytecode = True
-from personal_common import Refusal, require, plain, run, locked, publish, restore_files
+from personal_common import add_rime_directory_argument, Refusal, require, plain, run, locked, publish, restore_files
 
 HEADER = '# 个人词表，由 RockType 生成\n'
 NAMES = ['roarkt_personal.dict.yaml', 'roarkt_personal_en.dict.yaml',
@@ -161,7 +161,7 @@ def vocabulary(root, name, seen=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--rime-dir', required=True, help='existing target; never inferred')
+    add_rime_directory_argument(parser)
     parser.add_argument('--source', action='append', help='explicitly authorized directory; repeatable')
     parser.add_argument('--allow-default-source', action='store_true', help='authorize ~/Repos .md and Swift comments/strings')
     parser.add_argument('--dictionary-dir', help='directory containing the complete deployed source dictionaries')
