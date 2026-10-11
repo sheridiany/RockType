@@ -41,13 +41,13 @@ class PersonalTests(unittest.TestCase):
         self.source = self.base / 'source'; self.source.mkdir()
         self.dicts = self.base / 'dicts'; self.dicts.mkdir()
         (self.dicts / 'roarkt_zh.dict.yaml').write_text('---\nname: roarkt_zh\nversion: "1"\n...\n火\thuo\t100\n星\txing\t100\n')
-        (self.dicts / 'roarkt_en.dict.yaml').write_text('---\nname: roarkt_en\nversion: "1"\n...\nKnownWord\tknownword\t100\n')
-        (self.source / 'note.md').write_text(('火星 QuasarToken KnownWord\n') * 4)
-        (self.source / 'code.swift').write_text('let CodeOnlyToken = 1\n// CommentToken CommentToken CommentToken\nlet x = "StringToken StringToken StringToken"\n')
+        (self.dicts / 'roarkt_en.dict.yaml').write_text('---\nname: roarkt_en\nversion: "1"\n...\nKnownword\tknownword\t100\n')
+        (self.source / 'note.md').write_text(('火星 Herdr Knownword\n') * 4)
+        (self.source / 'code.swift').write_text('let Codeonlyword = 1\n// Magpie Magpie Magpie\nlet x = "Oriole Oriole Oriole"\n')
         for folder in ['.git', '.build', 'node_modules']:
             (self.source / folder).mkdir()
-            (self.source / folder / 'private.md').write_text('ExcludedToken ' * 5)
-        (self.base / 'outside.md').write_text('SymlinkToken ' * 5)
+            (self.source / folder / 'private.md').write_text('Hiddenbird ' * 5)
+        (self.base / 'outside.md').write_text('Linkbird ' * 5)
         (self.source / 'link.md').symlink_to(self.base / 'outside.md')
         self.args = ['--rime-dir', self.target, '--source', self.source, '--dictionary-dir', self.dicts]
 
@@ -97,7 +97,7 @@ class PersonalTests(unittest.TestCase):
             '---\nname: roarkt_ai\nimport_tables: [nested]\n...\n軟件\truan jian\n')
         (self.dicts / 'essay.txt').write_text('公司\t100\n管理\t90\n')
         self.source.joinpath('code.swift').unlink()
-        self.source.joinpath('note.md').write_text(('数据 數據 应当 公司 管理 软件 火星 QuasarToken\n') * 4)
+        self.source.joinpath('note.md').write_text(('数据 數據 应当 公司 管理 软件 火星 Herdr\n') * 4)
         result = invoke('build-personal-dict.py', self.args + ['--apply', '--offline'])
         self.assertEqual(result.returncode, 0, result.stderr)
         generated = (self.target / 'roarkt_personal.dict.yaml').read_text()
@@ -113,6 +113,41 @@ class PersonalTests(unittest.TestCase):
             self.assertEqual(result.returncode, 2)
             self.assertEqual((self.target / 'roarkt_personal.dict.yaml').read_text(), generated)
             path.write_bytes(contents)
+
+    def test_english_prose_only(self):
+        markdown = """Herdr Magpie RockType MLX LLM Knownword KNOWNWORD knownword.
+camelCase PascalCase URLSession snake_case name123 sha256 dotted.member file.swift
+let var func return async await nil true false print append map flatmap sizeof malloc require
+[Herdr](https://Urlbird.invalid/Pathbird) ![Imagebird](image.png)
+https://Webbird.invalid/Routebird /Users/Pathbird ./Relativebird ~/Homebird foo/Barbird
+`Inlinebird` ``Nestedbird ` Quotedbird``
+```swift
+Fencebird
+```
+~~~text
+Tildebird
+~~~
+    Indentedbird
+> ```swift
+> Quotebird
+> ```
+[ref]: https://Refbird.invalid "Titlebird"
+<!-- Hiddenbird -->
+<code>Htmlbird</code>
+"""
+        self.source.joinpath('note.md').write_text('---\nauthor: Metabird Metabird Metabird\n---\n' + markdown * 4)
+        self.source.joinpath('code.swift').write_text(
+            '// Magpie MLX LLM RockType\n' * 4 +
+            '/* Herdr /* Magpie */ LLM */\n' * 4 +
+            '// `Commentcode` https://Commenturl.invalid CommentType key_value\n' * 4 +
+            'let Oriole = "Stringbird Stringbird Stringbird // Fakecomment"\n' +
+            'let raw = #"Rawbird Rawbird Rawbird"#\n')
+        result = invoke('build-personal-dict.py', self.args + ['--apply', '--offline'])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        generated = (self.target / 'roarkt_personal_en.dict.yaml').read_text().split('...\n', 1)[1]
+        words = {line.split('\t')[0] for line in generated.splitlines()}
+        self.assertEqual(words, {'Herdr', 'Magpie', 'RockType', 'MLX', 'LLM'})
+        self.assertNotIn('Herdr', result.stdout + result.stderr)
 
     def test_source_lexer(self):
         text = personal.swift_text('let CodeToken = 0\n/* outer /* inner */ tail */\nlet a = #"raw word"#\nlet b = """multi\nline"""\nlet c = "skip \\(SecretCode)"')
@@ -141,12 +176,12 @@ class PersonalTests(unittest.TestCase):
         self.assertEqual(len(list(self.target.iterdir())), 2)
         result = invoke('build-personal-dict.py', self.args + ['--apply', '--offline'])
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertNotIn('QuasarToken', result.stdout + result.stderr)
+        self.assertNotIn('Herdr', result.stdout + result.stderr)
         token = result.stdout.split('backup_id=')[1].split(';')[0]
         english = (self.target / 'roarkt_personal_en.dict.yaml').read_text()
-        for included in ['QuasarToken', 'CommentToken', 'StringToken']:
+        for included in ['Herdr', 'Magpie']:
             self.assertIn(included, english)
-        for excluded in ['KnownWord\t', 'CodeOnlyToken', 'ExcludedToken', 'SymlinkToken']:
+        for excluded in ['Knownword\t', 'Codeonlyword', 'Hiddenbird', 'Linkbird', 'Oriole']:
             self.assertNotIn(excluded, english)
         self.assertIn('火星', (self.target / 'roarkt_personal.dict.yaml').read_text())
         before = {n: (self.target / n).read_bytes() for n in personal.NAMES}
@@ -188,7 +223,7 @@ class PersonalTests(unittest.TestCase):
                  '-Xlinker', '-rpath', '-Xlinker', runtime / 'lib/rime-plugins', '-o', probe], self.base)
         for scheme, code in [('roarkt', 'huoxing'), ('roarkt_flypy', 'hoxk')]:
             command([probe, shared, self.target, build, scheme, code, '火星'], self.base)
-            command([probe, shared, self.target, build, scheme, 'quasartoken', 'QuasarToken'], self.base)
+            command([probe, shared, self.target, build, scheme, 'herdr', 'Herdr'], self.base)
         # Rewrite the settings-owned custom files with actual writer output.
         for name in customs:
             shutil.copy2(fixture / 'updated' / name, self.target / name)
@@ -199,7 +234,7 @@ class PersonalTests(unittest.TestCase):
             self.assertFalse(deployed['english']['enable_completion'])
             self.assertEqual(deployed['ascii_composer']['switch_key']['Shift_L'], 'noop')
             command([probe, shared, self.target, build, scheme, code, '火星'], self.base)
-            command([probe, shared, self.target, build, scheme, 'quasartoken', 'QuasarToken'], self.base)
+            command([probe, shared, self.target, build, scheme, 'herdr', 'Herdr'], self.base)
         result = invoke('build-personal-dict.py', ['--rime-dir', self.target, '--rollback', token, '--apply', '--offline'])
         self.assertEqual(result.returncode, 0, result.stderr)
         for name in customs:

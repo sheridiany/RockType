@@ -12,6 +12,8 @@ import tempfile
 sys.dont_write_bytecode = True
 from personal_common import build_simplifier, simplify_words, add_rime_directory_argument, Refusal, require, plain, run, locked, publish, restore_files
 
+from english_prose import english_words
+
 HEADER = '# 个人词表，由 RockType 生成\n'
 NAMES = ['roarkt_personal.dict.yaml', 'roarkt_personal_en.dict.yaml',
          'roarkt_personal_en.schema.yaml', 'roarkt_personal.patch.yaml']
@@ -56,7 +58,7 @@ def personal_patch():
             '  "schema/dependencies/@next": roarkt_personal_en\n')
 
 
-def swift_text(text):
+def swift_text(text, comments_only=False):
     """Extract comments/literals; discard complete interpolated strings."""
     def comment(i):
         if text.startswith('//', i):
@@ -116,7 +118,7 @@ def swift_text(text):
             match = re.match(r'(#+)?("""|")', text[i:])
             if match:
                 i, value = literal(i, match)
-                if value is not None:
+                if value is not None and not comments_only:
                     result.append(value)
             else:
                 i += 1
@@ -138,7 +140,10 @@ def sources(roots):
                 require(p.is_file() and p.stat().st_size <= 4 * 1024 * 1024, 'source file unsupported or too large')
                 seen.add(p)
                 text = p.read_text(encoding='utf-8')
-                yield swift_text(text) if p.suffix == '.swift' else text
+                if p.suffix == '.swift':
+                    yield swift_text(text), swift_text(text, comments_only=True)
+                else:
+                    yield text, text
 
 
 def vocabulary(root, name, seen=None):
@@ -207,12 +212,13 @@ def main():
     counts, files = Counter(), 0
     with tempfile.TemporaryDirectory(prefix='roarkt-tokenizer-') as temporary:
         known = set(simplify_words(build_simplifier(temporary), sorted(known)))
+        known_english = {word.casefold() for word in known if word.isascii()}
         binary = Path(temporary) / 'tokenize'
         run(['xcrun', 'swiftc', Path(__file__).with_name('tokenize.swift'), '-o', binary])
-        for text in sources(roots):
+        for text, prose in sources(roots):
             files += 1
             counts.update(json.loads(run([binary], data=text.encode())))
-            counts.update(re.findall(r'(?<![\w@/])[A-Za-z][A-Za-z0-9]*(?:[-+][A-Za-z0-9]+)*(?![\w@/])', text))
+            counts.update(word for word in english_words(prose) if word.casefold() not in known_english)
     selected = [(word, count) for word, count in counts.items()
                 if count >= args.min_count and word not in known and 2 <= len(word) <= 48]
     selected.sort(key=lambda pair: (-pair[1], pair[0]))

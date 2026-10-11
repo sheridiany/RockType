@@ -39,7 +39,7 @@
 | W-1 | 评测集与评测脚本，先跑出现状基线 | pi-ui | 已完成，基线 162/200（81%） |
 | W-2 | 引入白霜词库并调整两套方案，回归 RimeChecks | pi-ui | 白霜已撤回；采用 C 原主词库/原设置，回归通过 |
 | W-3 | AI / 开发中文词库与英文扩充，评测校准权重 | pi-ui | 已完成 C 校准：日常 78、整句 17、开发 29、AI 57，总计 181/200 |
-| W-4 | 简体空间去重、ICU 学习词迁移及回归测试 | pi-platform | 完成；ICU 去重/迁移自动化与只读预览通过，真实迁移等待 D / W-6 |
+| W-4 | 简体空间去重、英文散文筛选、ICU 学习词迁移及回归测试 | pi-platform | 英文筛选、回归及只读预览完成；真实迁移等待 D / W-6 |
 | W-5 | Claude 在本机执行个人层脚本、安装、用户试打 | Claude + 用户 | 未开始 |
 
 **文件所有权**：pi-ui：`Rime/`、`THIRD_PARTY_NOTICES.md`、`LICENSES/`、`scripts/eval-candidates.sh`、`Tests/InputMethodTests/Fixtures/`、评测相关测试；pi-platform：`scripts/personal/`、其测试、`.gitignore` 一行。两人都不改 `InputMethod/sources`（pi-ime 正在恢复 RoType 视觉）。
@@ -263,3 +263,14 @@ A/B 与先前保存结果、重建 C 与新保存结果的三个 `cmp` 均退出
 - 只读真实预览：`python3 -B scripts/personal/build-personal-dict.py --dictionary-dir '/Users/xuean/Library/Input Methods/RockType Input.app/Contents/SharedSupport' --allow-default-source`，退出 **0**。`files=6784 distinct=85577 missing_chinese=26 missing_english=1474`，missing 为默认最少 3 次及总上限 1500 后的选中数量，不代表全部长尾缺失词。只输出统计，不记录原文/词条，不加 `--apply`，不写真实 profile。首次前台预览受工具 60 秒时限中断，后改为后台完整运行并记录真实退出码。
 - 验收：最终完整 `scripts/test.sh` 通过，直接捕获退出码 **0**；164 项 Swift Testing（含 12 项个人脚本子检查）及 Rime/输入法/AppShell 检查全部通过。`git diff --check` 通过。
 - 未验证：D / W-6 合并部署、真实学习词迁移与排序、个人词表人工质量及真实试打。既有导出不保留删除标记/完整动态学习元数据的限制不变。
+
+### W-4 后续：收紧英文提取
+
+- 开始前在 `agent/platform` 执行 `git merge main`，已对齐，无需新增合并提交。此次只修改个人词表英文提取、合成测试与说明文档，中文取词来源规则保持原样。
+- 英文仅取 Markdown 正文及 Swift 注释；不从 Swift 普通/raw/多行字符串取词。排除 Markdown 元数据头、围栏/缩进代码块、行内代码、URL/路径、链接目标/引用定义、图片与 HTML 代码；链接可见正文仍可统计。
+- 英文 token 整项检查，不从数字、下划线、内部点号等复合项拆词。拒绝 camelCase/PascalCase 及小写编程关键字/常见 API 停用词；保留普通英文、首字母大写专名、全大写缩写，以及明确白名单中的混合大小写品牌（包含 RockType）。主词库英文去重忽略大小写，来源词的输出大小写保留。
+- 合成 CLI 回归先红后绿：旧实现错误收录代码、路径片段、Swift 字符串、标识符与 API；修复后样例产物仅含 Herdr、Magpie、RockType、MLX、LLM。测试同时覆盖繁简去重、缺失词库拒绝、来源/目录隔离、实际 librime 部署与英文大小写上屏。
+- 最终完整 `scripts/test.sh` 通过，直接捕获退出码 **0**；个人脚本 13 项检查通过，未修改 M3 测试。`git diff --check` 通过。
+- 最终真实只读预览：`python3 -B scripts/personal/build-personal-dict.py --dictionary-dir '/Users/xuean/Library/Input Methods/RockType Input.app/Contents/SharedSupport' --allow-default-source`，直接记录退出码 **0**，`files=6813 distinct=28318 missing_chinese=203 missing_english=1297`。英文从前次 1474 降至 1297，不同词项从 85577 降至 28318；期间源码树有并行变化，文件数从 6784 增至 6813，不能声称严格固定语料 A/B。
+- 默认上限仍为中英文合计 1500，筛掉高频代码词后其他低频词补入，所以中文截取数由 26 增至 203，英文仍有 1297。中文提取逻辑未改；missing 是截取后数量，不是全部待选词数，也不代表剩余条目已人工验收。预览不加 `--apply`，只输出数量；结果日志在 `/tmp/roarkt-personal-english-final-preview.log`，退出码文件同名前缀 `.exit`。
+- 限制：规则是保守语法/词形筛选，不声称逐词语义验收。未列入白名单的新混合大小写品牌可能被略过；复杂 Markdown 的缩进正文可能被当作代码略过。未生成个人词表或写真实 Rime 目录，未操作真实 userdb。
