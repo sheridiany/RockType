@@ -2,7 +2,7 @@
 
 - 阶段：M7（本规格先做安装包、公证、卸载、自动更新；首版全量验收在各功能完成后进行）
 - 覆盖需求：FR-F3、FR-F4、NFR-9
-- 状态：Ready
+- 状态：InProgress（R-1～R-5 代码与许可证审计已交付；发布配置、来源核验及 R-6 人工验收未完成）
 
 ## 范围
 
@@ -33,7 +33,7 @@
 | R-2 | `scripts/notarize.sh`（无凭据时清晰报错退出） | pi-surfaces | 已实现；真实公证待凭据 |
 | R-3 | 卸载流程接到设置 → 关于 | pi-surfaces | 已实现；授权与真实卸载待人工验证 |
 | R-4 | Sparkle 2 集成、appcast 脚本、设置 → 关于 中“检查更新” | pi-surfaces | 已实现入口与 feed 工具；配置、启动接线和真实更新待验收 |
-| R-5 | 第三方声明与许可证文件核对 | pi-surfaces | 未开始 |
+| R-5 | 第三方声明与许可证文件核对 | pi-surfaces | 文本与审计已完成；预编译来源及对应源码发布待确认 |
 | R-6 | 干净账户安装 → 引导 → 卸载 验收 | 用户 + Claude | 未开始 |
 
 **文件所有权**：`Installer/`、`scripts/build-installer.sh`、`scripts/notarize.sh`、`scripts/make-appcast.sh`、`App/Features/Update/`、`App/Features/Uninstall/`、`Package.swift`（仅新增 Sparkle 依赖）、`App/Info.plist`（仅 Sparkle 键）、`THIRD_PARTY_NOTICES.md`、`LICENSES/`、对应测试。设置 → 关于 中按钮接线只改关于分区；`AppDelegate` 如需改动，提供入口由 Claude 集成。
@@ -42,17 +42,19 @@
 
 | 项 | 方法 | 结果 | 证据 |
 | --- | --- | --- | --- |
-| pkg 构建、`pkgutil --check-signature` | 命令 | 进行中 | 本次提供签名构建脚本；最终证据见下方 |
+| pkg 构建、`pkgutil --check-signature` | 命令 | 通过 | 已生成 0.1.0 arm64 product pkg，Developer ID Installer 团队 DF7J2VBQD8；未安装 |
 | postinstall 不 enable/select、不写 HIToolbox | 脚本测试（夹具） | 通过 | `DistributionScriptTests` 执行隔离副本，验证登录用户注册、服务加载、离线卷拒绝 |
 | 公证与 staple | 命令（需用户凭据） | 待人工验证 | |
 | 本机安装 → 首次引导 → 卸载（含/不含数据） | 用户 | 待人工验证 | |
-| Sparkle 从旧版本更新 | 用户 | 待人工验证 | |
+| Sparkle 从旧版本更新 | 用户 | 待人工验证 | 需正式 feed、公钥、公证 pkg 及 AppDelegate 启动接线 |
+| 许可证文本随包分发 | pkg 展开逐文件比对 | 通过 | 两个 App 均包含完整 Licenses 树与声明 |
+| 对应源码发布与预编译来源 | 发布审计 | 阻塞 | 缺确切插件构建来源、essay 修订与正式源码下载地址 |
 
 ## 进度
 
 - R-1：安装脚本、固定路径应用退出工具、签名 product pkg 构建已实现。`scripts/test.sh` 通过；实际安装与重启输入法待 R-6 人工验证。安装使用规格规定的系统 LaunchAgent 路径。
 
-## 问题
+## 验收证据
 
 ### R-1 补充验收（2026-10-11）
 
@@ -85,3 +87,21 @@
 
 - 已在本 worktree 合入 `7245678` 所在 main（合并提交 `9a94dff`），未修改主仓库。合并冲突采用 main 已接入真实选区动作的快捷键断言；全量测试通过。
 - R-3 随 main 新增的 Rime 配置归属标记收紧清理：`roarkt*.custom.yaml` 仅带生成标记时删除，用户手写补丁保留；全量测试通过，覆盖标记删除与手写保留。
+
+### R-5 与最终构建验收（2026-10-11）
+
+- 补齐 `THIRD_PARTY_NOTICES.md` 组件清单、45 份许可证/来源/源码说明文件（含既有 GPL 文本）。覆盖 Squirrel、librime/plum、插件、Lua、Boost、OpenCC 等静态依赖、Rime 数据、CC-BY-SA-4.0、Sparkle 及语音锁定依赖；保留原版权署名与 NOTICE。
+- `scripts/test.sh` **通过**：合入 main 后 131 tests / 4 suites，Rime 部署、快捷键与权限检查通过；脚本语法与 `git diff --check` 通过。既有 `Core/Voice/LICENSE.md` SPM 未声明资源警告不影响通过。
+- `scripts/build.sh` **通过**：主 App、输入法、MLX worker 构建与签名；独立 voice XPC smoke 回复、无效模型拒绝、未授权调用方拒绝均通过。未启动主 App 或输入法，未安装/注册/加载 LaunchAgent。
+- `scripts/build-installer.sh` **通过**：产出 `dist/RoarkT-0.1.0-macOS-arm64.pkg`；`pkgutil --check-signature` 为 DF7J2VBQD8 的 Developer ID Installer。
+- `pkgutil --expand-full` **通过**（仅展开，不安装）；展开的两个 App 均 `codesign --verify --deep --strict` 通过，主 App hardened runtime 与时间戳存在；Sparkle、注册/清理 helper、语音 worker 均包含。两个 `Contents/Resources/Licenses` 与仓库许可证逐文件一致，附加 THIRD_PARTY_NOTICES 也逐字节一致。
+- pkg SHA-256：`cb97da70ab3bd11d8a72465b2a807d33d2aab182c81029076892f658249d9c69`。本机详细日志留在 `.build/distribution-logs/`，未入 git。
+- 真实公证、签署发布 appcast、跨版本自动更新、管理员授权卸载和两种数据选项 **未运行 / 待人工验证**。按本机环境规则由 Claude 从 main 执行 R-6。
+
+## 需要 Claude 决定或接线
+
+1. 确定 GitHub 仓库、`SUFeedURL` 与 EdDSA 公钥；用户钥匙串保管私钥并提供公证 profile。现有占位配置明确禁用更新，不应当作发行配置发布。
+2. 在 `AppDelegate.applicationDidFinishLaunching` 调用 `UpdateController.shared.start()`；本分支按文件所有权仅提供入口，关于页已可按需启动。每次发布递增 `CFBundleVersion`。
+3. 确认 TIS 无公开 unregister API 时，以停用 + 删除 bundle + 注销登录清缓存作为注册移除验收。取消授权或中途失败可能已停用输入源/登录项，人工验收需覆盖重试。
+4. 核实预编译 librime / Lua / Octagram / Predict 的完整构建来源与静态依赖，及 essay 数据的精确修订；现有源码无法证明全部二进制来源。建议取得原构建记录，或从固定源码重建后发布。`LICENSES/GPL-SOURCE.md` 已列对应源码包材料；正式源代码下载 URL 和源码包尚未发布，NFR-9 不标记完成。
+5. 本实现遵循 SPEC-009 的 `/Library/LaunchAgents/` 系统位置；架构表仍写 `~/Library/LaunchAgents/`，请统一文档口径。
