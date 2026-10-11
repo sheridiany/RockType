@@ -102,12 +102,44 @@ enum Tokens {
         var focus: Color { accent.opacity(dark ? 0.30 : 0.22) }
         var windowShadow: Color { hex(0x14161e, 0x000000).opacity(dark ? 0.55 : 0.16) }
         var windowShadowSecondary: Color { hex(0x14161e, 0x000000).opacity(dark ? 0.30 : 0.06) }
+        var screenshotDesktopTop: Color { hex(0xb7c8da, 0x24374d) }
+        var screenshotDesktopBottom: Color { hex(0xe2d7cd, 0x534b61) }
     }
     enum Shadow {
         static let windowRadius: CGFloat = 44
         static let windowY: CGFloat = 16
         static let secondaryRadius: CGFloat = 8
         static let secondaryY: CGFloat = 2
+    }
+    /// Additive U3 review constants: a 1440×900 frozen desktop, shown at 2/3 size.
+    enum Screenshot {
+        static let screenWidth: CGFloat = 1440
+        static let screenHeight: CGFloat = 900
+        static let thumbnailScale: CGFloat = 2.0 / 3.0
+        static let edge: CGFloat = 16
+        static let selection = CGRect(x: 170, y: 240, width: 800, height: 340)
+        // Bottom-edge fixture exercises toolbar placement above the selection.
+        static let bottomSelection = CGRect(x: 170, y: 540, width: 800, height: 330)
+        static let minimumSelection: CGFloat = 80
+        static let handle: CGFloat = 8
+        static let selectionStroke: CGFloat = 1.5
+        static let badgeHeight: CGFloat = 28
+        static let toolbarWidth: CGFloat = 580
+        static let toolbarHeight: CGFloat = 48
+        static let gap: CGFloat = 12
+        static let ocrWidth: CGFloat = 340
+        static let ocrHeight: CGFloat = 240
+        static let ocrBusyHeight: CGFloat = 88
+        static let menuHeight: CGFloat = 30
+        static let noteWindow = CGRect(x: 100, y: 130, width: 850, height: 560)
+        static let terminalWindow = CGRect(x: 380, y: 400, width: 740, height: 300)
+        static let dockWidth: CGFloat = 400
+        static let dockHeight: CGFloat = 64
+        static let windowControls: CGFloat = 10
+        static let folderWidth: CGFloat = 120
+        static let folderX: CGFloat = 1260
+        static let folderY: CGFloat = 110
+        static let mask = Color.black.opacity(0.48)
     }
     static func palette(_ scheme: ColorScheme) -> Palette { Palette(dark: scheme == .dark) }
 }
