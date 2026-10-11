@@ -93,6 +93,10 @@ import RoarkTCore
         return (code, modifiers)
     }
 
+    public static func key(forPhysicalCode code: UInt16) -> String? {
+        keyCodes.first { $0.value == UInt32(code) }?.key
+    }
+
     private static let keyCodes: [String: UInt32] = [
         "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8, "v": 9,
         "b": 11, "q": 12, "w": 13, "e": 14, "r": 15, "y": 16, "t": 17,
