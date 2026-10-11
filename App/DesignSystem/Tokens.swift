@@ -125,3 +125,14 @@ struct DesignSurface: ViewModifier {
                 .stroke(colors.line, lineWidth: Tokens.Size.hairline))
     }
 }
+
+/// Gallery may request less motion; it never overrides a system request for less motion.
+private struct DesignReduceMotionKey: EnvironmentKey {
+    static let defaultValue = false
+}
+extension EnvironmentValues {
+    var designReduceMotion: Bool {
+        get { self[DesignReduceMotionKey.self] }
+        set { self[DesignReduceMotionKey.self] = newValue }
+    }
+}

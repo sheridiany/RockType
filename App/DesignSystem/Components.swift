@@ -28,6 +28,7 @@ struct DesignButtonStyle: ButtonStyle {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.isEnabled) private var enabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.designReduceMotion) private var previewReduceMotion
     @State private var hovering = false
 
     func makeBody(configuration: Configuration) -> some View {
@@ -55,7 +56,7 @@ struct DesignButtonStyle: ButtonStyle {
                 .stroke(variant == .secondary ? p.pillLine : .clear, lineWidth: Tokens.Size.stroke))
             .contentShape(RoundedRectangle(cornerRadius: Tokens.Radius.control))
             .onHover { hovering = $0 }
-            .animation(reduceMotion ? nil : Tokens.Motion.hover, value: active)
+            .animation((reduceMotion || previewReduceMotion) ? nil : Tokens.Motion.hover, value: active)
     }
 }
 
