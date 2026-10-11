@@ -46,7 +46,7 @@
 | 划词：TextEdit、Safari、VS Code、企业微信 直接读取或复制回退 | 手工兼容矩阵 | 待人工验证 | |
 | Secure Input / 密码框无工具栏、无读取 | 手工 | 待人工验证 | |
 | 结果浮窗不抢焦点，复制并返回后可直接 ⌘V | 手工 | 待人工验证 | M3-4 已提供非激活面板、来源应用与 AX 窗口检查；AppDelegate 接线由 M3-6 完成后实测 |
-| M3-4 流式状态、取消、迟到结果、追问上下文、保护状态、关闭清空、最近结果重试 | 独立 Swift 回归检查 | 通过 | `ResultWindowChecks.swift`；合成数据、可控事件流，无网络和用户内容 |
+| M3-4 流式状态、取消、迟到结果、追问上下文、保护状态、关闭清空、最近结果重试 | Swift Testing | 通过 | `Tests/SurfaceTests/ResultWindowTests.swift`；合成数据、可控事件流，无网络和用户内容 |
 | M3-4 实际视图浅深色、完成态、原文展开与追问 | AppKit 离屏渲染并目视检查 | 通过（静态检查） | `/tmp/roarkt-result-{light,dark}-{done,expanded}.png`；交互、VoiceOver 与设计验收仍待人工 |
 | M3-4 分支测试与构建 | 命令 | 测试通过；完整构建阻塞 | 66 项测试及 Rime 部署通过；主 App/翻译服务构建签名通过；输入法子模块未初始化，完整 `scripts/build.sh` 未通过；Gallery 208 张通过 |
 | 真实 AI 端到端（用户提供端点） | 手工 | 待人工验证 | |
@@ -103,26 +103,8 @@ scripts/render-gallery.sh
 - 待人工验证：真实 runner / AI 端到端、来源 TextEdit/Safari/VS Code 的焦点与返回、来源关闭或切换应用、真实中文输入法 marked text、键盘路径、全屏/多显示器/屏幕边缘、置顶/透明度即时设置、Secure Input/密码框/撤销辅助功能权限、VoiceOver。静态渲染不代表上述功能通过。
 - Claude 需决定／接线：关闭后非激活提示的宿主；未聚焦结果窗的纯键盘追问入口；初始化输入法依赖后运行完整构建并完成 M3-6。M3-5 等用户另行通知。
 
-M3-4 独立检查命令（bash；限定在本 worktree，生产编译不启用检查入口）：
+M3-4 检查已按新 AGENTS 规则迁入 `Tests/SurfaceTests/ResultWindowTests.swift`，通过 `Package.swift` 的 `RoarkTSurfaceTests` 运行，不再保留源码内独立测试入口。命令：`scripts/test.sh`（全部）或 `swift test --filter RoarkTSurfaceTests`（专项），同时生成合成内容的四张离屏预览。
 
-```bash
-cd /Users/xuean/Repos/00-Roark/RoarkT-wt/surfaces
-set -e
-swift build --product RoarkTApp
-bin_dir=$(swift build --show-bin-path)
-app_objects=()
-for object in "$bin_dir"/RoarkTApp.build/*.swift.o; do
-  case "$object" in */main.swift.o) ;; *) app_objects+=("$object");; esac
-done
-swiftc -swift-version 6 -D RESULT_WINDOW_CHECKS -D RESULT_WINDOW_UI_CHECKS \
-  -parse-as-library -I "$bin_dir/Modules" \
-  -Xcc -fmodule-map-file="$bin_dir/RoarkTXPCProtocol.build/module.modulemap" \
-  -Xcc -IShared/XPCProtocol/include \
-  App/Features/ResultWindow/ResultWindowChecks.swift "${app_objects[@]}" \
-  "$bin_dir"/RoarkTCore.build/*.swift.o "$bin_dir"/RoarkTPlatform.build/*.swift.o \
-  "$bin_dir"/RoarkTXPCProtocol.build/*.o -o /tmp/roarkt-result-window-ui-checks
-/tmp/roarkt-result-window-ui-checks
-```
 
 ## 问题
 

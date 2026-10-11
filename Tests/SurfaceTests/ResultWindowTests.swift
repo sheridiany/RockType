@@ -1,11 +1,9 @@
-#if RESULT_WINDOW_CHECKS
 import Foundation
 import RoarkTCore
-#if RESULT_WINDOW_UI_CHECKS
 @testable import RoarkTApp
 import SwiftUI
 import AppKit
-#endif
+import Testing
 
 /// Standalone regression checks: compile with ResultWindowState.swift and the Core module.
 @MainActor private final class ControlledRunner: OperationRunner {
@@ -23,8 +21,8 @@ import AppKit
 
 @MainActor private final class CheckContext { var readable = true; var saved: [OperationResult] = [] }
 
-@main private enum ResultWindowChecks {
-    @MainActor static func main() async {
+@Suite(.serialized) @MainActor struct ResultWindowTests {
+    @Test func streamingAndSessionLifecycle() async {
         let runner = ControlledRunner()
         let context = CheckContext()
         let state = ResultWindowState(runner: runner, readable: { context.readable }, completed: { context.saved.append($0) })
@@ -34,12 +32,12 @@ import AppKit
         state.start(); state.show(request)
         runner.streams[0].yield(.delta("partial"))
         await settle()
-        precondition(state.answer == "partial" && state.isBusy)
+        #expect(state.answer == "partial" && state.isBusy)
         state.cancel()
         runner.streams[0].yield(.delta("late"))
         runner.streams[0].yield(.completed(result(session)))
         await settle()
-        precondition(state.answer == "partial" && state.phase == .cancelled && context.saved.isEmpty)
+        #expect(state.answer == "partial" && state.phase == .cancelled && context.saved.isEmpty)
 
         state.show(request)
         runner.streams[1].yield(.delta("obsolete"))
@@ -49,56 +47,51 @@ import AppKit
         runner.streams[2].yield(.engine("synthetic"))
         runner.streams[2].yield(.completed(result(fresh)))
         await settle()
-        precondition(state.answer == "answer" && state.phase == .done && context.saved.count == 1)
-        precondition(state.session?.id == fresh.id)
+        #expect(state.answer == "answer" && state.phase == .done && context.saved.count == 1)
+        #expect(state.session?.id == fresh.id)
 
         state.question = "follow up"
         state.ask(settings: .defaults)
-        precondition(runner.requests.last?.session.turns == [OperationTurn(question: "", answer: "answer")])
-        precondition(runner.requests.last?.question == "follow up")
+        #expect(runner.requests.last?.session.turns == [OperationTurn(question: "", answer: "answer")])
+        #expect(runner.requests.last?.question == "follow up")
         runner.streams[3].yield(.delta("unfinished"))
         await settle(); state.cancel()
         state.question = "another question"; state.ask(settings: .defaults)
-        precondition(runner.requests.last?.session.turns.count == 1) // cancelled answer is not context
+        #expect(runner.requests.last?.session.turns.count == 1) // cancelled answer is not context
         runner.streams[4].yield(.failed(.inputTooLong(limit: 10)))
         await settle()
-        precondition(state.phase == .failed && state.notice?.contains("10") == true)
+        #expect(state.phase == .failed && state.notice?.contains("10") == true)
 
         let count = runner.requests.count
         context.readable = false; state.retry(settings: .defaults)
-        precondition(runner.requests.count == count && state.phase == .failed)
+        #expect(runner.requests.count == count && state.phase == .failed)
         context.readable = true; state.retry(settings: .defaults)
         context.readable = false
         runner.streams[5].yield(.completed(result(fresh)))
         await settle()
-        precondition(context.saved.count == 1 && state.answer.isEmpty && state.phase == .failed)
+        #expect(context.saved.count == 1 && state.answer.isEmpty && state.phase == .failed)
 
         context.readable = true; state.show(request)
         runner.streams[6].finish()
         await settle()
-        precondition(state.phase == .failed) // EOF without terminal event is incomplete
+        #expect(state.phase == .failed) // EOF without terminal event is incomplete
         state.show(request)
         runner.streams[7].yield(.completed(result(fresh)))
         await settle()
-        precondition(state.phase == .failed && context.saved.count == 1) // wrong session
+        #expect(state.phase == .failed && context.saved.count == 1) // wrong session
         state.show(request)
-        precondition(state.session?.turns.isEmpty == true && state.history.isEmpty)
+        #expect(state.session?.turns.isEmpty == true && state.history.isEmpty)
         state.stop()
         runner.streams[8].yield(.delta("after close"))
         await settle()
-        precondition(state.answer.isEmpty && state.session == nil && state.phase == .idle)
+        #expect(state.answer.isEmpty && state.session == nil && state.phase == .idle)
         state.show(result(fresh), template: .defaults[1], settings: .defaults)
         state.retry(settings: .defaults)
-        precondition(runner.requests.last?.session.turns.isEmpty == true)
-        precondition(runner.requests.last?.question == nil) // retry reopened result must not duplicate its answer
+        #expect(runner.requests.last?.session.turns.isEmpty == true)
+        #expect(runner.requests.last?.question == nil) // retry reopened result must not duplicate its answer
         state.stop()
-        #if RESULT_WINDOW_UI_CHECKS
-        try! renderLiveSurface()
-        #endif
-        print("PASS: streaming, cancellation, supersession, completed-only follow-up, protection, EOF, identity, clear")
     }
-    #if RESULT_WINDOW_UI_CHECKS
-    @MainActor static func renderLiveSurface() throws {
+        @Test func renderLiveSurface() throws {
         _ = NSApplication.shared
         let controller = ResultWindowController(runner: ControlledRunner(), settings: { .defaults }, feedback: { _ in })
         let snapshot = ContentSnapshot(text: "This is synthetic preview content.\nA second paragraph preserves spacing.",
@@ -134,14 +127,11 @@ import AppKit
             }
         }
         controller.stop()
-        print("PASS: live surface rendered in both themes, done and source/follow-up states")
     }
-    #endif
-    static func result(_ session: OperationSession) -> OperationResult {
+        private func result(_ session: OperationSession) -> OperationResult {
         OperationResult(session: OperationSession(id: session.id, snapshot: session.snapshot,
                                                   turns: session.turns + [.init(question: "", answer: "answer")]),
                         templateID: "summarize", text: "answer", engine: "synthetic")
     }
-    static func settle() async { try? await Task.sleep(for: .milliseconds(30)) }
+    private func settle() async { try? await Task.sleep(for: .milliseconds(30)) }
 }
-#endif
