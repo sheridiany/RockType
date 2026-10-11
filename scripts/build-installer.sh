@@ -4,7 +4,7 @@ set -euo pipefail
 export COPYFILE_DISABLE=1
 repo_dir=${0:A:h:h}
 cd "$repo_dir"
-[[ $(uname -m) == arm64 ]] || { print -u2 'RoarkT requires Apple Silicon.'; exit 1; }
+[[ $(uname -m) == arm64 ]] || { print -u2 'RockType requires Apple Silicon.'; exit 1; }
 identity=${ROARKT_CODESIGN_IDENTITY:-'Developer ID Application: XIAO BIN (DF7J2VBQD8)'}
 installer_identity=${ROARKT_INSTALLER_IDENTITY:-'Developer ID Installer: XIAO BIN (DF7J2VBQD8)'}
 version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' App/Info.plist)
@@ -70,7 +70,7 @@ pkgbuild --root "$root" --component-plist "$work/components.plist" --scripts "$w
 # A product archive supports Sparkle's guided package installation.
 productbuild --synthesize --package "$work/component.pkg" "$work/Distribution.xml"
 sed -E -i '' 's/ hostArchitectures="[^"]*"//g; s/<options /<options hostArchitectures="arm64" /' "$work/Distribution.xml"
-output="$repo_dir/dist/RoarkT-$version-macOS-arm64.pkg"
+output="$repo_dir/dist/RockType-$version-macOS-arm64.pkg"
 productbuild --distribution "$work/Distribution.xml" --package-path "$work" --sign "$installer_identity" "$output"
 pkgutil --check-signature "$output"
 print "Built: $output"

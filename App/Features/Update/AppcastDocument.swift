@@ -26,11 +26,11 @@ enum AppcastDocument {
         <?xml version="1.0" encoding="utf-8"?>
         <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
           <channel>
-            <title>RoarkT</title>
-            <description>RoarkT for macOS</description>
+            <title>RockType</title>
+            <description>RockType for macOS</description>
             <language>zh-CN</language>
             <item>
-              <title>RoarkT \(escape(version))</title>
+              <title>RockType \(escape(version))</title>
               <sparkle:version>\(build)</sparkle:version>
               <sparkle:shortVersionString>\(escape(version))</sparkle:shortVersionString>
               <sparkle:minimumSystemVersion>\(escape(minimum))</sparkle:minimumSystemVersion>

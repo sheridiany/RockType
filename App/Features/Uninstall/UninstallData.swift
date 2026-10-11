@@ -14,13 +14,15 @@ enum UninstallData {
                 throw CocoaError(.fileWriteNoPermission)
             }
         }
-        let appData = support.appendingPathComponent("RockType", isDirectory: true)
-        if fm.fileExists(atPath: appData.path) { try fm.removeItem(at: appData) }
+        let appData = support.appendingPathComponent(Identifiers.applicationSupportFolder, isDirectory: true)
         let rime = Identifiers.rimeUserDirectory(home: home)
-        let rimeParent = rime.deletingLastPathComponent()
-        guard (try? rimeParent.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) != true else {
-            throw CocoaError(.fileWriteNoPermission)
+        // Check before deleting anything: the private Rime profile lives inside appData.
+        for directory in [appData, rime.deletingLastPathComponent(), rime] {
+            if (try? directory.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true {
+                throw CocoaError(.fileWriteNoPermission)
+            }
         }
         if fm.fileExists(atPath: rime.path) { try fm.removeItem(at: rime) }
+        if fm.fileExists(atPath: appData.path) { try fm.removeItem(at: appData) }
     }
 }

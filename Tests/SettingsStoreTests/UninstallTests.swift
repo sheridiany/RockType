@@ -7,8 +7,11 @@ import RoarkTCore
     let fm = FileManager.default
     let home = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fm.removeItem(at: home) }
-    let appData = home.appendingPathComponent("Library/Application Support/RockType")
+    let appData = home.appendingPathComponent("Library/Application Support/" + Identifiers.applicationSupportFolder)
     try fm.createDirectory(at: appData.appendingPathComponent("VoiceModels"), withIntermediateDirectories: true)
+    // The display name is RockType, but a same-named folder is not ours and must survive.
+    let displayNamed = home.appendingPathComponent("Library/Application Support/RockType")
+    try fm.createDirectory(at: displayNamed, withIntermediateDirectories: true)
     let privateRime = Identifiers.rimeUserDirectory(home: home)
     let otherRime = home.appendingPathComponent("Library/Rime")
     for directory in [privateRime, otherRime] {
@@ -20,6 +23,7 @@ import RoarkTCore
     try UninstallData.remove(in: home)
     #expect(!fm.fileExists(atPath: appData.path))
     #expect(!fm.fileExists(atPath: privateRime.path))
+    #expect(fm.fileExists(atPath: displayNamed.path), "The display name must not change internal data ownership")
     for name in ["roarkt_zh.userdb", "roarkt_en.userdb", "user.yaml", "installation.yaml", "default.custom.yaml", "build/roarkt.prism.bin"] {
         #expect(try Data(contentsOf: otherRime.appendingPathComponent(name)) == Data("fixture".utf8))
     }
