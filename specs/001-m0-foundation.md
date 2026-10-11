@@ -28,7 +28,7 @@
 | --- | --- | --- | --- |
 | T1 | Rime 方案迁移 | pi | 完成（待验收） |
 | T2 | 翻译 XPC 协议与服务迁移 | pi | 未开始 |
-| T3 | 输入法迁移与开发安装 | pi | 未开始 |
+| T3 | 输入法迁移与开发安装 | pi | 非 XPC 部分完成（待验收）；等待 T2 合并 |
 | T4 | 端到端验收 | Claude | 未开始 |
 
 ### T1 Rime 方案迁移
@@ -57,6 +57,35 @@
 - `scripts/build.sh` 增加输入法构建（xcodebuild Release，签名同一身份），产物 `dist/RoarkT Input.app`。
 - 新增 `scripts/install-dev.sh`：把 `RoarkT Input.app` 装到 `~/Library/Input Methods/`、生成并加载翻译服务 LaunchAgent（路径指向 `dist/RoarkT.app`）、用 `TISRegisterInputSource` 注册（可沿用 RoType 的 Installer/tools 中的注册工具，改名）；`scripts/uninstall-dev.sh` 逆操作。不静默启用或选择输入源。
 - 验收：`scripts/build.sh`、`scripts/test.sh` 通过；`install-dev.sh` 后 `TISCreateInputSourceList` 能列出两个新输入源；`grep` 旧标识守卫通过。
+
+### T3 验收证据（2026-10-11，agent/ime）
+
+实现提交：`d9e2135`（输入法迁移与子模块）、`e0426b1`（构建、开发安装/卸载及注册工具）。开始时已执行 `git merge main`，快进至 T1 提交 `5c89b5a`。未 push、未合并回 main、未修改其他 worktree。
+
+已完成（待验收）：
+
+- `InputMethod/` 迁入 Squirrel 源码、资源及 arm64 预编译 librime；所有产品源码与资源引用改为 RoarkT。三个子模块为 gitlink，提交分别为 `a251145d3aafa33871824a40bbec04c966bd8b56`、`4c28f11f451facef809b380502874a48ba964ddb`、`41847a58cdef7506b257591fcca6f9495df591d4`，URL 与来源相同。无构建目录入库。
+- Xcode target/scheme 保留上游名 `Squirrel`，Swift 6 / macOS 14，产物 `RoarkT Input.app`，Bundle ID 与连接名改为新产品。全拼和小鹤输入源在 `Info.plist` 独立声明，`setValue(_:forTag:client:)` 与新建 Rime session 将它们映射到 `roarkt` / `roarkt_flypy`。默认不启用输入源。
+- 删除工厂文件备份/迁移、旧签名替换兼容分支、旧设置 helper 启动和跨进程通知握手。设置菜单按主 App Bundle ID 查找，未安装时禁用。语音服务/填入实现留在 M5，不迁入当前运行路径；输入法没有麦克风权限声明或 entitlement，不主动申请通知权限。
+- 候选翻译仅调用 v2 `translateCandidate` / `cancel` / `recordControllerInput`，通过 header search path 引用 `Shared/XPCProtocol/include/RoarkTTranslationXPCProtocol.h`，无共享头副本。客户端要求翻译服务具有规定 Team ID 与 identifier。请求值类型在输入法独立编译，保留原 MIT 许可证于 `InputMethod/LICENSE.translation.txt`；MIT 产品不 import/link 输入法代码。
+- Xcode build phase 从仓库根 `Rime/` 打包 YAML/Lua 及八股文模型到 SharedSupport。`lib/` + `bin/` 约 12 MB；`data/plum/` 约 52 MB，其中约 40 MB 为全拼/小鹤所需八股文语言模型，非构建产物。未携带无用的预编译 Sparkle framework。
+- `scripts/build.sh` 增加 Release 输入法构建、嵌套 dylib/工具与 bundle 同身份签名、注册工具构建。`install-dev.sh` 安装到用户 Input Methods，生成指向当前 `dist/RoarkT.app` helper 的 LaunchAgent 并加载，然后注册和查询两个输入源；`uninstall-dev.sh` 禁用本产品输入源、退出本产品进程、移除开发安装与 LaunchAgent，保留 Rime 用户数据。均不静默启用/选择输入源。TIS 无公开注销 API，卸载后系统缓存条目可能需重新登录消失。
+
+| 检查 | 结果 | 证据 / 限制 |
+| --- | --- | --- |
+| `scripts/build.sh` | 阻塞（输入法编译失败） | 主 App / 翻译服务构建签名通过；输入法当前只报共享协议缺少 `translateCandidate`、`cancel`、`recordControllerInput` 四处成员错误。T2 尚未合入，不添加假协议绕过。完整签名输入法未生成。 |
+| `codesign -dv dist/RoarkT.app/Contents/Helpers/RoarkTTranslationService` | 通过 | Identifier `com.roarkist.roarkt.translation`，TeamIdentifier `DF7J2VBQD8`。输入法签名尚未验证。 |
+| `scripts/test.sh` | 失败（旧标识守卫误报） | Swift Testing 2/2 通过；Rime 三方案部署通过。最后 grep 命中 `InputMethod/librime/data/minimal/essay.txt`、`InputMethod/data/plum/essay.txt`、`InputMethod/data/plum/terra_pinyin.dict.yaml` 的“巴洛克”“夏洛克”等普通词条，并非旧产品引用。为保持词库原文和固定子模块提交未篡改词条。`scripts/test.sh` 不属 T3 文件所有权，需 Claude 调整守卫的产品标识判定或第三方词库扫描边界。 |
+| 产品源码旧标识检查 | 通过 | `git grep -n -E 'RoType|洛克|Luoke|im\.roarkai|RoarkTools' -- InputMethod ':!InputMethod/data/plum/*' ':!InputMethod/LICENSE*' ':!InputMethod/README.md'` 无结果（gitlink 不递归进入上游源码）。 |
+| `plutil -lint` | 通过 | `InputMethod/resources/Info.plist`、`Squirrel.entitlements`、`Squirrel.xcodeproj/project.pbxproj`。 |
+| Shell 语法 | 通过 | `zsh -n scripts/build.sh scripts/install-dev.sh scripts/uninstall-dev.sh`；`bash -n InputMethod/scripts/package-rime.sh`。 |
+| 注册工具 Swift 6 编译与拒绝无效 bundle | 通过 | `xcrun swiftc -swift-version 6 -parse-as-library Core/Identifiers.swift Installer/tools/RegisterInputSource.swift -o /tmp/RoarkTRegisterInputSource`；`register /tmp/nonexistent-roarkt.app` 返回 1，明确拒绝错误 Bundle ID。 |
+| 安装前置检查 | 通过 | 缺少输入法产物时 `scripts/install-dev.sh` 返回 1，提示先运行 build，不写入用户安装目录或加载服务。 |
+| Rime 资源打包 smoke check | 通过 | 在临时目录设置 `TARGET_BUILD_DIR`、`CONTENTS_FOLDER_PATH`、`SRCROOT` 运行 `InputMethod/scripts/package-rime.sh`；逐字节比较所有根 Rime YAML/Lua 与打包副本及八股文模型，一致；两个输入源方案映射与默认禁用断言通过。 |
+| 实际安装/卸载、TIS 列出两个已安装输入源 | 阻塞 / 未运行 | 等待 T2 合并并生成可执行输入法后运行。未改变当前系统输入源。 |
+| 真实键盘、候选翻译、设置菜单、密码框/安全输入、macOS 14 运行 | 待人工验证 | 留给 T4；资源静态检查不能替代 IMK 端到端验收。继承的 AppKit actor 隔离编译警告也需后续结合真实输入线程验证。 |
+
+剩余工作：Claude 合并 T2 后重新运行 `scripts/build.sh`，核对共享头实际 Swift selector 与输入法本地 v2 请求值类型一致；如编译继续暴露错误再修复。调整词库守卫后运行 `scripts/test.sh`，然后执行开发安装、TIS 双输入源查询、卸载与 T4 真实输入验收。当前按任务指令在 T2 依赖处停止。
 
 ### T4 端到端验收（Claude）
 
