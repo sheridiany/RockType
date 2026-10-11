@@ -1,6 +1,7 @@
 import AppKit
 import InputMethodKit
 import Security
+import Carbon
 
 // XPC entrypoints dispatch to main before accessing ticket/controller state.
 final class RoarkTVoiceServer: NSObject, NSXPCListenerDelegate, RoarkTDictationXPCProtocol, @unchecked Sendable {
@@ -113,7 +114,8 @@ final class RoarkTVoiceServer: NSObject, NSXPCListenerDelegate, RoarkTDictationX
   @MainActor
   private func currentContext() -> (VoiceCommitTicket.Context, IMKTextInput)? {
     dispatchPrecondition(condition: .onQueue(.main))
-    guard let client = controller?.voiceClient,
+    guard !IsSecureEventInputEnabled(),
+          let client = controller?.voiceClient,
           let app = NSWorkspace.shared.frontmostApplication,
           app.bundleIdentifier == client.bundleIdentifier() else { return nil }
     let context = VoiceCommitTicket.Context(activation: activation, applicationPID: app.processIdentifier,
