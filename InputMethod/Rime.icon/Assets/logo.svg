@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <path id="luoke-r"
+        d="M316 806V218H590C713 218 788 286 788 395C788 500 713 568 590 568H316M563 568L760 806"
+        fill="none"
+        stroke="#FFFFFF"
+        stroke-width="146"
+        stroke-linecap="round"
+        stroke-linejoin="round"/>
+</svg>
