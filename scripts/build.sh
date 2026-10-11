@@ -26,3 +26,29 @@ codesign --force --options runtime --timestamp=none --sign "$identity" \
 codesign --force --options runtime --timestamp=none --sign "$identity" "$app"
 codesign --verify --strict --deep "$app"
 print "Built $app (signed with $identity)"
+
+# Build the GPL input method as a separate process. Only protocol headers cross
+# the boundary; no input method code is linked into the MIT products.
+for dependency in librime plum Sparkle; do
+  [[ -f "$repo_dir/InputMethod/$dependency/.git" ]] || {
+    print -u2 'Initialize dependencies with git submodule update --init --recursive.'; exit 1
+  }
+done
+xcodebuild -project "$repo_dir/InputMethod/Squirrel.xcodeproj" -scheme Squirrel \
+  -configuration Release -derivedDataPath "$repo_dir/build/ime" \
+  ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build
+input_app="$repo_dir/dist/RoarkT Input.app"
+rm -rf "$input_app"
+ditto "$repo_dir/build/ime/Build/Products/Release/RoarkT Input.app" "$input_app"
+# Sign nested executables/libraries before the bundle (without --deep signing).
+for binary in "$input_app/Contents/Frameworks/"*.dylib(N) \
+    "$input_app/Contents/Frameworks/rime-plugins/"*.dylib(N) \
+    "$input_app/Contents/MacOS/rime_deployer" "$input_app/Contents/MacOS/rime_dict_manager"; do
+  codesign --force --options runtime --timestamp=none --sign "$identity" "$binary"
+done
+codesign --force --options runtime --timestamp=none --sign "$identity" "$input_app"
+codesign --verify --strict --deep "$input_app"
+xcrun swiftc -swift-version 6 -parse-as-library -O "$repo_dir/Core/Identifiers.swift" \
+  "$repo_dir/Installer/tools/RegisterInputSource.swift" -o "$repo_dir/dist/RoarkTRegisterInputSource"
+codesign --force --options runtime --timestamp=none --sign "$identity" "$repo_dir/dist/RoarkTRegisterInputSource"
+print "Built $input_app and registration tool (signed with $identity)"
