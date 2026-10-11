@@ -14,7 +14,6 @@ enum GalleryCatalog {
     // U3 (surfaces 1–5) and U4 register independent blocks.
     static let entries: [GalleryEntry] = PrimarySurfaceEntries.entries
         + InputVoiceGallery.entries
-        + OnboardingGallery.entries
         + SettingsGallery.entries
 }
 

@@ -59,11 +59,11 @@ private struct SettingsRoot: View {
     private var persistenceMessage: String {
         if let error = store.persistenceError { return error }
         if case .recovered = store.loadStatus { return "设置文件损坏，已保留副本并恢复默认值。修改自动保存。" }
-        return "修改自动保存 · 后续功能的偏好将在相应功能上线后使用"
+        return "修改自动保存 · 无需另行确认"
     }
     var body: some View {
         ShellSettingsView(settings: $store.settings, login: login, connection: connection, sections: sections,
-                          persistenceMessage: persistenceMessage, exportDiagnostics: export,
+                          persistenceMessage: persistenceMessage, persistenceFailed: store.persistenceError != nil, exportDiagnostics: export,
                           inputMethodSyncMessage: store.inputMethodSyncMessage, retryInputMethodSync: { store.flush() },
                           clearCurrentContent: clear, section: $navigation.section)
             .preferredColorScheme(store.settings.general.appearance == .system ? nil :

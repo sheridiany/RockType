@@ -73,11 +73,12 @@ struct U4Toggle: View {
         Button { isOn.toggle() } label: {
             Capsule().fill(isOn && enabled ? p.accent : p.bubble)
                 .overlay(alignment: isOn ? .trailing : .leading) {
-                    Circle().fill(enabled ? p.card : p.tertiary)
+                    Circle().fill(enabled ? (isOn ? p.onAccent : (scheme == .dark ? p.secondary : p.card)) : p.tertiary)
                         .frame(width: Tokens.U4.toggleKnob, height: Tokens.U4.toggleKnob)
                         .padding(Tokens.U4.toggleInset)
                 }
                 .frame(width: Tokens.U4.toggleWidth, height: Tokens.U4.toggleHeight)
+                .overlay(Capsule().stroke(p.pillLine, lineWidth: Tokens.Size.stroke))
         }.buttonStyle(.plain).accessibilityLabel(title).accessibilityValue(isOn ? "开启" : "关闭")
     }
 }

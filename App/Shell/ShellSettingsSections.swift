@@ -1,12 +1,11 @@
 import SwiftUI
 import RoarkTCore
 
-/// Shared production dependencies for Settings and onboarding.
+/// Production dependencies for the settings window.
 @MainActor
 struct ShellSettingsSections {
     let permissions: PermissionCenter
     let hotkeys: HotkeyCenter
-    let showOnboarding: () -> Void
 
     func permissionsPane() -> AnyView { AnyView(PermissionCenterView(center: permissions)) }
     func shortcutsPane(settings: Binding<AppSettings>) -> AnyView { AnyView(HotkeySettingsView(center: hotkeys, appSettings: settings)) }
