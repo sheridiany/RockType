@@ -6,6 +6,7 @@ import Testing
     _ = NSApplication.shared
     let hud = RoarkTVoiceHUD()
     let panel = try #require(Mirror(reflecting: hud).children.first { $0.label == "panel" }?.value as? NSPanel)
+    panel.appearance = NSAppearance(named: .darkAqua)
     let view = try #require(panel.contentView)
     for elapsed: TimeInterval in [0, 8, 59, 60, 599] {
         hud.render(.recording)

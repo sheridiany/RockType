@@ -87,8 +87,49 @@ import Testing
     state.result = ""
     state.message = "请先在设置 → 语音下载模型。"
     controller.show()
-    #expect(hud.state == .notice(title: "语音输入", detail: state.message))
+    #expect(hud.state == .notice(title: state.message, detail: state.message))
     try render("voice-notice")
     controller.hide()
     #expect(!panel.isVisible)
+}
+
+@Test @MainActor func voiceHUDRepeatedStatusPreservesExpandedResultAndMeter() throws {
+    _ = NSApplication.shared
+    let hud = RoarkTVoiceHUD(present: { _ in })
+    hud.render(.result("合成测试文本"))
+    hud.toggleDetails()
+    hud.render(.result("合成测试文本"))
+    #expect(hud.expanded, "Repeated lifecycle notifications must not collapse the user's details")
+    hud.render(.recording)
+    hud.updateRecording(elapsed: 12, decibels: -10)
+    hud.render(.recording)
+    let waveform = try #require(Mirror(reflecting: hud).children.first { $0.label == "waveform" }?.value as? RoarkTVoiceHUDWaveform)
+    #expect(waveform.levels.last == 1, "Repeated recording status must not erase live meter samples")
+    hud.render(.processing)
+    #expect(waveform.levels.allSatisfy { $0 == 0 })
+    hud.render(.result("合成测试文本"))
+    hud.hide()
+    #expect(hud.state.detail == nil, "Closing releases the result retained by the presentation")
+}
+
+@Test @MainActor func voiceHUDThemesRenderAllStates() throws {
+    _ = NSApplication.shared
+    let hud = RoarkTVoiceHUD(present: { _ in })
+    let panel = try #require(Mirror(reflecting: hud).children.first { $0.label == "panel" }?.value as? NSPanel)
+    let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let output = root.appendingPathComponent(".build/ime-evidence")
+    try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+    for (theme, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+        panel.appearance = NSAppearance(named: appearance)
+        for (name, state) in [("recording", RoarkTVoiceHUD.State.recording), ("processing", .processing), ("notice", .notice(title: "请先下载模型", detail: "在设置 → 语音中下载后，按住 Fn 重试。")), ("result", .result("合成测试文字")), ("done", .success("已填入 · 未发送"))] {
+            hud.render(state)
+            if state == .recording { hud.updateRecording(elapsed: 12, decibels: -18) }
+            if state.detail != nil { hud.toggleDetails() }
+            let view = try #require(panel.contentView)
+            let bitmap = try #require(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+            view.cacheDisplay(in: view.bounds, to: bitmap)
+            try #require(bitmap.representation(using: .png, properties: [:])).write(to: output.appendingPathComponent("voice-\(name)-\(theme).png"))
+            #expect(!hud.acceptsKeyboardFocus)
+        }
+    }
 }
