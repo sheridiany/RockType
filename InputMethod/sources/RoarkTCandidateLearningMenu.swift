@@ -5,7 +5,7 @@ enum RoarkTCandidateLearningMenu {
   static func make(candidate: String, canForget: Bool, perform: @escaping () -> Void) -> NSMenu {
     let menu = NSMenu()
     menu.autoenablesItems = false
-    let item = LearningMenuItem(title: "忘记「\(candidate)」的学习记录", perform: perform)
+    let item = LearningMenuItem(title: "忘记“\(candidate)”的学习记录", perform: perform)
     item.isEnabled = canForget
     if !canForget { item.toolTip = "此候选没有可清除的个人学习记录" }
     menu.addItem(item)

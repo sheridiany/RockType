@@ -262,7 +262,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Vector template R glyph stays crisp in both menu-bar appearances.
-    private static func statusImage() -> NSImage {
+    static func statusImage() -> NSImage {
         let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { rect in
             let font = NSFont.systemFont(ofSize: 17, weight: .semibold)
             let text = NSAttributedString(string: "R", attributes: [.font: font, .foregroundColor: NSColor.black])
