@@ -7,6 +7,7 @@ import os
 
 /// Retain in AppDelegate, call start/stop, and bind HotkeyCenter.screenshotAction to capture().
 @MainActor final class ScreenshotCoordinator {
+    private var pendingTemplateID: String?
     private var running = false
     private var generation = 0
     private lazy var importer: ScreenshotImportController = {
@@ -93,6 +94,7 @@ import os
     }
     func stop() { running = false; warmupTask?.cancel(); warmupTask = nil; ScreenCapture.stopWarming(); cancel(); closePreview(); PinnedImageController.shared.closeAll() }
     func cancel() {
+        pendingTemplateID = nil
         generation += 1
         elementQuery.cancel(); elementSnapshot = nil
         saving = false; saveAs.cancel()
@@ -109,10 +111,10 @@ import os
         if overlayWasShown, let previousApp, !previousApp.isTerminated { previousApp.activate() }
         previousApp = nil
     }
-    func capture() {
+    func capture(templateID: String? = nil) {
         guard running, captureAllowed() else { return }
         let started = CACurrentMediaTime()
-        cancel(); closePreview()
+        cancel(); closePreview(); pendingTemplateID = templateID
         let current = generation
         captureDesktopTop = NSScreen.screens.first?.frame.maxY ?? 0
         let mouse = NSEvent.mouseLocation
@@ -198,6 +200,12 @@ import os
             view.onCancel = { [weak self] in self?.cancel() }
             view.onComplete = { [weak self, weak view] image in
                 guard let self, let view, self.captureAllowed() else { return }
+                if let id = self.pendingTemplateID {
+                    self.lastSelection = (displayID, view.selection)
+                    self.cancel(); self.openImage(image, origin: "截图")
+                    self.session?.runTemplate(id)
+                    return
+                }
                 do {
                     try ScreenshotOutput.shared.copyImage(image)
                     self.lastSelection = (displayID, view.selection)

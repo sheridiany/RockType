@@ -121,12 +121,12 @@ struct LiveResultWindowView: View {
             .frame(maxWidth: .infinity, alignment: .trailing)
     }
     private var captureMethod: String {
-        if let id = controller.state.request?.template.id, let template = ScreenshotSession.imageTemplate(forID: id) { return template.name }
+        if let template = controller.state.request?.template, ScreenshotSession.imageTemplate(forID: template.id) != nil { return template.name }
         return switch controller.state.session?.snapshot.method {
         case .accessibility: "直接读取"
         case .copyFallback: "复制回退"
         case .paste: "粘贴"
-        case .screenshotOCR: "截图 OCR"
+        case .screenshotOCR: "截图文字识别"
         case nil: ""
         }
     }

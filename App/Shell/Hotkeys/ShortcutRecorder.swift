@@ -112,14 +112,34 @@ struct HotkeySettingsView: View {
                 }
                 Button("重试注册") { center.retry() }.buttonStyle(DesignButtonStyle(variant: .ghost))
             }
+            DesignSectionTitle(title: "AI 动作快捷键")
+            DesignCard {
+                ForEach(appSettings.templates) { template in
+                    HStack {
+                        Text(template.name)
+                        Spacer()
+                        Button(center.recordingTemplate == template.id ? "按下组合键…" : label(template.shortcut)) { center.beginTemplateRecording(template.id) }
+                        Button("清除") { setTemplateShortcut(nil, id: template.id) }
+                    }
+                    Text(center.templateStatuses[template.id]?.text ?? "未设置").font(.caption).foregroundStyle(.secondary)
+                    if center.recordingTemplate == template.id {
+                        ShortcutRecorder(voiceOnly: false, onRecord: { setTemplateShortcut($0, id: template.id) }, onCancel: { center.cancelRecording() }).frame(height: 1)
+                    }
+                }
+            }
             DesignCard { InputAISettingsSection(settings: $appSettings) }
             Notice(text: "Fn 也可能触发系统听写或切换输入源。若有冲突，请前往系统键盘设置调整 Fn 行为。")
             if let notice = center.notice { Notice(text: notice, tone: .warn) }
             ShortcutReference()
         }
-        .onDisappear { if center.recording != nil { center.cancelRecording() } }
+        .onDisappear { if center.recording != nil || center.recordingTemplate != nil { center.cancelRecording() } }
     }
 
+    private func setTemplateShortcut(_ shortcut: Shortcut?, id: String) {
+        guard let index = appSettings.templates.firstIndex(where: { $0.id == id }) else { return }
+        appSettings.templates[index].shortcut = shortcut
+        center.cancelRecording()
+    }
     private func label(_ shortcut: Shortcut?) -> String {
         guard let shortcut else { return "录制快捷键" }
         var text = ""

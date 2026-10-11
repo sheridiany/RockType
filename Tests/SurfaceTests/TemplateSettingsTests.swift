@@ -148,6 +148,8 @@ import RoarkTCore
         let bitmap = try #require(hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds))
         hosting.cacheDisplay(in: hosting.bounds, to: bitmap)
         let data = try #require(bitmap.representation(using: .png, properties: [:]))
-        try data.write(to: URL(fileURLWithPath: "/tmp/roarkt-m35-\(name)-\(dark ? "dark" : "light").png"))
+        let directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(".build/r4-ai/ui")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try data.write(to: directory.appendingPathComponent("\(name)-\(dark ? "dark" : "light").png"))
     }
 }

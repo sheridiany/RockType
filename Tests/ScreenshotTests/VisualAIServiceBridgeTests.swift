@@ -123,3 +123,34 @@ extension VisualAIServiceBridgeTests {
         }
     }
 }
+
+
+extension VisualAIServiceBridgeTests {
+    @MainActor func testCustomImagePromptAndVerifiedOverrideReachProductionTransport() async throws {
+        _ = VisualWireProtocol.recorder.take()
+        let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [VisualWireProtocol.self]
+        let network = URLSession(configuration: config)
+        defer { network.invalidateAndCancel() }
+        var settings = AppSettings.defaults
+        settings.ai.baseURL = "https://synthetic.invalid/v1"
+        settings.ai.visionModel = "synthetic-primary"
+        settings.ai.fallbackModel = "synthetic-alternative"
+        let template = OperationTemplate(name: "Synthetic action", icon: "photo", prompt: "CUSTOM SYNTHETIC INSTRUCTION", input: .image, model: "synthetic-alternative")
+        settings.templates.append(template)
+        let workflow = ScreenshotVisualAI(settings: { settings }, verified: { _, model in model == "synthetic-alternative" }, allowed: { true }, remember: { _ in },
+            send: ScreenshotVisualAI.sender(client: { AIClient(connection: $0, session: network) }, apiKey: { _ in "synthetic-key" }))
+        workflow.prepare(action: .explain, png: Data([1, 2, 3]), text: "Synthetic correction", template: template)
+        XCTAssertTrue(VisualWireProtocol.recorder.take().isEmpty)
+        workflow.confirm()
+        for _ in 0..<300 where workflow.isBusy { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(workflow.phase, .done)
+        let data = try XCTUnwrap(VisualWireProtocol.recorder.take().first)
+        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(payload["model"] as? String, "synthetic-alternative")
+        let messages = try XCTUnwrap(payload["messages"] as? [[String: Any]])
+        let content = try XCTUnwrap(messages.last?["content"] as? [[String: Any]])
+        let text = try XCTUnwrap(content.first?["text"] as? String)
+        XCTAssertTrue(text.contains(template.prompt)); XCTAssertTrue(text.contains("Synthetic correction"))
+        workflow.clear()
+    }
+}

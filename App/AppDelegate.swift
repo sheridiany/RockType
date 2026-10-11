@@ -57,6 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         read: { [unowned self] in self.store.settings.shortcuts },
         write: { [unowned self] in self.store.settings.shortcuts = $0 },
         showSettings: { [weak self] in self?.showSettings() },
+        readTemplates: { [unowned self] in self.store.settings.templates },
         unavailableAction: { [weak self] in self?.noticeController.show($0) },
         selection: { [weak self] in self?.selectionController.trigger($0) },
         voiceListening: { [weak self] enabled in
@@ -102,6 +103,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         PinnedImageController.shared.setHistoryLimit(store.settings.screenshot.pinHistoryLimit ?? 10)
         screenshot.start()
         hotkeys.screenshotAction = { [weak self] in self?.captureScreenshot() }
+        hotkeys.templateAction = { [weak self] id in
+            guard let self, let template = self.store.settings.templates.first(where: { $0.id == id }) else { return }
+            if template.input == .image { self.panel.close(); self.screenshot.capture(templateID: id) }
+            else { self.selectionController.triggerTemplate(id) }
+        }
         hotkeys.start()
         if SettingsLaunchPolicy.action(arguments: CommandLine.arguments) == .settings { showSettings() }
     }
