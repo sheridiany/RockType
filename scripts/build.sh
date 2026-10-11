@@ -27,6 +27,8 @@ app="$repo_dir/dist/RockType.app"
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Helpers" "$app/Contents/Resources"
 cp "$repo_dir/App/Info.plist" "$app/Contents/Info.plist"
+# MIT-authored vocabulary, independent of the GPL input-method executable.
+cp "$repo_dir/Rime/roarkt_ai.dict.yaml" "$app/Contents/Resources/VoiceVocabulary.dict.yaml"
 cp "$bin_dir/RoarkTApp" "$app/Contents/MacOS/RockType"
 cp "$bin_dir/RoarkTTranslationService" "$app/Contents/Helpers/RoarkTTranslationService"
 # Sparkle (SPEC-009 R-4) is a dynamic SPM framework; embed it and sign it before the app.

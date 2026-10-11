@@ -22,6 +22,33 @@ import Testing
 @MainActor private final class CheckContext { var readable = true; var saved: [OperationResult] = [] }
 
 @Suite(.serialized) @MainActor struct ResultWindowTests {
+    @Test func reasoningHasVisibleStatusAndNeverBecomesConversation() async {
+        let runner = ControlledRunner()
+        let state = ResultWindowState(runner: runner, readable: { true })
+        let snapshot = ContentSnapshot(text: "Synthetic", source: .init(pid: 0, applicationName: "Test"), method: .paste)
+        state.show(OperationRequest(session: .init(snapshot: snapshot), template: .defaults[1], settings: .defaults))
+        runner.streams[0].yield(.thinking)
+        await settle(until: { state.phase == .thinking })
+        #expect(state.isBusy && !state.canCopy && state.answer.isEmpty)
+        runner.streams[0].yield(.delta(""))
+        await settle()
+        #expect(state.phase == .thinking)
+        runner.streams[0].yield(.delta("answer"))
+        await settle(until: { state.phase == .streaming })
+        runner.streams[0].yield(.thinking)
+        await settle()
+        #expect(state.phase == .streaming && state.answer == "answer")
+        state.cancel()
+        #expect(state.session?.turns.isEmpty == true && !state.canAsk)
+        state.question = "Do not follow up on an incomplete answer"
+        state.ask(settings: .defaults)
+        #expect(runner.requests.count == 1)
+        runner.streams[0].yield(.thinking)
+        await settle()
+        #expect(state.phase == .cancelled)
+        state.stop()
+    }
+
     @Test func streamingAndSessionLifecycle() async {
         let runner = ControlledRunner()
         let context = CheckContext()

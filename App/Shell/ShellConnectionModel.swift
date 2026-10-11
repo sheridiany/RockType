@@ -37,7 +37,11 @@ final class ShellConnectionModel {
     @ObservationIgnored var runTests: (AIConnectionSettings, String) async -> [String] = { settings, secret in
         do {
             let result = try await AIConnectionTester(client: AIClient(connection: settings)).run(apiKey: secret)
-            return [result.text, result.streaming, result.image, result.cancellation].map(ShellConnectionModel.label)
+            var labels = [result.text, result.streaming, result.image, result.cancellation].map(ShellConnectionModel.label)
+            if result.text == .available, let latency = result.textLatency {
+                labels[0] += String(format: " · %.2f 秒", latency)
+            }
+            return labels
         } catch { return Array(repeating: "未验证", count: 4) }
     }
 
@@ -54,7 +58,9 @@ final class ShellConnectionModel {
             case .modelNotFound: reason = "模型不存在"
             case .rateLimited: reason = "限流，请稍后重试"
             case .server: reason = "服务异常"
-            case .decoding: reason = "响应格式不兼容"
+            case .decoding: reason = "响应格式不兼容或中途断开"
+            case .emptyResponse: reason = "模型未生成正文"
+            case .outputLimit: reason = "输出预算不足，请换模型或缩短内容"
             case .timeout: reason = "请求超时"
             case .cancelled: reason = "请求已取消"
             case .http(let code): reason = "HTTP \(code)"
@@ -188,9 +194,15 @@ struct ShellConnectionView: View {
     @Binding var settings: AIConnectionSettings
     @State private var editingKey = false
     @State private var secret = ""
+    @Environment(\.colorScheme) private var scheme
+    private var p: Tokens.Palette { Tokens.palette(scheme) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
+            if !model.configured {
+                Notice(text: "填写服务地址、默认模型并设置密钥，即可开始使用 AI。未配置时，中文输入与本地 OCR 仍可使用。")
+            }
+            U4SectionTitle(title: "服务商连接")
             U4Card {
                 field("服务名称", $settings.name)
                 field("Base URL", $settings.baseURL)
@@ -200,25 +212,36 @@ struct ShellConnectionView: View {
                     if model.hasKey { Button("删除") { model.deleteKey() } }
                 }
                 field("默认模型", $settings.defaultModel)
-                Toggle("默认模型支持图片", isOn: $settings.defaultModelSupportsImages)
+                U4Rule()
+                SettingsControlRow("默认模型支持图片") {
+                    U4Toggle(title: "默认模型支持图片", isOn: $settings.defaultModelSupportsImages)
+                }
                 field("视觉模型（可选）", Binding(get: { settings.visionModel ?? "" }, set: { settings.visionModel = $0.isEmpty ? nil : $0 }))
             }
             Text("OpenAI Chat Completions 兼容接口 · 测试会发送固定样本文字与图片。")
                 .font(Tokens.Typography.font(Tokens.Typography.caption))
             HStack {
-                Text("能力验证"); Spacer()
+                U4SectionTitle(title: "能力验证"); Spacer()
                 if model.testing { Button("取消测试") { model.cancel() } }
                 else { Button("测试连接") { model.test() }.disabled(!model.configured) }
             }
-            HStack(spacing: Tokens.Space.sm) {
+            U4Card {
                 ForEach(Array(["文字", "流式", "图片", "取消"].enumerated()), id: \.offset) { index, title in
-                    VStack(spacing: Tokens.Space.xs) {
-                        Text(title)
-                        Text(model.results[index]).font(Tokens.Typography.font(Tokens.Typography.caption))
-                    }.frame(maxWidth: .infinity)
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(title).frame(width: 44, alignment: .leading)
+                        Spacer(minLength: Tokens.Space.sm)
+                        Text(model.results[index])
+                            .font(Tokens.Typography.font(Tokens.Typography.meta))
+                            .foregroundStyle(model.results[index].hasPrefix("不可用") ? p.danger :
+                                model.results[index] == "可用" ? p.ok : p.secondary)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    if index < 3 { U4Rule() }
                 }
             }
-            Text(model.message).font(Tokens.Typography.font(Tokens.Typography.caption))
+            if !model.message.isEmpty {
+                Text(model.message).font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(p.secondary)
+            }
         }
         .sheet(isPresented: $editingKey, onDismiss: { secret = "" }) {
             VStack(alignment: .leading, spacing: Tokens.Space.lg) {
@@ -239,7 +262,9 @@ struct ShellConnectionView: View {
     }
 
     private func field(_ title: String, _ text: Binding<String>) -> some View {
-        HStack { Text(title); Spacer(); TextField(title, text: text).textFieldStyle(.roundedBorder)
-                .frame(width: Tokens.U4.fieldWidth) }
+        SettingsControlRow(title) {
+            TextField(title, text: text).textFieldStyle(.roundedBorder)
+                .frame(width: Tokens.Size.fieldWidth).accessibilityLabel(title)
+        }
     }
 }

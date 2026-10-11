@@ -20,7 +20,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         coordinator.readSettings = { [unowned self] in self.store.settings }
         coordinator.onNotice = { [weak self] in self?.comingSoon.show(message: $0) }
         coordinator.onPermissionRequired = { [weak self] in
-            self?.panel.close(); self?.settingsWindow.show(section: .permissions)
+            self?.panel.close()
+            self?.comingSoon.show(message: "截图需要屏幕录制权限。授权后请重新按下截图快捷键。")
+            self?.permissions.openSettings(.screenRecording)
         }
         coordinator.configureVision = { [weak self] in
             self?.panel.close(); self?.settingsWindow.show(section: .ai)
@@ -62,24 +64,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if !available { self.voice.stop() }
             return available
         })
-    private lazy var onboarding = OnboardingWindowController(
-        store: store,
-        permissions: { [unowned self] in AnyView(PermissionCenterView(center: self.permissions)) },
-        aiConnection: { [unowned self] in
-            AnyView(OnboardingConnectionRoot(store: self.store, connection: self.connection))
-        },
-        showSettings: { [weak self] in self?.showSettings() })
     private lazy var settingsWindow: SettingsWindowController = {
         let window = SettingsWindowController(store: store, login: login, connection: connection,
-            sections: ShellSettingsSections(permissions: permissions, hotkeys: hotkeys,
-                showOnboarding: { [weak self] in self?.onboarding.rerun() }))
+            sections: ShellSettingsSections(permissions: permissions, hotkeys: hotkeys))
         window.clearCurrentContent = { [weak self] in self?.clearCurrentContent() }
         window.exportDiagnostics = { [weak self] in self?.diagnostics.export() }
         return window
     }()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // The design gallery has no production listeners, preference writes or onboarding.
+        // The design gallery has no production listeners, preference writes or permission requests.
         if CommandLine.arguments.contains("--gallery") { gallery.show(); return }
         updateStatusItemVisibility()
         clock.didRefresh = { [weak self] in self?.refreshStatus() }
@@ -102,12 +96,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         screenshot.start()
         hotkeys.screenshotAction = { [weak self] in self?.captureScreenshot() }
         hotkeys.start()
-        onboarding.applicationDidFinishLaunching()
+        if SettingsLaunchPolicy.action(arguments: CommandLine.arguments) == .settings { showSettings() }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if CommandLine.arguments.contains("--gallery") { gallery.show(); return false }
-        return onboarding.applicationShouldHandleReopen()
+        showSettings()
+        return false
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -265,10 +260,4 @@ private struct LiveMenuRoot: View {
             .preferredColorScheme(store.settings.general.appearance == .system ? nil :
                 store.settings.general.appearance == .dark ? .dark : .light)
     }
-}
-
-private struct OnboardingConnectionRoot: View {
-    @Bindable var store: SettingsStore
-    let connection: ShellConnectionModel
-    var body: some View { ShellConnectionView(model: connection, settings: $store.settings.ai) }
 }

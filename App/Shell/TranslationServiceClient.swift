@@ -2,7 +2,7 @@ import Foundation
 import RoarkTCore
 import RoarkTXPCProtocol
 
-/// Main-app-only discovery and onboarding calls. No text crosses this interface.
+/// Main-app-only discovery and input verification calls. No text crosses this interface.
 @MainActor
 final class TranslationServiceClient {
     struct InputGeneration: Sendable, Equatable {

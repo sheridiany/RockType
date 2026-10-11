@@ -6,6 +6,8 @@ public struct AIConnectionTestResult: Equatable, Sendable {
     public var streaming: Status = .unverified
     public var image: Status = .unverified
     public var cancellation: Status = .unverified
+    /// Wall time to a complete text answer, including any bounded retry.
+    public var textLatency: TimeInterval? = nil
     public init() {}
 }
 
@@ -17,7 +19,10 @@ public struct AIConnectionTester: Sendable {
     /// Image stays unverified until the user declares an image-capable model.
     public func run(apiKey: String) async throws -> AIConnectionTestResult {
         var result = AIConnectionTestResult()
+        let started = ContinuousClock.now
         result.text = await probe { _ = try await client.complete(text: "Reply OK.", apiKey: apiKey) }
+        let elapsed = started.duration(to: .now).components
+        result.textLatency = Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18
         try Task.checkCancellation()
         result.streaming = await probe { _ = try await client.stream(text: "Reply OK.", apiKey: apiKey) { _ in } }
         try Task.checkCancellation()

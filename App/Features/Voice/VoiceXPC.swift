@@ -1,5 +1,6 @@
 import Foundation
 import RoarkTCore
+import RoarkTPlatform
 import RoarkTXPCProtocol
 
 @MainActor
@@ -78,6 +79,11 @@ enum VoiceFailure: Error { case timeout, unavailable, model, empty, permission }
     }
     func transcribe(_ audio: Data) async throws -> String {
         guard let connection, loaded != nil else { throw VoiceFailure.unavailable }
+        guard SecureInput.status() == .allowed else { throw VoiceFailure.permission }
+        let vocabulary = Task.detached(priority: .utility) { VoiceContextVocabulary.load() }
+        let context = await withTaskCancellationHandler { await vocabulary.value } onCancel: { vocabulary.cancel() }
+        try Task.checkCancellation()
+        guard self.connection === connection, SecureInput.status() == .allowed else { throw VoiceFailure.permission }
         do {
             let gate = VoiceReply<String?>()
             let result = try await gate.wait(seconds: 90) { gate in
@@ -85,7 +91,7 @@ enum VoiceFailure: Error { case timeout, unavailable, model, empty, permission }
                     Task { @MainActor in gate.finish(.failure(VoiceFailure.unavailable)) }
                 } as? VoiceWorkerProtocol
                 guard let proxy else { gate.finish(.failure(VoiceFailure.unavailable)); return }
-                proxy.transcribe(audio: audio) { @Sendable text in Task { @MainActor in gate.finish(.success(text)) } }
+                proxy.transcribe(audio: audio, context: context) { @Sendable text in Task { @MainActor in gate.finish(.success(text)) } }
             }
             try Task.checkCancellation()
             guard self.connection === connection, let result, !result.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {

@@ -43,8 +43,9 @@ final class RoarkTVoiceHUD: NSObject {
         override func viewDidChangeEffectiveAppearance() { super.viewDidChangeEffectiveAppearance(); updateColors() }
         func updateColors() {
             effectiveAppearance.performAsCurrentDrawingAppearance {
-                layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
-                layer?.borderColor = NSColor.separatorColor.cgColor
+                let palette = Tokens.palette(effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .dark : .light)
+                layer?.backgroundColor = NSColor(palette.canvas).cgColor
+                layer?.borderColor = NSColor(palette.borderControl).cgColor
             }
         }
     }
@@ -77,17 +78,17 @@ final class RoarkTVoiceHUD: NSObject {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         background.wantsLayer = true
         background.updateColors()
-        background.layer?.borderWidth = 0.5
-        background.layer?.cornerRadius = 11
+        background.layer?.borderWidth = Tokens.Size.hairline
+        background.layer?.cornerRadius = Tokens.Radius.window
         panel.contentView = background
         for field in [label, icon, clock] {
-            field.font = .systemFont(ofSize: 12, weight: .regular)
+            field.font = .systemFont(ofSize: Tokens.Typography.meta, weight: .regular)
             field.textColor = .labelColor
             field.alignment = .center
             field.lineBreakMode = .byTruncatingTail
             background.addSubview(field)
         }
-        clock.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        clock.font = .monospacedDigitSystemFont(ofSize: Tokens.Typography.caption, weight: .regular)
         clock.textColor = .secondaryLabelColor
         configure(close, title: "×", action: #selector(cancel))
         close.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "取消")?
@@ -101,7 +102,7 @@ final class RoarkTVoiceHUD: NSObject {
         waveform.setAccessibilityElement(true)
         waveform.setAccessibilityRole(.levelIndicator)
         panel.setAccessibilityTitle("RockType 语音输入")
-        detailText.font = .systemFont(ofSize: 12)
+        detailText.font = .systemFont(ofSize: Tokens.Typography.meta)
         detailText.textColor = .labelColor
         detailText.maximumNumberOfLines = 0
         scroll.drawsBackground = false
@@ -117,7 +118,7 @@ final class RoarkTVoiceHUD: NSObject {
         button.target = self
         button.action = action
         button.isBordered = false
-        button.font = .systemFont(ofSize: 11)
+        button.font = .systemFont(ofSize: Tokens.Typography.caption)
         button.contentTintColor = .secondaryLabelColor
         background.addSubview(button)
     }

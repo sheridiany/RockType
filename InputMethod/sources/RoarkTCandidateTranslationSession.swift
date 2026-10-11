@@ -13,6 +13,21 @@ struct RoarkTCandidateSnapshot: Equatable {
     return selected % pageSize == index
   }
 
+  /// Conservative local protection. Mixed prose containing a technical token stays intact;
+  /// no placeholders or identifiers are sent to the translator and then guessed back.
+  static func preservesTechnicalText(_ text: String) -> Bool {
+    let tokens = text.lowercased().components(separatedBy: technicalTokenCharacters.inverted)
+    if tokens.contains(where: technicalNames.contains) { return true }
+    return technicalPattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
+  }
+
+  private static let technicalNames: Set<String> = ["swiftui", "xcode", "github", "gitlab", "openai", "anthropic",
+    "qwen", "qwen3", "mlx", "json", "yaml", "api", "sdk", "gpt", "claude", "rocktype",
+    "kubernetes", "docker", "postgresql", "typescript", "javascript"]
+  private static let technicalTokenCharacters = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789_")
+  private static let technicalPattern = try! NSRegularExpression(pattern:
+    "C\\+\\+|C#|[a-z][A-Z]|[A-Z]{2,}[a-z]|[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]+|[A-Za-z][A-Za-z0-9]*\\.[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9]*\\(\\)|\\b[A-Z]{2,16}\\b")
+
   var translationRequest: CandidateTranslationRequest? {
     guard let scope = CandidateTranslationRequest.Scope(rawValue: scope) else { return nil }
     return try? CandidateTranslationRequest(rawInput: rawInput, sourceText: source, identity: identity, scope: scope)

@@ -51,6 +51,8 @@ import RoarkTCore
     #expect(sink.payloads.last?["apiKey"] == key)
     #expect(sink.payloads.last?["model"] == "synthetic-model")
     #expect(sink.payloads.last?["timeout"] == "30.0")
+    #expect(sink.payloads.last?["translatePrompt"]?.contains("代码块、行内代码、命令、URL") == true)
+    #expect(sink.payloads.last?["polishPrompt"]?.contains("不增加事实") == true)
     store.settings.ai.defaultModel = "synthetic-replacement"
     await awaitInputAI { sink.payloads.last?["model"] == "synthetic-replacement" }
     let polish = try #require(store.settings.templates.firstIndex { $0.id == "polish" })

@@ -6,7 +6,6 @@ import Testing
     let settings = AppSettings()
     #expect(settings.schemaVersion == 1)
     #expect(!settings.general.showBeijingTime && !settings.general.launchAtLogin)
-    #expect(!settings.general.onboardingCompleted)
     #expect(!settings.translation.allowCandidateAI)
     #expect(!settings.voice.polishWithAI && !settings.voice.automaticallyPrepareModel)
     #expect(settings.voice.model == .small)

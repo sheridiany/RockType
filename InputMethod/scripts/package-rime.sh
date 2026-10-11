@@ -13,6 +13,9 @@ cp "$SRCROOT/../Rime/lua/"*.lua "$shared/lua/"
 cp "$SRCROOT/../Rime/essay.txt" "$SRCROOT/../Rime/"*.gram "$shared/"
 cp "$SRCROOT/../THIRD_PARTY_NOTICES.md" "$shared/"
 licenses="$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Resources/Licenses"
+# Recreate generated notices: cp preserves source read-only modes, so overwriting
+# yesterday's copies fails. Removing also prevents stale dependency notices.
+rm -rf "$licenses"
 mkdir -p "$licenses"
 cp -R "$SRCROOT/../LICENSES/." "$licenses/"
 cp "$SRCROOT/../THIRD_PARTY_NOTICES.md" "$licenses/"

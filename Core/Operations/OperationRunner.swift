@@ -54,6 +54,7 @@ public struct OperationResult: Equatable, Sendable, Identifiable {
 
 public enum OperationEvent: Equatable, Sendable {
     case started(generation: UInt64)
+    case thinking
     case engine(String)
     case delta(String)
     case completed(OperationResult)

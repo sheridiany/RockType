@@ -76,7 +76,7 @@ import RoarkTCore
         let restoredResult = try await execute(settings.templates[0], settings: settings)
         #expect(restoredResult.engine == "synthetic-translation")
         #expect(!restoredResult.text.contains("Synthetic custom translation to"))
-        #expect(restoredResult.text.contains("保留段落、列表和代码块"))
+        #expect(restoredResult.text.contains("保留段落、空行、标题、列表层级、表格和 Markdown 格式"))
         let assistant = try await execute(settings.templates[1], settings: settings)
         #expect(assistant.engine == "synthetic-assistant")
         settings.selection.assistantModel = OperationTemplateEdits.optionalModel("  \n ")

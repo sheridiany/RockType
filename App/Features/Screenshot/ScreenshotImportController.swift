@@ -5,22 +5,25 @@ import UniformTypeIdentifiers
 @MainActor final class ScreenshotImportController {
     private let allowed: () -> Bool
     private let decode: @Sendable (Data) throws -> CGImage
-    var onImage: (CGImage, String) -> Void = { _, _ in }
+    private let loadBatch: @Sendable ([URL]) throws -> [CGImage]
+    var onImage: (CGImage, String, Bool) -> Void = { _, _, _ in }
+    var onBatch: ([CGImage]) -> Void = { _ in }
     var onNotice: (String) -> Void = { _ in }
     private var task: Task<Void, Never>?
     private var progress: Progress?
     private var generation = 0
 
-    init(allowed: @escaping () -> Bool, decode: @escaping @Sendable (Data) throws -> CGImage = ScreenshotImageImport.decode) {
-        self.allowed = allowed; self.decode = decode
+    init(allowed: @escaping () -> Bool, decode: @escaping @Sendable (Data) throws -> CGImage = ScreenshotImageImport.decode,
+         loadBatch: @escaping @Sendable ([URL]) throws -> [CGImage] = ScreenshotBatch.load) {
+        self.allowed = allowed; self.decode = decode; self.loadBatch = loadBatch
     }
     func cancel() {
         generation += 1; task?.cancel(); task = nil; progress?.cancel(); progress = nil
     }
-    func load(_ data: Data, origin: String) {
+    func load(_ data: Data, origin: String, recognize: Bool = false) {
         cancel()
         guard allowed() else { return }
-        run(origin: origin, current: generation) { data }
+        run(origin: origin, current: generation, recognize: recognize) { data }
     }
     func load(_ provider: NSItemProvider, type: String) {
         cancel()
@@ -40,14 +43,31 @@ import UniformTypeIdentifiers
             }
         }
     }
-    private func run(origin: String, current: Int, read: @escaping @Sendable () throws -> Data) {
+    func load(_ urls: [URL]) {
+        cancel()
+        guard allowed() else { return }
+        let current = generation, loadBatch = loadBatch
+        task = Task { [weak self] in
+            do {
+                let worker = Task.detached { try loadBatch(urls) }
+                let images = try await withTaskCancellationHandler { try await worker.value } onCancel: { worker.cancel() }
+                guard let self, !Task.isCancelled, current == self.generation, self.allowed() else { return }
+                self.task = nil; self.onBatch(images)
+            } catch {
+                guard let self, !Task.isCancelled, current == self.generation, self.allowed() else { return }
+                self.task = nil
+                self.onNotice("无法打开这批图片。请选择最多 10 张 PNG、JPEG 或 TIFF，总像素内存不超过 128 MB。")
+            }
+        }
+    }
+    private func run(origin: String, current: Int, recognize: Bool = false, read: @escaping @Sendable () throws -> Data) {
         let decode = decode
         task = Task { [weak self] in
             do {
                 let worker = Task.detached { try decode(read()) }
                 let image = try await withTaskCancellationHandler { try await worker.value } onCancel: { worker.cancel() }
                 guard let self, !Task.isCancelled, current == self.generation, self.allowed() else { return }
-                self.task = nil; self.onImage(image, origin)
+                self.task = nil; self.onImage(image, origin, recognize)
             } catch {
                 guard let self, !Task.isCancelled, current == self.generation, self.allowed() else { return }
                 self.task = nil

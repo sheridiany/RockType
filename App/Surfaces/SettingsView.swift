@@ -6,7 +6,7 @@ struct SettingsView: View {
     @State private var scenario: SettingsPresentation.Scenario
     @State private var values: [String: String]
     @State private var toggles: [String: Bool] = ["fuzzy": true, "correction": true, "candidate": true, "selection": true,
-        "fallback": true, "follow": true, "autoclose": true, "ocr": true]
+        "fallback": true, "follow": true, "autoclose": true, "ocr": true, "recent": true]
     @State private var feedback = ""
     @State private var keySet: Bool
     @State private var recordingShortcut: String?
@@ -14,7 +14,6 @@ struct SettingsView: View {
     @State private var selectedSelectionTab = "行为"
     @State private var actions = ["翻译", "解释", "总结", "润色", "搜索"]
     @State private var templates = ["翻译", "总结", "润色", "解释"]
-    @State private var showGuide = false
     @Environment(\.colorScheme) private var scheme
     private var p: Tokens.Palette { Tokens.palette(scheme) }
 
@@ -31,10 +30,7 @@ struct SettingsView: View {
             sidebar
             Rectangle().fill(p.line).frame(width: Tokens.Size.stroke)
             VStack(alignment: .leading, spacing: Tokens.Space.lg) {
-                VStack(alignment: .leading, spacing: Tokens.Space.sm) {
-                    Text(section.title).font(Tokens.Typography.font(Tokens.Typography.input, weight: .semibold))
-                    Text(section.detail).font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(p.secondary)
-                }
+                SettingsPageHeading(section: section)
                 // A finite pane keeps ImageRenderer and the interactive layout identical.
                 // Longer settings groups use explicit subpages, not a native scroll container.
                 VStack(alignment: .leading, spacing: Tokens.Space.md) { sectionContent }
@@ -50,23 +46,11 @@ struct SettingsView: View {
         .font(Tokens.Typography.font()).foregroundStyle(p.foreground)
         .frame(width: Tokens.Size.settingsWidth, height: Tokens.Size.settingsHeight)
         .background(p.background, in: RoundedRectangle(cornerRadius: Tokens.Radius.window))
-        .sheet(isPresented: $showGuide) {
-            VStack(spacing: 0) {
-                HStack { Spacer(); Button("关闭引导预览") { showGuide = false }.keyboardShortcut(.cancelAction) }
-                    .padding(Tokens.Space.md)
-                OnboardingDemo(step: .input, phase: .pending)
-            }
-        }
     }
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.xs) {
-            HStack(spacing: Tokens.Space.sm) {
-                Text("R").font(Tokens.Typography.font(weight: .semibold))
-                    .frame(width: Tokens.Size.control, height: Tokens.Size.control)
-                    .foregroundStyle(p.onAccent).background(p.accent, in: RoundedRectangle(cornerRadius: Tokens.Radius.control))
-                Text("RockType").font(Tokens.Typography.font(weight: .semibold))
-            }.padding(.vertical, Tokens.Space.md).padding(.horizontal, Tokens.Space.sm)
+            SettingsBrand().padding(.vertical, Tokens.Space.md).padding(.horizontal, Tokens.Space.sm)
             ForEach(SettingsSection.allCases) { item in
                 Button {
                     section = item; scenario = .normal; feedback = ""; recordingShortcut = nil
@@ -82,10 +66,10 @@ struct SettingsView: View {
                 }.buttonStyle(.plain).accessibilityAddTraits(section == item ? .isSelected : [])
             }
             Spacer(minLength: 0)
-            Text("一个输入法，一套工具。")
+            Text("设置预览")
                 .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(p.tertiary)
                 .padding(Tokens.Space.sm)
-        }.padding(Tokens.Space.md).frame(width: Tokens.U4.sidebarWidth)
+        }.padding(Tokens.Space.md).frame(width: Tokens.Size.sidebarWidth).background(p.cardSecondary)
     }
 
     @ViewBuilder private var sectionContent: some View {
@@ -132,22 +116,22 @@ struct SettingsView: View {
         row(title) { U4Choice(title: title, value: value(key), options: options) }
     }
     private func field(_ title: String, _ key: String) -> some View {
-        row(title) { U4EditableField(title: title, value: value(key)).frame(width: Tokens.U4.fieldWidth) }
+        row(title) { U4EditableField(title: title, value: value(key)).frame(width: Tokens.Size.fieldWidth) }
     }
 
     private var generalPane: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
             U4SectionTitle(title: "启动与外观")
             U4Card {
-                toggle("开机启动", "launch", detail: "登录后在菜单栏常驻")
+                toggle("开机启动", "launch", detail: "登录后自动启动 RockType")
                 U4Rule()
-                toggle("菜单栏显示北京时间", "beijing", detail: "默认关闭 · 固定 Asia/Shanghai")
-                choice("界面语言", "language", ["跟随系统", "简体中文", "English"])
+                toggle("在菜单栏显示 RockType", "menubar")
+                toggle("菜单栏显示北京时间", "beijing", detail: "固定北京时间，不受本地时区影响")
+                    .disabled(!(toggles["menubar"] ?? false))
                 choice("外观", "theme", ["跟随系统", "浅色", "深色"])
             }
             U4SectionTitle(title: "默认值")
             U4Card { choice("搜索引擎", "search", ["Google", "Bing", "DuckDuckGo", "百度"]) }
-            Button("重新打开首次引导") { showGuide = true }.buttonStyle(DesignButtonStyle(variant: .ghost))
         }
     }
     private var inputPane: some View {
@@ -211,6 +195,7 @@ struct SettingsView: View {
                 toggle("选中输入法时自动准备模型", "preload", detail: "只准备已下载模型，不开启麦克风")
                 toggle("AI 润色语音结果", "polish", detail: keySet ? "失败时保留原识别结果" : "请先配置 AI 连接")
                     .disabled(!keySet)
+                toggle("本地文字清理", "cleanup", detail: "整理口头填充词与标点，无需 AI")
                 row("按住说话", detail: "松开结束，Esc 取消，不自动发送") { Kbd("Fn") }
             }
             Text("密码框或 Secure Input 开启时，不填入语音。")
@@ -383,7 +368,7 @@ struct SettingsView: View {
                             if title == "翻译选区" && scenario == .conflict { Image(systemName: "exclamationmark.triangle").foregroundStyle(p.warn) }
                             Button(recordingShortcut == title ? "按下组合键…" : shortcutOverrides[title] ?? key) {
                                 recordingShortcut = title
-                            }.buttonStyle(DesignButtonStyle()).disabled(key == "待定义")
+                            }.buttonStyle(DesignButtonStyle()).disabled(key == "Shift" || key == "Tab")
                                 .accessibilityLabel("设置" + title + "快捷键")
                                 .onKeyPress { press in
                                     guard recordingShortcut == title else { return .ignored }
@@ -403,7 +388,7 @@ struct SettingsView: View {
                     }
                 }
             }
-            Text(recordingShortcut == nil ? "点击快捷键重新录制；输入法内 AI 的默认按键待 M6 确定。" : "按组合键完成录制，Esc 取消。")
+            Text(recordingShortcut == nil ? "点击快捷键重新录制；输入法内 AI 仅在组词时触发。" : "按组合键完成录制，Esc 取消。")
                 .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(p.secondary)
         }
     }
@@ -429,7 +414,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
             U4Card {
                 row("默认不保存内容", detail: "原文、截图与结果只在内存中；退出即清空。") { Image(systemName: "lock.shield").foregroundStyle(p.accent) }
-                row("会话内最近结果", detail: "最多 10 条，不落盘。") { Text("10 条").foregroundStyle(p.secondary) }
+                toggle("保留最近结果", "recent", detail: "最多 10 条，只保存在内存中。")
                 row("清除当前内容", detail: "清空结果和追问上下文，不影响另存的图片。") {
                     Button("清除") { feedback = "当前预览内容已清空（没有读取或删除真实内容）" }
                         .buttonStyle(DesignButtonStyle(variant: .danger))
@@ -451,7 +436,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: Tokens.Space.lg) {
             U4Card {
                 Text("RockType").font(Tokens.Typography.font(Tokens.Typography.display, weight: .semibold))
-                Text("设计基线 · D0").foregroundStyle(p.secondary)
+                Text("设置预览 · 合成数据").foregroundStyle(p.secondary)
                 Text("macOS 14 及以上 · Apple Silicon")
                 U4Rule()
                 Text("中文输入 · 双语候选 · 本地语音 · 划词与 AI · 截图")
@@ -461,9 +446,9 @@ struct SettingsView: View {
                 row("开源许可", detail: "主 App：MIT · 输入法：GPL v3，按进程隔离。") {
                     Button("查看说明") { feedback = "许可证见仓库 LICENSES 与 THIRD_PARTY_NOTICES" }.buttonStyle(DesignButtonStyle(variant: .ghost))
                 }
-                row("版本更新", detail: "自动更新将在分发阶段提供。") { Chip(text: "即将推出") }
+                row("版本更新", detail: "更新来源以安装版本的配置为准。") { Chip(text: "待配置") }
             }
-            Button("卸载 RockType…") { feedback = "卸载将在分发阶段提供；本预览不会删除程序或用户数据" }
+            Button("卸载 RockType…") { feedback = "安装版本中可选择保留用户数据；本预览不会删除程序或用户数据" }
                 .buttonStyle(DesignButtonStyle(variant: .danger))
         }
     }
