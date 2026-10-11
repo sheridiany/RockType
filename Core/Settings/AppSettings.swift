@@ -10,6 +10,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var selection = SelectionSettings()
     public var screenshot = ScreenshotSettings()
     public var ai = AIConnectionSettings()
+    /// Additional connection profiles. Secrets remain in Keychain under each profile's id.
+    public var aiProviders: [AIConnectionSettings]? = nil
+    public var aiTaskRoutes: [String: AITaskRoute]? = nil
     public var templates = OperationTemplate.defaults
     public var shortcuts = ShortcutSettings()
     public var privacy = PrivacySettings()
@@ -109,13 +112,15 @@ public struct ScreenshotSettings: Codable, Equatable, Sendable {
 }
 
 public struct AIConnectionSettings: Codable, Equatable, Sendable {
-    /// Stable Keychain account, not a credential. One connection in this product version.
+    /// Stable Keychain account for this provider, never a credential.
     public var id = "default"
     public var name = ""
     public var baseURL = ""
     public var defaultModel = ""
     public var defaultModelSupportsImages = false
     public var visionModel: String? = nil
+    /// Explicit opt-in only; a failed request may retry this model on the SAME provider.
+    public var fallbackModel: String? = nil
     public init() {}
 }
 
@@ -171,4 +176,10 @@ public struct ScreenshotAnnotationStyle: Codable, Equatable, Sendable {
     public init(colorHex: String = "D84A2F", width: Double = 5) {
         self.colorHex = colorHex; self.width = width
     }
+}
+
+public struct AITaskRoute: Codable, Equatable, Sendable {
+    public var providerID: String
+    public var model: String?
+    public init(providerID: String, model: String? = nil) { self.providerID = providerID; self.model = model }
 }
