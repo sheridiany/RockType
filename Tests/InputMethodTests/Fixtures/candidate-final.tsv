@@ -25,7 +25,7 @@ daily	laoshi	老师	老师	1
 daily	xuesheng	学生	学生	1
 daily	gongsi	公司	公司	1
 daily	tongshi	同事	同时	0
-daily	huiyi	会议	回忆	0
+daily	huiyi	会议	会议	1
 daily	wenti	问题	问题	1
 daily	fangfa	方法	方法	1
 daily	jieguo	结果	结果	1
@@ -140,7 +140,7 @@ ai	shangxiawenxuexi	上下文学习	上下文学习	1
 ai	shaoyangbenxuexi	少样本学习	少样本学习	1
 ai	lingyangbenxuexi	零样本学习	零样本学习	1
 development	lingpai	令牌	令牌	1
-development	bingfa	并发	兵法	0
+development	bingfa	并发	并发	1
 development	xianliu	限流	限流	1
 development	huidu	灰度	灰度	1
 development	maidian	埋点	卖点	0
@@ -194,8 +194,8 @@ sentence	zhegegongnengxuyaoceshi	这个功能需要测试	这个功能需要测�
 sentence	wozhengzaixuexibiancheng	我正在学习编程	我正在学习变成	0
 sentence	qingjianchawangluolianjie	请检查网络连接	请检查网络连接	1
 sentence	jintiandegongzuowanchengle	今天的工作完成了	今天的工作完成了	1
-sentence	woxiangheyibeikafei	我想喝一杯咖啡	我想和一杯咖啡	0
+sentence	woxiangheyibeikafei	我想喝一杯咖啡	我想喝一杯咖啡	1
 sentence	zhunishengrikuaile	祝你生日快乐	祝你生日快乐	1
 sentence	qinggaosuwonidexiangfa	请告诉我你的想法	请告诉我你的想法	1
-sentence	womenxiazhouzaitaolun	我们下周再讨论	我们下走在讨论	0
+sentence	womenxiazhouzaitaolun	我们下周再讨论	我们下周在讨论	0
 sentence	zhegefangankeyishangxian	这个方案可以上线	这个方案可以上线	1

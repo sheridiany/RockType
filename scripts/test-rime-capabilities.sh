@@ -2,6 +2,9 @@
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 runtime="$root/InputMethod"
+# Optional factory resource directory supports isolated trial replay with unchanged checks.
+(( $# <= 1 )) || { echo "Usage: $0 [Rime resource directory]" >&2; exit 2; }
+source_dir=${1:-"$root/Rime"}
 temporary=$(mktemp -d "${TMPDIR:-/tmp}/roarkt-rime-capabilities.XXXXXX")
 # lsof reports canonical paths (macOS /var is a symlink).
 temporary=$(cd "$temporary" && pwd -P)
@@ -9,12 +12,11 @@ trap 'rm -rf "$temporary"' EXIT
 mkdir -p "$temporary/bin" "$temporary/shared" "$temporary/bootstrap" "$temporary/build"
 cp "$runtime/bin/rime_deployer" "$temporary/bin/"
 ln -s "$runtime/lib" "$temporary/Frameworks"
-for resource in default.yaml key_bindings.yaml punctuation.yaml symbols.yaml pinyin.yaml luna_pinyin.dict.yaml essay.txt zh-hant-t-essay-bgw.gram; do
+for resource in default.yaml key_bindings.yaml punctuation.yaml symbols.yaml pinyin.yaml; do
   cp "$runtime/data/plum/$resource" "$temporary/shared/"
 done
-cp -R "$runtime/data/opencc" "$root/Rime/lua" "$temporary/shared/"
-cp "$root/Rime/"*.yaml "$temporary/shared/"
-cp "$root/Rime/default.custom.yaml" "$temporary/bootstrap/"
+cp -R "$source_dir/." "$temporary/shared/"
+cp "$source_dir/default.custom.yaml" "$temporary/bootstrap/"
 deploy() {
   if ! "$temporary/bin/rime_deployer" --build "$temporary/bootstrap" "$temporary/shared" "$temporary/build" > "$temporary/deploy.log" 2>&1; then
     cat "$temporary/deploy.log"; exit 1

@@ -16,9 +16,6 @@ switches:
   - name: ascii_mode
     reset: 0
     states: [中文, 西文]
-  - name: simplification
-    reset: 1
-    # 强制启用繁转简，不提供菜单开关。
   - name: full_shape
     reset: 0
     states: [半角, 全角]
@@ -60,10 +57,8 @@ engine:
     - table_translator@english
     - lua_translator@*roarkt_english_echo
   filters:
-    - simplifier@simplification
-    - lua_filter@*roarkt_simplified_only_filter
     - uniquifier
-    # Order visible candidates after simplification and deduplication.
+    # Order visible candidates after deduplication.
     - lua_filter@*roarkt_candidate_filter
 
 speller:
@@ -103,9 +98,9 @@ translator:
   max_homophones: 7
 
 grammar:
-  language: zh-hant-t-essay-bgw
-  collocation_max_length: 5
-  collocation_min_length: 2
+  language: zh-hans-t-essay-bgw
+  collocation_max_length: 4
+  collocation_min_length: 3
 
 english:
   dictionary: roarkt_en
@@ -115,11 +110,6 @@ english:
   initial_quality: 1.2
   comment_format:
     - xform/.+/〔EN〕/
-
-simplification:
-  option_name: simplification
-  opencc_config: tw2s.json
-  tips: none
 
 punctuator:
   import_preset: default

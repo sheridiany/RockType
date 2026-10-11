@@ -42,7 +42,7 @@ Voice dependency revisions are pinned in `Services/VoiceWorker/Package.resolved`
 
 ## Release provenance and outstanding source checks
 
-`LICENSES/PROVENANCE.md` records the precise notice-source revisions used in this audit. For librime dependencies these are the commits pinned by librime 1.16.0. The shipped Luna Pinyin dictionary is byte-identical to upstream revision 56b934b099dfbeab842320f13aa8b461a6ab3e42 (SHA-256 75bcf6eb3ff62b129882ed89cc22b2d80a5347aa72bcfa2ccc839bac298e7314).
+`LICENSES/PROVENANCE.md` records the precise notice-source revisions used in this audit. For librime dependencies these are the commits pinned by librime 1.16.0. The source Luna Pinyin dictionary used to generate the shipped simplified derivative is byte-identical to upstream revision 56b934b099dfbeab842320f13aa8b461a6ab3e42 (SHA-256 75bcf6eb3ff62b129882ed89cc22b2d80a5347aa72bcfa2ccc839bac298e7314).
 
 The repository contains prebuilt universal librime and plugin binaries. Their plugin build revisions and full static dependency bill of materials are not recorded. The current essay data also differs from upstream HEAD. Supplying present upstream license texts does not prove the provenance of those binaries/data. Before public distribution, the release owner must recover the exact build inputs or rebuild from pinned source, reconcile any additional notices, and publish the matching complete source. These checks remain open; this inventory is not a claim that source-distribution acceptance has passed. See `GPL-SOURCE.md`.
 
@@ -53,10 +53,9 @@ software development, product, design and collaboration, licensed under MIT.
 It is not extracted from user files or copied from upstream domain dictionaries.
 The source asset remains MIT; it is imported into the GPL input method's combined
 Rime dictionary. Rime auto-encodes ordinary entries, with 104 explicit polyphonic
-readings. Terms use traditional text for the existing Luna Pinyin/octagram pipeline,
-with simplified output supplied by its original OpenCC filter. The weight `100%`
-preserves existing preset frequencies for 245 entries; the other 822 use authored
-priority 800. No upstream frequency table is copied into this MIT asset.
+readings. Terms use simplified text. The weight `100%` inherits the final simplified
+preset frequency when it is at least 800; other terms use authored priority 800.
+No upstream frequency table is copied into this MIT asset.
 
 The English dictionary adds 65 entries and updates 19 existing entries for canonical
 case or technical priority, bringing the total to 30,261. The curation follows the
@@ -64,3 +63,38 @@ previous documented convention: lowercase alphabetic lookup codes, original outp
 case and punctuation (`finetune` → `fine-tune`), priority 15,000 while preserving
 higher existing weights. This original contribution does not change the combined
 English data asset's CC-BY-SA-4.0 license or its upstream attribution.
+
+## W-6 simplified production pipeline D
+
+`Rime/roarkt_base.dict.yaml` is a RockType derivative of Luna Pinyin (LGPL-3.0),
+with the original credits retained. macOS ICU Hant-Hans converts text; relative
+weights are resolved against the original essay, identical text/code weights
+are summed, and reading-aware corrections preserve 著/乾/瞭/藉 where appropriate.
+The original traditional Luna dictionary and OpenCC conversion data are not
+included in the input method's SharedSupport. The prebuilt librime binary still
+contains OpenCC code, so its Apache-2.0 notice remains applicable.
+
+`Rime/essay.txt` derives from [rime-essay-simp](https://github.com/rime/rime-essay-simp)
+`dc06d4c96ae72ad46b29e3aa824a5d1e8f721fd0` (`essay-zh-hans.txt`) and the repository's
+original essay: normalize text with ICU and preserve the maximum frequency per
+simplified word. Both are LGPL-3.0 data; the original essay's exact historical
+provenance caveat above remains open.
+
+An offline final pass uses OpenCC `556ed22496d650bd0b13b6c163be9814637970ae`
+`TSPhrases.txt` and `TSCharacters.txt` (Apache-2.0) as evidence for variant forms.
+Only forms with a shared dictionary reading are compared. The unmodified pinned
+simplified essay selects the preferred form; absent or <=1%-frequency alternatives
+are capped at frequency 1 without deleting their readings. These tables are not
+runtime dependencies. The derivative dictionaries remain LGPL-3.0; OpenCC's
+license and attribution are retained in `LICENSES/opencc/`.
+
+`Rime/zh-hans-t-essay-bgw.gram` is copied unchanged from
+[lotem/rime-octagram-data](https://github.com/lotem/rime-octagram-data) hans revision
+`f8ce3b534733e489a8470a7c2adf5a154e8ea069`, licensed LGPL-3.0. Upstream licenses
+are retained in `LICENSES/rime-essay-simp/`, `LICENSES/rime-octagram-data/`, and
+`LICENSES/rime-essay/`, with the full GPL text in `LICENSES/GPL-3.0.txt`.
+
+The simplified AI vocabulary remains MIT. Generation commands, original/derived
+hashes and variant counts are recorded in `docs/dictionary-simplification.md`.
+Only production resources are committed; intermediate resources and full audit
+tables live under ignored `.build/dictionary/w6/`.

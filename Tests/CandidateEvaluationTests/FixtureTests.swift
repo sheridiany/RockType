@@ -58,10 +58,10 @@ import Testing
     }
   }
   var readings: [Character: Set<String>] = [:]
-  for row in try dictionaryRows("InputMethod/data/plum/luna_pinyin.dict.yaml") where row.count >= 2 && row[0].count == 1 {
+  for row in try dictionaryRows("Rime/roarkt_base.dict.yaml") where row.count >= 2 && row[0].count == 1 {
     readings[row[0].first!, default: []].insert(row[1])
   }
-  let presetText = try String(contentsOf: root.appendingPathComponent("InputMethod/data/plum/essay.txt"), encoding: .utf8)
+  let presetText = try String(contentsOf: root.appendingPathComponent("Rime/essay.txt"), encoding: .utf8)
   var preset: [String: Int] = [:]
   for line in presetText.split(separator: "\n") {
     let fields = line.split(separator: "\t")
@@ -91,4 +91,28 @@ import Testing
     } else { uncodedCount += 1 }
   }
   #expect(uncodedCount > rows.count / 2, "ordinary terms should use the shared Rime character table")
+}
+
+@Test func simplifiedFactoryResourcesRetainReadingsWithoutConversionFilters() throws {
+  let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+  let base = try String(contentsOf: root.appendingPathComponent("Rime/roarkt_base.dict.yaml"), encoding: .utf8)
+  for reading in ["著\tzhu\t", "乾\tqian\t", "瞭\tliao\t", "藉\tji\t"] {
+    #expect(base.contains("\n" + reading), "semantic correction must retain reading: \(reading)")
+  }
+  let body = try #require(base.components(separatedBy: "...\n").last)
+  var keys = Set<String>()
+  for line in body.split(separator: "\n") where !line.hasPrefix("#") {
+    let fields = line.split(separator: "\t")
+    #expect(fields.count == 3)
+    guard fields.count == 3 else { continue }
+    #expect(keys.insert(fields[0] + "\t" + fields[1]).inserted)
+  }
+  for schema in ["roarkt", "roarkt_flypy"] {
+    let text = try String(contentsOf: root.appendingPathComponent("Rime/\(schema).schema.yaml"), encoding: .utf8)
+    #expect(!text.contains("simplifier@"))
+    #expect(!text.contains("opencc_config:"))
+    #expect(!text.contains("name: simplification"))
+    #expect(text.contains("language: zh-hans-t-essay-bgw"))
+    #expect(text.contains("contextual_suggestions: true"))
+  }
 }

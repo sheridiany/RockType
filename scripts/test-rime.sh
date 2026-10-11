@@ -7,8 +7,7 @@ if (( $# != 0 )); then
   [[ $# == 2 && "$1" == --bundle ]] || { print -u2 "Usage: $0 [--bundle <input-method.app>]"; exit 1; }
   bundle="${2:A}"
 fi
-shared_files=(default.yaml key_bindings.yaml punctuation.yaml symbols.yaml pinyin.yaml
-              luna_pinyin.dict.yaml essay.txt zh-hant-t-essay-bgw.gram)
+shared_files=(default.yaml key_bindings.yaml punctuation.yaml symbols.yaml pinyin.yaml)
 if [[ -n "$bundle" ]]; then
   deployer="$bundle/Contents/MacOS/rime_deployer"
   libraries="$bundle/Contents/Frameworks"
@@ -39,10 +38,12 @@ else
   for resource in "${shared_files[@]}"; do
     cp "$shared_source/$resource" "$temporary/shared/"
   done
-  cp -R "$runtime/data/opencc" "$temporary/shared/"
-  cp -R "$repo_dir/Rime/lua" "$temporary/shared/"
-  cp "$repo_dir/Rime/"*.yaml "$temporary/shared/"
+  cp -R "$repo_dir/Rime/." "$temporary/shared/"
 fi
+for resource in roarkt_base.dict.yaml essay.txt zh-hans-t-essay-bgw.gram; do
+  [[ -s "$temporary/shared/$resource" ]] || { print -u2 "Missing simplified resource: $resource"; exit 1; }
+done
+[[ ! -e "$temporary/shared/luna_pinyin.dict.yaml" && ! -e "$temporary/shared/opencc" && ! -e "$temporary/shared/zh-hant-t-essay-bgw.gram" ]]
 cp "$temporary/shared/default.custom.yaml" "$temporary/user/"
 
 if ! "$temporary/bin/rime_deployer" --build "$temporary/user" "$temporary/shared" \

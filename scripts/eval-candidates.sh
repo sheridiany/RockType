@@ -12,10 +12,16 @@ trap 'rm -rf "$temporary"' EXIT
 mkdir -p "$temporary/bin" "$temporary/shared" "$temporary/user" "$temporary/build"
 cp "$runtime/bin/rime_deployer" "$temporary/bin/"
 ln -s "$runtime/lib" "$temporary/Frameworks"
-for resource in default.yaml key_bindings.yaml punctuation.yaml symbols.yaml pinyin.yaml luna_pinyin.dict.yaml essay.txt zh-hant-t-essay-bgw.gram; do
+for resource in default.yaml key_bindings.yaml punctuation.yaml symbols.yaml pinyin.yaml; do
   cp "$runtime/data/plum/$resource" "$temporary/shared/"
 done
-cp -R "$runtime/data/opencc" "$temporary/shared/"
+# Historical C replay only; the simplified factory resources are self-contained.
+if [[ ! -f "$source_dir/roarkt_base.dict.yaml" ]]; then
+  for resource in luna_pinyin.dict.yaml essay.txt zh-hant-t-essay-bgw.gram; do
+    cp "$runtime/data/plum/$resource" "$temporary/shared/"
+  done
+  cp -R "$runtime/data/opencc" "$temporary/shared/"
+fi
 cp -R "$source_dir/." "$temporary/shared/"
 cp "$source_dir/default.custom.yaml" "$temporary/user/"
 /usr/bin/time -p "$temporary/bin/rime_deployer" --build "$temporary/user" "$temporary/shared" "$temporary/build" > "$output/deploy.log" 2>&1

@@ -7,7 +7,7 @@ version: "0.6.0"
 sort: by_weight
 use_preset_vocabulary: true
 import_tables:
-  - luna_pinyin
+  - roarkt_base
   - roarkt_ai
 ...
 

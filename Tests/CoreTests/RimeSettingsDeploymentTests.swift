@@ -15,13 +15,12 @@ import Testing
     let deployer = bin.appendingPathComponent("rime_deployer")
     try fm.copyItem(at: runtime.appendingPathComponent("bin/rime_deployer"), to: deployer)
     try fm.createSymbolicLink(at: temporary.appendingPathComponent("Frameworks"), withDestinationURL: runtime.appendingPathComponent("lib"))
-    for name in ["default.yaml", "key_bindings.yaml", "punctuation.yaml", "symbols.yaml", "pinyin.yaml", "luna_pinyin.dict.yaml", "essay.txt", "zh-hant-t-essay-bgw.gram"] {
+    for name in ["default.yaml", "key_bindings.yaml", "punctuation.yaml", "symbols.yaml", "pinyin.yaml"] {
         try fm.copyItem(at: runtime.appendingPathComponent("data/plum/" + name), to: shared.appendingPathComponent(name))
     }
-    try fm.copyItem(at: runtime.appendingPathComponent("data/opencc"), to: shared.appendingPathComponent("opencc"))
     let rime = repo.appendingPathComponent("Rime")
     try fm.copyItem(at: rime.appendingPathComponent("lua"), to: shared.appendingPathComponent("lua"))
-    for file in try fm.contentsOfDirectory(at: rime, includingPropertiesForKeys: nil) where file.pathExtension == "yaml" {
+    for file in try fm.contentsOfDirectory(at: rime, includingPropertiesForKeys: nil) where ["yaml", "txt", "gram"].contains(file.pathExtension) {
         try fm.copyItem(at: file, to: shared.appendingPathComponent(file.lastPathComponent))
     }
     try fm.copyItem(at: shared.appendingPathComponent("default.custom.yaml"), to: user.appendingPathComponent("default.custom.yaml"))
