@@ -104,7 +104,22 @@ final class RoarkTTranslationPanel: NSPanel {
     action.frame = NSRect(x: 12, y: 3, width: textWidth, height: height - 6)
     shortcutLabel.frame = NSRect(x: width - shortcutWidth - 8, y: (height - shortcutSize.height) / 2,
                                 width: shortcutWidth, height: shortcutSize.height)
-    orderFront(nil)
+    // Ordering an already visible panel forces a synchronous WindowServer round trip per key.
+    if !isVisible { orderFront(nil) }
+  }
+
+  /// Input changed: keep the window in place (hiding and re-showing it on every key flickers and
+  /// stalls the candidate window), but never show or commit the old translation.
+  func markStale() {
+    guard isVisible else { return }
+    let attributes = action.attributedTitle.length > 0
+      ? action.attributedTitle.attributes(at: 0, effectiveRange: nil) : [:]
+    action.attributedTitle = NSAttributedString(string: "正在翻译…", attributes: attributes)
+    action.isEnabled = false
+    action.toolTip = nil
+    shortcutLabel.isHidden = true
+    let scope = action.accessibilityLabel()?.components(separatedBy: "：").first ?? "翻译"
+    action.setAccessibilityLabel("\(scope)：正在翻译…")
   }
 
   @objc private func activate() { onActivate?() }

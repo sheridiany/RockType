@@ -190,8 +190,8 @@ final class SquirrelPanel: NSPanel {
   // Main function to add attributes to text output from librime
   // swiftlint:disable:next cyclomatic_complexity function_parameter_count
   func update(preedit: String, selRange: NSRange, caretPos: Int, candidates: [String], comments: [String], labels: [String], highlighted index: Int, page: Int, lastPage: Bool, update: Bool) {
-    // Invalidate presentation immediately when input or selection changes.
-    translationPanel.orderOut(nil)
+    // Invalidate the old translation in place when input or selection changes.
+    translationPanel.markStale()
     if update {
       self.preedit = preedit
       self.selRange = selRange
@@ -514,7 +514,8 @@ private extension SquirrelPanel {
     }
     alphaValue = theme.alpha
     invalidateShadow()
-    orderFront(nil)
+    // Re-ordering a visible panel synchronizes with WindowServer on every keystroke.
+    if !isVisible { orderFront(nil) }
     // voila!
   }
 

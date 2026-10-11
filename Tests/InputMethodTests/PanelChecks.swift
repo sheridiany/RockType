@@ -82,7 +82,9 @@ struct PanelChecks {
         .first { $0 !== translation && $0.isVisible }!
       candidate.update(preedit: "new", selRange: .empty, caretPos: 3,
         candidates: ["新"], comments: [], labels: [], highlighted: 0, page: 0, lastPage: true, update: true)
-      precondition(!attached.isVisible, "input changes hide the old translation immediately")
+      let attachedRow = attached.contentView!.subviews.compactMap { $0 as? NSButton }.first!
+      precondition(attached.isVisible && !attachedRow.isEnabled, "input changes invalidate in place without flicker")
+      precondition(attachedRow.attributedTitle.string == "正在翻译…", "old translation is never shown after input changes")
       let next = session.observe(other)!
       translation.show(session, beside: candidate, style: style)
       precondition(row.accessibilityLabel() == "整句翻译：正在翻译…", "old retained result never displayed")
