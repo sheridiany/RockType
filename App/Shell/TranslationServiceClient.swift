@@ -14,16 +14,27 @@ final class TranslationServiceClient {
     private var connection: NSXPCConnection?
     private var connectionID = UUID()
     private var pending: [UUID: (Error) -> Void] = [:]
+    private let makeConnection: () -> NSXPCConnection
+
+    init(makeConnection: @escaping () -> NSXPCConnection = {
+        let connection = NSXPCConnection(machServiceName: Identifiers.translationServiceName)
+        connection.setCodeSigningRequirement(Identifiers.codeRequirement(for: Identifiers.translationServiceName))
+        return connection
+    }) {
+        self.makeConnection = makeConnection
+    }
+
+    isolated deinit { connection?.invalidate() }
 
     func ping() async throws -> String {
-        try await request { proxy, reply in proxy.ping { reply(.success($0)) } }
+        try await request { proxy, reply in proxy.ping { @Sendable in reply(.success($0)) } }
     }
 
     func controllerInputGeneration() async throws -> InputGeneration {
         _ = ensureConnection()
         let id = connectionID
         let value: Int64 = try await request { proxy, reply in
-            proxy.controllerInputGeneration { value, error in
+            proxy.controllerInputGeneration { @Sendable value, error in
                 if let error { reply(.failure(error)) } else { reply(.success(value)) }
             }
         }
@@ -32,7 +43,7 @@ final class TranslationServiceClient {
     }
 
     func dictationEndpoint() async throws -> NSXPCListenerEndpoint? {
-        try await request { proxy, reply in proxy.dictationEndpoint { reply(.success($0)) } }
+        try await request { proxy, reply in proxy.dictationEndpoint { @Sendable in reply(.success($0)) } }
     }
 
     func invalidate() {
@@ -41,8 +52,7 @@ final class TranslationServiceClient {
 
     private func ensureConnection() -> NSXPCConnection {
         if let connection { return connection }
-        let connection = NSXPCConnection(machServiceName: Identifiers.translationServiceName)
-        connection.setCodeSigningRequirement(Identifiers.codeRequirement(for: Identifiers.translationServiceName))
+        let connection = makeConnection()
         connection.remoteObjectInterface = NSXPCInterface(with: RoarkTTranslationXPCProtocol.self)
         connectionID = UUID()
         let id = connectionID
@@ -97,7 +107,7 @@ final class TranslationServiceClient {
                         continuation.resume(with: result)
                     }
                 }
-                guard let proxy = connection.remoteObjectProxyWithErrorHandler({ [weak self] error in
+                guard let proxy = connection.remoteObjectProxyWithErrorHandler({ @Sendable [weak self] error in
                     reply(.failure(error))
                     Task { @MainActor in self?.disconnect(epoch) }
                 }) as? RoarkTTranslationXPCProtocol else {
