@@ -32,7 +32,7 @@
 | S3 | 权限中心与全局快捷键接线 | pi-platform | S1 的 Settings 模型 | 完成（待验收） |
 | S4 | 首次引导与输入法“设置”入口 | pi-ime | S1 的 Settings 模型 | 未开始 |
 | S4 | 首次引导与输入法“设置”入口 | pi-ime | S1 的 Settings 模型 | 完成（待验收） |
-| S5 | 集成验收 | Claude | S1–S4 | 未开始 |
+| S5 | 集成验收 | Claude（代码集成：agent/ui） | S1–S4 | 集成完成（待验收） |
 
 ### S1（pi-xpc，分支 agent/xpc）
 
@@ -214,3 +214,35 @@ swiftc -swift-version 6 -parse-as-library -module-name RoarkTApp \
 4. 设置 → 通用 的“重新运行引导”按钮调用 `onboarding.rerun()`。
 5. 请 Claude 确认 AI 表单最终提供者：S4 原文称“S1 的连接表单”，但 S1 所有权是客户端/存储，表单接线归 S2。本实现按复用 S2 的同一表单设计，避免重复状态。S3 权限中心的 start/stop 仍由共享外壳管理。
 以上接线未完成前，FR-E5 与输入法打开设置的端到端验收仍为阻塞；自动化通过不代表这些功能已集成。
+
+
+### S5 代码集成（agent/ui，2026-10-11）
+
+**集成完成（待验收）**。由 Claude 合并与验收；本次未 push、未 merge main。此前 S2/S3/S4 交接中的“待接线”描述为历史记录，以下为本次集成结果。
+
+- `dbe410d`：AppDelegate 组装同一个 SettingsStore、PermissionCenter、HotkeyCenter 和 OnboardingWindowController；设置权限/快捷键分区使用真实视图，删除 Pending 协议实现；通用页可重跑引导，引导复用权限中心与 AI 表单；补麦克风用途说明。
+- `974ac9a`：全局截图、翻译、总结快捷键显示两秒后消失的非激活轻提示，并记录 `DiagnosticEvent`；沿用 Core 现有闭合词汇 `hotkeyRegistration / unavailable`，不含按键文本、选区或屏幕内容。Fn 探针沿用 S3。停止、录制期间、Secure Input 与过期回调不会触发动作。HotkeyCenter 通过 Observation 订阅同一 SettingsStore 的变更并重注册；退出停止监听。
+- `d3dc734`：补充首次安装输入源注册修复。输入源步骤开始时查询包含未启用项的 TIS 列表；缺失时从当前登录会话注册已安装的输入法一次，最多轮询两秒。仅本会话注册过时，在用户打开键盘设置前正常退出并重开系统设置，以刷新可添加列表；退出失败不强杀，保留重试标记并说明。只注册，不调用 enable/select；文案为“系统设置 → 键盘 → 输入法 → 编辑… → ＋ → 简体中文 → RoarkT”。旧项目仅只读参考，没有迁入旧标识、升级或迁移逻辑。
+- `c3b2683`：设置翻译分区复用真实语言包检查/准备视图；统一后续功能的“即将推出”说明；补 SettingsStore → 快捷键的集成测试与混合启动参数优先级测试；Gallery 启动、reopen 和退出不触发引导、快捷键注册或设置保存。
+- 启动优先级沿用 S4 测试：`--gallery` / `--render-gallery` 高于 `--show-settings`，设置高于未完成的首次引导。重复启动复用设置窗口；完成引导标记仍由 OnboardingFlow 管理。
+- `App/Shell` 占位检查：已无“等待集成”的权限/快捷键/引导实现。剩余 `HotkeyRegistering` 为系统注册边界与测试注入接口，非产品占位。输入法偏好跨进程消费没有现成 XPC 接口可接，界面明确显示“当前只保存偏好，尚未同步到输入法进程”；该限制交由 Claude 确认后续归属，不声称即时生效。
+
+#### 验收证据
+
+| 检查 | 结果 | 证据与限制 |
+| --- | --- | --- |
+| `scripts/test.sh` | 通过 | 19 个 XCTest + 71 个 Swift Testing 测试；Rime 新鲜部署与旧标识扫描通过。新增测试覆盖真实 SettingsStore 变更后的重注册、持久化、冲突/恢复、停止后与过期回调不执行；输入源注册一次、延迟传播、已可见、缺安装/失败/超时、系统设置重开失败后重试。日志 `/tmp/roarkt-s5-test.log`。 |
+| `bash Tests/AppShellTests/run.sh` | 通过 | Hotkey / Permission checks；新增三种动作回调及 Secure Input 抑制断言。日志 `/tmp/roarkt-s5-shell.log`。 |
+| `scripts/build.sh` | 通过 | 本工作树初始化仓库锁定的输入法子模块后，主 App、翻译服务、输入法、注册工具全部构建与 Developer ID 签名验证通过；没有修改依赖版本或其他工作树。日志 `/tmp/roarkt-s5-build.log`，产物 `dist/`。 |
+| `scripts/render-gallery.sh` | 通过 | 最终代码产出 208 张浅深色 PNG，`dist/gallery/`；Gallery/Mock 数据接口保持可用。日志 `/tmp/roarkt-s5-gallery.log`。 |
+| 生产设置窗口自查 | 通过（局部自查） | 合成配置渲染 12 个分区 × 2 主题及菜单面板共 28 张图片，检查权限与快捷键分区的可见布局；设置窗口连续 show、关闭后重开保持单例。`dist/s5-review/` 中临时验证源与图片不提交。不是完整视觉验收。 |
+| `open dist/RoarkT.app` | 通过 | 实际启动最终签名应用，用系统辅助功能树确认“欢迎使用 RoarkT”自动出现、菜单栏标签为“RoarkT 菜单栏”；`⌘,` 打开“RoarkT · 设置”；用 `⌘Q` 退出后确认进程不存在。`dist/s5-review/launch-check.txt`。没有完成或跳过用户引导，也未申请权限。 |
+| `git diff --check` | 通过 | 无空白错误。 |
+
+#### 待人工验证与未完成项
+
+- 干净账户首次安装，系统设置已打开时的 TIS 注册 → 正常退出/重开 → “＋”列表出现两个方案；原生添加、菜单选择与真实试打。当前机器已有输入法，自动化注入检查不代替首次安装现场。
+- 真实 ⌃1 / ⌃⌥T / ⌃⌥S 的轻提示、系统冲突、重设、Fn 长按及与系统 Fn 行为的冲突、Secure Input；自动化覆盖调用与抑制，但未模拟用户全局按键。
+- 权限首次/拒绝/授予/撤销与跳转、语言包下载与取消、真实 AI 凭据四项能力测试、输入法菜单拉起设置端到端。
+- 纯键盘、VoiceOver、多屏、浅深主题完整设计验收、macOS 14 真机、开机启动及空闲功耗；输入法偏好跨进程即时消费仍未实现。
+- 保留当前 `agent/ui` 分支与独立工作树交给 Claude；没有运行或保留子代理，启动验证的主 App 已退出。
