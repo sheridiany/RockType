@@ -4,6 +4,7 @@ repo_dir=${0:A:h:h}
 cd "$repo_dir"
 swift test
 zsh "$repo_dir/scripts/test-rime.sh"
+bash "$repo_dir/Tests/AppShellTests/run.sh"
 # Guard: retain existing exclusions, plus only these upstream IME trees.
 scan_roots=()
 for entry in ./*(DN); do

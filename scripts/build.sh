@@ -35,7 +35,14 @@ xcrun actool "$repo_dir/Assets/AppIcon.icon" --compile "$app/Contents/Resources"
 
 codesign --force --options runtime --timestamp=none --sign "$identity" \
   --identifier com.roarkist.roarkt.translation "$app/Contents/Helpers/RoarkTTranslationService"
-codesign --force --options runtime --timestamp=none --sign "$identity" "$app"
+# Voice: the signed helper lives in Helpers; XPCServices exposes it to launchd.
+ROARKT_CODESIGN_IDENTITY="$identity" zsh "$repo_dir/scripts/build-voice-worker.sh"
+ditto "$repo_dir/dist/RoarkTVoiceWorker.xpc" "$app/Contents/Helpers/RoarkTVoiceWorker.xpc"
+mkdir -p "$app/Contents/XPCServices"
+ln -s ../Helpers/RoarkTVoiceWorker.xpc "$app/Contents/XPCServices/RoarkTVoiceWorker.xpc"
+codesign --force --options runtime --timestamp=none --sign "$identity" \
+  --entitlements "$repo_dir/Services/VoiceWorker/App.entitlements" "$app"
+# End voice integration.
 codesign --verify --strict --deep "$app"
 print "Built $app (signed with $identity)"
 
@@ -64,3 +71,6 @@ xcrun swiftc -swift-version 6 -parse-as-library -O "$repo_dir/Core/Identifiers.s
   "$repo_dir/Installer/tools/RegisterInputSource.swift" -o "$repo_dir/dist/RoarkTRegisterInputSource"
 codesign --force --options runtime --timestamp=none --sign "$identity" "$repo_dir/dist/RoarkTRegisterInputSource"
 print "Built $input_app and registration tool (signed with $identity)"
+
+# Packaged voice worker: launch, signature-bound XPC, wrong-identifier rejection.
+zsh "$repo_dir/Tests/VoiceWorkerSmoke/run.sh"
