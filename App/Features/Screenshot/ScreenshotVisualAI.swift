@@ -168,7 +168,7 @@ import RoarkTPlatform
     func completedResult(origin: String) -> (OperationResult, OperationTemplate)? {
         guard phase == .done, allowed() else { return nil }
         let template = Self.template(action)
-        let snapshot = ContentSnapshot(text: Self.title(action) + "：追问仅基于已完成的文字结果；原图和 OCR 原文不保留在对话中。",
+        let snapshot = ContentSnapshot(text: Self.title(action) + "：追问仅基于已完成的文字结果；原图和识别原文不保留在对话中。",
             source: .init(pid: ProcessInfo.processInfo.processIdentifier, applicationName: origin), method: .screenshotOCR)
         let session = OperationSession(snapshot: snapshot, turns: [.init(question: Self.title(action), answer: output)])
         return (.init(session: session, templateID: template.id, text: output, engine: model), template)

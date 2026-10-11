@@ -34,7 +34,7 @@ import RoarkTCore
             phase = .failed; notice = "翻译模板不可用，请在设置中恢复。"; return
         }
         let snapshot = ContentSnapshot(text: source, source: .init(pid: ProcessInfo.processInfo.processIdentifier,
-            applicationName: "截图 OCR"), method: .screenshotOCR)
+            applicationName: "截图文字识别"), method: .screenshotOCR)
         let session = OperationSession(snapshot: snapshot)
         let request = OperationRequest(session: session, template: template, settings: settings)
         let current = generation

@@ -129,7 +129,7 @@ import RoarkTPlatform
             } catch {
                 guard let self, current == self.loadGeneration, !Task.isCancelled else { return }
                 self.loading = false; self.loadTask = nil
-                if !(error is CancellationError) { self.report("无法读取磁盘截图历史，请检查目录权限。") }
+                if !(error is CancellationError) { self.report("无法读取已保存的截图历史，请检查历史目录能否访问后重试。") }
             }
         }
     }
@@ -148,7 +148,7 @@ import RoarkTPlatform
             } catch {
                 guard let self, current == self.revision, !Task.isCancelled else { return }
                 self.syncing = false; self.task = nil
-                if !(error is CancellationError) { self.report("截图历史磁盘同步失败；新增内容仅在内存，删除内容可能仍在磁盘，请检查目录权限后重试。") }
+                if !(error is CancellationError) { self.report("截图历史未能同步到磁盘。新增内容仅保留在内存中，待删除内容可能仍在磁盘；请检查可用空间和历史目录的访问权限后重试。") }
             }
         }
     }
