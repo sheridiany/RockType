@@ -1,9 +1,13 @@
 import Foundation
+import CryptoKit
 import Testing
 
 @Test func fixedEvaluationHasUniqueValidInputs() throws {
   let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
   let text = try String(contentsOf: root.appendingPathComponent("InputMethodTests/Fixtures/candidate-eval.tsv"), encoding: .utf8)
+  #expect(SHA256.hash(data: Data(text.utf8)).map { String(format: "%02x", $0) }.joined()
+          == "7b8d9651974895879a2d11a28325eb2ca86e6e046a2b6c1c345b41ab39d15f96",
+          "The original evaluation inputs and expectations are frozen")
   let rows = text.split(separator: "\n").filter { !$0.hasPrefix("#") }
   #expect(rows.count == 200)
   var codes = Set<String>()
@@ -41,11 +45,25 @@ import Testing
   let results = try String(contentsOf: output.appendingPathComponent("results.tsv"), encoding: .utf8)
   let rows = results.split(separator: "\n").dropFirst()
   #expect(rows.count == 200)
-  #expect(rows.filter { $0.hasSuffix("\t1") }.count >= 181)
+  #expect(rows.filter { $0.hasSuffix("\t1") }.count >= 188)
   #expect(rows.filter { $0.hasPrefix("ai\t") && $0.hasSuffix("\t1") }.count >= 57)
-  #expect(rows.filter { $0.hasPrefix("daily\t") && $0.hasSuffix("\t1") }.count >= 78)
-  #expect(rows.filter { $0.hasPrefix("development\t") && $0.hasSuffix("\t1") }.count >= 29)
-  #expect(rows.filter { $0.hasPrefix("sentence\t") && $0.hasSuffix("\t1") }.count >= 17)
+  #expect(rows.filter { $0.hasPrefix("daily\t") && $0.hasSuffix("\t1") }.count >= 79)
+  #expect(rows.filter { $0.hasPrefix("development\t") && $0.hasSuffix("\t1") }.count >= 32)
+  #expect(rows.filter { $0.hasPrefix("sentence\t") && $0.hasSuffix("\t1") }.count >= 20)
+  // Counts alone can conceal a lost everyday word offset by a new hit.
+  let previous = try String(contentsOf: root.appendingPathComponent("Tests/InputMethodTests/Fixtures/candidate-w6-r4.tsv"), encoding: .utf8)
+  let priorRows = previous.split(separator: "\n").dropFirst()
+  let actualByInput = Dictionary(uniqueKeysWithValues: rows.map { row in
+    let fields = row.split(separator: "\t", omittingEmptySubsequences: false)
+    return (fields.prefix(3).joined(separator: "\t"), fields[3...].joined(separator: "\t"))
+  })
+  for row in priorRows {
+    let fields = row.split(separator: "\t", omittingEmptySubsequences: false)
+    let key = fields.prefix(3).joined(separator: "\t")
+    if fields[0] == "daily" || fields.last == "1" {
+      #expect(actualByInput[key] == fields[3...].joined(separator: "\t"), "Preserve prior hit / daily ranking: \(key)")
+    }
+  }
 }
 
 @Test func domainDictionaryReadingsAreEncodableAndUnique() throws {
