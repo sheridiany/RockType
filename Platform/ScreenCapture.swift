@@ -1,9 +1,9 @@
 import AppKit
 import ScreenCaptureKit
 
-/// One-shot, memory-only capture. Call only in response to the screenshot action.
+/// Metadata is warmed in advance; pixels are captured only on explicit action.
 @MainActor public enum ScreenCapture {
-    public struct Frame {
+    public struct Frame: Sendable {
         public let displayID: CGDirectDisplayID
         public let rect: CGRect
         public let image: CGImage
@@ -11,13 +11,50 @@ import ScreenCaptureKit
             self.displayID = displayID; self.rect = rect; self.image = image
         }
     }
+    private static var content: SCShareableContent?
+    private static var refreshTask: Task<Void, Never>?
+    private static var refreshGeneration = 0
+
+    public static func startWarming() {
+        guard refreshTask == nil else { return }
+        refreshGeneration += 1
+        let generation = refreshGeneration
+        refreshTask = Task {
+            var previous: [NSDictionary] = []
+            var previousScreens: [CGRect] = []
+            while !Task.isCancelled {
+                if SecureInput.status() == .allowed,
+                   Permissions.status(for: .screenRecording) == .granted {
+                    // Window-server metadata only, never pixels or titles retained in logs.
+                    let windows = (CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [NSDictionary] ?? []).map {
+                        NSDictionary(dictionary: ["id": $0[kCGWindowNumber] ?? 0, "bounds": $0[kCGWindowBounds] ?? [:]])
+                    }
+                    let screens = NSScreen.screens.map(\.frame)
+                    if content == nil || windows != previous || screens != previousScreens {
+                        if let fresh = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true),
+                           !Task.isCancelled, generation == refreshGeneration {
+                            content = fresh; previous = windows; previousScreens = screens
+                        }
+                    }
+                } else { content = nil; previous = [] }
+                do { try await Task.sleep(for: .seconds(1)) } catch { return }
+            }
+        }
+    }
+    public static func stopWarming() {
+        refreshGeneration += 1
+        refreshTask?.cancel(); refreshTask = nil; content = nil
+    }
     public enum Failure: Error { case permission, unavailable }
     public static func capture() async throws -> [Frame] {
         try SecureInput.requireReadable()
         guard Permissions.status(for: .screenRecording) == .granted else { throw Failure.permission }
-        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        let content: SCShareableContent
+        if let cached = self.content { content = cached }
+        else { content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true); self.content = content }
         let own = content.applications.filter { $0.processID == ProcessInfo.processInfo.processIdentifier }
-        var frames: [Frame] = []
+        var captures: [Task<Frame, Error>] = []
+        defer { captures.forEach { $0.cancel() } }
         for screen in NSScreen.screens {
             try Task.checkCancellation()
             try SecureInput.requireReadable()
@@ -30,10 +67,21 @@ import ScreenCaptureKit
             config.width = Int(filter.contentRect.width * CGFloat(filter.pointPixelScale))
             config.height = Int(filter.contentRect.height * CGFloat(filter.pointPixelScale))
             config.showsCursor = false
-            let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+            let rect = screen.frame
+            captures.append(Task { @MainActor in
+                try Task.checkCancellation()
+                try SecureInput.requireReadable()
+                let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+                try Task.checkCancellation()
+                try SecureInput.requireReadable()
+                return Frame(displayID: display.displayID, rect: rect, image: image)
+            })
+        }
+        var frames: [Frame] = []
+        for capture in captures {
+            let frame = try await capture.value
             try Task.checkCancellation()
-            try SecureInput.requireReadable()
-            frames.append(Frame(displayID: display.displayID, rect: screen.frame, image: image))
+            frames.append(frame)
         }
         guard !frames.isEmpty else { throw Failure.unavailable }
         return frames

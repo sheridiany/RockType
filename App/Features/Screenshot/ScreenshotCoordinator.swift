@@ -3,6 +3,8 @@ import RoarkTPlatform
 import RoarkTCore
 import SwiftUI
 import UniformTypeIdentifiers
+import QuartzCore
+import os
 
 /// Retain in AppDelegate, call start/stop, and bind HotkeyCenter.screenshotAction to capture().
 @MainActor final class ScreenshotCoordinator {
@@ -34,8 +36,15 @@ import UniformTypeIdentifiers
          allowed: @escaping () -> Bool = { SecureInput.status() == .allowed }) {
         self.captureFrames = captureFrames; self.allowed = allowed
     }
-    func start() { running = true }
-    func stop() { running = false; cancel(); closePreview() }
+    private var warmupTask: Task<Void, Never>?
+    private static let timing = Logger(subsystem: Identifiers.appBundleID, category: "ScreenshotTiming")
+    func start() {
+        guard !running else { return }
+        running = true
+        ScreenCapture.startWarming()
+        warmupTask = Task { await OCR.prewarm() }
+    }
+    func stop() { running = false; warmupTask?.cancel(); warmupTask = nil; ScreenCapture.stopWarming(); cancel(); closePreview() }
     func cancel() {
         generation += 1
         importTask?.cancel(); importTask = nil; importProgress?.cancel(); importProgress = nil
@@ -48,6 +57,7 @@ import UniformTypeIdentifiers
     }
     func capture() {
         guard running, allowed() else { return }
+        let started = CACurrentMediaTime()
         cancel(); closePreview()
         let current = generation
         hidden = (NSApp?.windows ?? []).filter { $0.isVisible && $0.level != .normal }
@@ -72,6 +82,8 @@ import UniformTypeIdentifiers
                 let frames = try await self.captureFrames()
                 guard !Task.isCancelled, current == self.generation, self.allowed() else { return }
                 self.show(frames)
+                CATransaction.flush()
+                Self.timing.info("overlay_ms \((CACurrentMediaTime() - started) * 1000, privacy: .public)")
             } catch {
                 guard current == self.generation else { return }
                 self.cancel()

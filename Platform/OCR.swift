@@ -15,6 +15,20 @@ public struct OCR: Sendable {
     public enum Failure: Error { case invalidImage, recognitionFailed }
     public init() {}
 
+    /// Warm Vision with synthetic pixels only; never reads the screen.
+    public static func prewarm() async {
+        await Task.detached(priority: .utility) {
+            guard let context = CGContext(data: nil, width: 64, height: 64, bitsPerComponent: 8,
+                bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue), let image = context.makeImage() else { return }
+            let request = VNRecognizeTextRequest()
+            request.recognitionLevel = .accurate
+            request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en-US"]
+            request.usesLanguageCorrection = true
+            try? VNImageRequestHandler(cgImage: image).perform([request])
+        }.value
+    }
+
     /// Runs Vision locally, away from the main actor. No network, disk writes or logging.
     public func recognize(_ data: Data) async throws -> Result {
         try Task.checkCancellation()

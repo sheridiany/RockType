@@ -41,7 +41,7 @@ enum ScreenshotCompositor {
         for annotation in annotations { draw(annotation, image: image, size: size, context: ctx) }
         return ctx.makeImage()
     }
-    private static func draw(_ a: ScreenshotAnnotation, image: CGImage, size: CGSize, context c: CGContext) {
+    static func draw(_ a: ScreenshotAnnotation, image: CGImage, size: CGSize, context c: CGContext) {
         guard let start = a.points.first, let end = a.points.last else { return }
         c.saveGState(); defer { c.restoreGState() }
         c.setStrokeColor(a.color.cgColor); c.setFillColor(a.color.cgColor)
