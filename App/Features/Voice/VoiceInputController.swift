@@ -157,7 +157,6 @@ import RoarkTPlatform
                 guard environment.held(), environment.allowed(), environment.pid() == pid else { cancel(); return }
                 try recorder.start()
                 recordingStarted = environment.now()
-                state.previewStatus = previewPolicy.disabled.contains(model) ? "预览已暂停 · 松键后识别" : "实时预览 · 松键后确认"
                 show(.recording, "录音中 · 最长 3 分钟")
             } catch {
                 guard session == id else { return }
@@ -183,7 +182,6 @@ import RoarkTPlatform
         latency.stop = environment.now() - releasedAt
         latency.resamplingDuringCapture = recorder.resamplingSeconds
         let pendingPreview = previewTask
-        state.preview = ""
         recordingStarted = nil
         guard environment.allowed() else { cancel(); return }
         guard !audio.isEmpty else {
@@ -278,8 +276,8 @@ import RoarkTPlatform
         recorder.cancel(); bridge.cancel(target)
         if !preservingPrepared { worker.stop(); preparedModel = nil }
         target = nil; sourcePID = nil; recordingStarted = nil
-        state.result = ""; state.preview = ""; state.previewStatus = ""; state.phase = .hidden; state.message = ""
-        state.seconds = 0; state.levels = Array(repeating: 0.05, count: 9)
+        state.result = ""; state.phase = .hidden; state.message = ""
+        state.levels = Array(repeating: 0.05, count: 9)
         hud?.hide()
     }
     func tick() {
@@ -304,8 +302,7 @@ import RoarkTPlatform
             return
         }
         requestPreview()
-        state.seconds = Int(elapsed)
-        state.levels.removeFirst(); state.levels.append(recorder.level)
+        state.levels = Array(state.levels.dropFirst()) + [recorder.level]
     }
     private func requestPreview() {
         let model = VoiceModel(environment.settings().model)
@@ -318,18 +315,12 @@ import RoarkTPlatform
             guard let self else { return }
             defer { if session == id { previewTask = nil } }
             do {
-                let text = try await worker.preview(audio)
+                _ = try await worker.preview(audio)
                 guard session == id, !Task.isCancelled, environment.allowed() else { return }
                 let elapsed = environment.now() - start
                 previewPolicy.observe(model: model, seconds: elapsed, audioSeconds: Double(audio.count) / 64_000)
                 Self.log.info("voice preview model=\(model.rawValue, privacy: .public) seconds=\(elapsed) audio_seconds=\(Double(audio.count) / 64_000) degraded=\(self.previewPolicy.disabled.contains(model))")
-                guard state.phase == .recording else { return }
-                if previewPolicy.disabled.contains(model) {
-                    state.previewStatus = "预览跟不上 · 松键后识别"
-                } else {
-                    state.preview = String(VoiceAudioSegmentation.join([state.preview, text]).suffix(600))
-                }
-                hud?.show()
+                // SPEC-015: retain bounded recognition/fallback behavior, discard interim text.
             } catch {
                 guard session == id, !Task.isCancelled, environment.allowed() else { return }
                 previewPolicy.fail(model: model)
@@ -338,10 +329,6 @@ import RoarkTPlatform
                 Self.log.info("voice preview stopped model=\(model.rawValue, privacy: .public) seconds=\(elapsed) reason=\(reason, privacy: .public)")
                 // Real worker client tears down failed/timed-out work. Reload only after release.
                 preparedModel = nil
-                if state.phase == .recording {
-                    state.previewStatus = "预览已暂停 · 松键后识别"
-                    hud?.show()
-                }
             }
         }
     }
@@ -392,7 +379,7 @@ import RoarkTPlatform
     }
 
     private func showNoSpeech() {
-        show(.failed, "未检测到有效声音，请重试。")
+        show(.noSpeech, "未检测到有效声音，请重试。")
         let id = session
         dismissal = Task { [weak self] in
             do { try await Task.sleep(for: .seconds(2)) } catch { return }
