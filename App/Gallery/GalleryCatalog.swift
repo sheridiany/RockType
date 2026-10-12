@@ -16,6 +16,7 @@ enum GalleryCatalog {
     static let entries: [GalleryEntry] = PrimarySurfaceEntries.entries
         + InputVoiceGallery.entries
         + SettingsGallery.entries
+        + WordLookupGallery.entries
 }
 
 enum GalleryTheme: String, CaseIterable, Identifiable {
