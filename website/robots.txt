@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+Disallow: /deploy/
+Sitemap: https://type.roarkist.com/sitemap.xml

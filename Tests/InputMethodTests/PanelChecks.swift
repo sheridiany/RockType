@@ -69,6 +69,12 @@ struct PanelChecks {
       precondition(buttons.count == 5)
       precondition(buttons[2].accessibilityPerformPress() && controller.selected == 2)
       try render(candidate, "candidate-" + name)
+      if ProcessInfo.processInfo.environment["ROARKT_WEBSITE_RENDER_DIR"] != nil {
+        candidate.update(preedit: "ni hao", selRange: .empty, caretPos: 6,
+          candidates: ["你好", "您好", "你", "拟好", "呢"], comments: [], labels: [], highlighted: 0, page: 0,
+          lastPage: false, update: true)
+        try render(candidate, "website-candidate-" + name)
+      }
       var session = RoarkTCandidateTranslationSession()
       let ticket = session.observe(known)!
       session.receive("Hello", for: ticket)
