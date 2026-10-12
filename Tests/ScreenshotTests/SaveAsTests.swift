@@ -94,6 +94,10 @@ extension SaveAsTests {
             windowNumber: 0, context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53))
         coordinator.saveSelection(image, canvas: canvas, displayID: 1)
         XCTAssertNotNil(coordinator.routeCanvasEvent(escape), "The save panel must receive Escape before capture cancellation")
+        let right = try XCTUnwrap(NSEvent.mouseEvent(with: .rightMouseDown, location: .zero, modifierFlags: [],
+            timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+        XCTAssertNotNil(coordinator.routeCanvasEvent(right), "The save panel also owns context-menu gestures")
+        XCTAssertTrue(save.isPresenting)
         reply?(nil)
         XCTAssertFalse(save.isPresenting)
         coordinator.saveSelection(image, canvas: canvas, displayID: 1)

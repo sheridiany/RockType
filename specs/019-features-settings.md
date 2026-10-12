@@ -15,7 +15,7 @@
 | G1 | 功能开关运行时生效（App 侧） | pi-platform | 未开始 |
 | G2 | 输入法内 AI 开关在输入法侧生效 | pi-ime | 未开始 |
 | G3 | 设置界面按 Magpie 风格重做 + “功能”总览页 | pi-ui | 未开始 |
-| G4 | 截图时右键取消；修复整套测试中偶发失败的 `AnnotationStyleTests.testToolbarStyleChangeIsRememberedOnlyForThatTool`（单跑通过，整套偶发失败，疑似共享设置状态） | pi-xpc | 未开始 |
+| G4 | 截图时右键取消；修复整套测试中偶发失败的 `AnnotationStyleTests.testToolbarStyleChangeIsRememberedOnlyForThatTool`（单跑通过，整套偶发失败，疑似共享设置状态） | pi-xpc | 实现及 test/build 通过（0）；真实焦点/多屏待人工，见 [证据](evidence/019-G4.md) |
 
 ## G1 运行时生效（pi-platform）
 

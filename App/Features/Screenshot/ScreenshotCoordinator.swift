@@ -187,8 +187,15 @@ import os
             if event.window?.firstResponder is CaptureTextView || overlays.canvases.values.contains(where: \.isEditingText) { return event }
             cancel(); return nil
         }
-        if event.type == .leftMouseDown || event.type == .rightMouseDown,
-           event.window?.contentView is CaptureCanvas {
+        if event.type == .rightMouseDown {
+            // Only our active overlays own this gesture. Keep text/IME context menus intact,
+            // including an edit on another display; do not commit it via the outside-click path.
+            guard let canvas = event.window?.contentView as? CaptureCanvas,
+                  overlays.canvases.values.contains(where: { $0 === canvas }) else { return event }
+            if event.window?.firstResponder is CaptureTextView || overlays.canvases.values.contains(where: \.isEditingText) { return event }
+            cancel(); return nil
+        }
+        if event.type == .leftMouseDown, event.window?.contentView is CaptureCanvas {
             for canvas in overlays.canvases.values { canvas.finishTextEditingIfOutside(event) }
         }
         return event
