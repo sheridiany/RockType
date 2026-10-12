@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>RockType | Mac 上更自在的表达方式</title>
+    <meta
+      name="description"
+      content="中文输入法、本地语音、划词翻译与截图 OCR。一个原生 Mac 工具，保留你的输入习惯。"
+    />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="canonical" href="https://type.roarkist.com/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="zh_CN" />
+    <meta property="og:title" content="RockType | Mac 上更自在的表达方式" />
+    <meta
+      property="og:description"
+      content="中文输入法、本地语音、划词翻译与截图 OCR。一个原生 Mac 工具，保留你的输入习惯。"
+    />
+    <meta property="og:url" content="https://type.roarkist.com/" />
+    <meta
+      property="og:image"
+      content="https://type.roarkist.com/assets/og.png"
+    />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="/assets/icon.png" />
+    <link rel="stylesheet" href="/style.css" />
+    <script src="/site.js" defer></script>
+    <noscript><link rel="stylesheet" href="/no-script.css" /></noscript>
+  </head>
+  <body>
+    <a class="skip" href="#main">跳到正文</a>
+    <header class="site-header">
+      <div class="wrap nav-row">
+        <a class="brand" href="/" aria-label="RockType 首页"
+          ><img
+            src="/assets/icon.png"
+            width="32"
+            height="32"
+            alt=""
+          />RockType</a
+        ><button
+          class="menu-toggle"
+          aria-expanded="false"
+          aria-controls="navigation"
+        >
+          菜单
+        </button>
+        <nav id="navigation" aria-label="主导航">
+          <a href="/#features">功能</a><a href="/privacy/">隐私</a
+          ><a href="/releases/">更新日志</a
+          ><a href="https://github.com/Roarkai/RockType"
+            >GitHub <span aria-hidden="true">↗</span></a
+          >
+        </nav>
+        <a
+          class="button nav-download"
+          href="https://github.com/Roarkai/RockType/releases/latest"
+          >下载 macOS 版 <span aria-hidden="true">↓</span></a
+        >
+      </div>
+    </header>
+    <main id="main">
+      <section class="hero wrap">
+        <div class="hero-copy">
+          <p class="eyebrow">为你的 Mac，多一种表达。</p>
+          <h1>表达，<br />自在一点。</h1>
+          <p class="hero-description">
+            中文输入、本地语音、划词翻译与截图 OCR，<br
+              class="desktop-break"
+            />收进一个原生 Mac 工具。
+          </p>
+          <div class="actions">
+            <a
+              class="button"
+              href="https://github.com/Roarkai/RockType/releases/latest"
+              >下载 macOS 版 <span aria-hidden="true">↓</span></a
+            ><a class="text-link" href="#features"
+              >看看怎么用 <span aria-hidden="true">↘</span></a
+            >
+          </div>
+          <p class="requirements">Apple Silicon · macOS 14+ · 已签名</p>
+        </div>
+        <div class="hero-stage" role="group" aria-label="RockType 原生界面展示">
+          <div class="stage-orbit" aria-hidden="true"></div>
+          <div class="input-pair hero-input">
+            <picture class=""
+              ><source
+                media="(prefers-color-scheme: dark)"
+                srcset="/assets/candidate-dark.webp" />
+              <img
+                src="/assets/candidate-light.webp"
+                width="508"
+                height="138"
+                alt="拼音 ni hao 对应五个中文候选，首选为你好"
+                loading="lazy"
+                decoding="async" /></picture
+            ><picture class=""
+              ><source
+                media="(prefers-color-scheme: dark)"
+                srcset="/assets/candidate-translation-dark.webp" />
+              <img
+                src="/assets/candidate-translation-light.webp"
+                width="600"
+                height="68"
+                alt="候选译文 Hello，按 Tab 填入"
+                loading="lazy"
+                decoding="async"
+            /></picture>
+          </div>
+          <picture class="hero-translation"
+            ><source
+              media="(prefers-color-scheme: dark)"
+              srcset="/assets/translate-dark.webp" />
+            <img
+              src="/assets/translate-light.webp"
+              width="840"
+              height="498"
+              alt="RockType 翻译窗：Make room for what matters. 翻译为把时间留给重要的事。"
+              fetchpriority="high"
+              decoding="async" /></picture
+          ><picture class="hero-voice"
+            ><source
+              media="(prefers-color-scheme: dark)"
+              srcset="/assets/voice-dark.webp" />
+            <img
+              src="/assets/voice-light.webp"
+              width="224"
+              height="64"
+              alt="RockType 录音状态胶囊"
+              loading="lazy"
+              decoding="async"
+          /></picture>
+        </div>
+      </section>
+      <section class="compat wrap" aria-labelledby="compat-title">
+        <h2 id="compat-title">留在熟悉的窗口里。</h2>
+        <div
+          class="app-strip"
+          tabindex="0"
+          role="region"
+          aria-label="常见使用场景，可横向滚动"
+        >
+          <span><b aria-hidden="true">文</b>文本编辑</span
+          ><span><b aria-hidden="true">记</b>备忘录</span
+          ><span><b aria-hidden="true">S</b>Safari</span
+          ><span><b aria-hidden="true">C</b>Chrome</span
+          ><span><b aria-hidden="true">⌘</b>VS Code</span
+          ><span><b aria-hidden="true">›</b>终端</span>
+        </div>
+        <p class="small">
+          支持情况随应用和权限而异。<a
+            href="https://github.com/Roarkai/RockType/blob/main/docs/selection-compat.md"
+            >查看取词兼容说明 ↗</a
+          >
+        </p>
+      </section>
+      <section id="features" class="feature input-section wrap reveal">
+        <div class="feature-copy">
+          <h2>打中文，<br />顺手出英文。</h2>
+          <p>
+            全拼或小鹤双拼，沿用你的习惯。<br />候选旁边就是译文，按一下
+            <kbd>Tab</kbd> 填入。
+          </p>
+          <p class="detail">
+            需要再改一改？开启输入法 AI 后，<kbd>⌥</kbd
+            ><kbd>Tab</kbd> 切换改写、润色与翻译。
+          </p>
+        </div>
+        <div class="input-stage">
+          <div class="input-pair">
+            <picture class=""
+              ><source
+                media="(prefers-color-scheme: dark)"
+                srcset="/assets/candidate-dark.webp" />
+              <img
+                src="/assets/candidate-light.webp"
+                width="508"
+                height="138"
+                alt="拼音 ni hao 对应五个中文候选，首选为你好"
+                loading="lazy"
+                decoding="async" /></picture
+            ><picture class=""
+              ><source
+                media="(prefers-color-scheme: dark)"
+                srcset="/assets/candidate-translation-dark.webp" />
+              <img
+                src="/assets/candidate-translation-light.webp"
+                width="600"
+                height="68"
+                alt="候选译文 Hello，按 Tab 填入"
+                loading="lazy"
+                decoding="async"
+            /></picture>
+          </div>
+          <p class="image-caption">中文候选与译文，共用一次输入。</p>
+        </div>
+      </section>
+      <section class="voice-section wrap reveal">
+        <div class="section-heading">
+          <h2>按住 Fn，<br />说完就好。</h2>
+          <p>
+            录音在本机转成文字，回到正在使用的输入框。<br />还想精简口头表达？可选
+            AI 润色，只发送识别后的文字。
+          </p>
+        </div>
+        <div class="voice-stage">
+          <kbd class="fn-key">Fn</kbd
+          ><span class="voice-connector" aria-hidden="true"></span
+          ><button
+            class="voice-demo"
+            aria-pressed="true"
+            aria-label="暂停波形演示"
+            data-playing="true"
+          >
+            <img
+              src="/assets/voice-dark.webp"
+              width="224"
+              height="64"
+              alt=""
+            /><span class="voice-wave" aria-hidden="true"
+              ><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i
+            ></span></button
+          ><span class="voice-result">想法，变成一句完整的话。</span>
+        </div>
+        <p class="small voice-instruction">
+          点击语音胶囊可暂停演示。语音功能需先下载本地模型。
+        </p>
+      </section>
+      <section class="translation-section wrap reveal">
+        <div class="section-heading">
+          <h2>选中，即译。</h2>
+          <p>不必来回复制粘贴。选中文字，翻译就在旁边。</p>
+        </div>
+        <div class="translation-stage">
+          <div class="translation-image">
+            <picture class=""
+              ><source
+                media="(prefers-color-scheme: dark)"
+                srcset="/assets/selection-dark.webp" />
+              <img
+                src="/assets/selection-light.webp"
+                width="840"
+                height="96"
+                alt="划词工具栏：翻译、总结、润色、解释和搜索"
+                loading="lazy"
+                decoding="async" /></picture
+            ><picture class=""
+              ><source
+                media="(prefers-color-scheme: dark)"
+                srcset="/assets/translate-dark.webp" />
+              <img
+                src="/assets/translate-light.webp"
+                width="840"
+                height="498"
+                alt="可编辑原文、切换语言、朗读和复制的翻译窗口"
+                loading="lazy"
+                decoding="async"
+            /></picture>
+          </div>
+          <div class="translation-notes">
+            <div>
+              <h3>一句话，看懂。</h3>
+              <p>Apple 离线与 AI 翻译可切换。</p>
+            </div>
+            <div>
+              <h3>一个词，读准。</h3>
+              <p>本机词典释义，配合系统朗读。</p>
+            </div>
+            <div>
+              <h3>一段话，改好。</h3>
+              <p>润色后复制，或替换回原选区。</p>
+            </div>
+          </div>
+        </div>
+        <p class="small">
+          Apple 离线翻译需 macOS 26 和对应语言包；其他系统可配置 AI 翻译。
+        </p>
+      </section>
+      <section class="capture-section wrap reveal">
+        <div class="section-heading">
+          <h2>框选之后，<br />把重点讲清楚。</h2>
+          <p>
+            <kbd>⌃</kbd
+            ><kbd>1</kbd>
+            截下灵感，标注、贴图、识别文字。需要更多上下文时，再交给 AI。
+          </p>
+        </div>
+        <div class="capture-stage">
+          <picture class=""
+            ><source
+              media="(prefers-color-scheme: dark)"
+              srcset="/assets/screenshot-dark.webp" />
+            <img
+              src="/assets/screenshot-light.webp"
+              width="1520"
+              height="960"
+              alt="RockType 真实截图选区、边框手柄与标注工具栏，画布内容为把灵感留在这一刻"
+              loading="lazy"
+              decoding="async"
+          /></picture>
+        </div>
+        <ul class="capabilities">
+          <li>标注与贴图</li>
+          <li>滚动长截图</li>
+          <li>本机文字识别</li>
+          <li>图片翻译</li>
+          <li>二维码识别</li>
+          <li>内存历史默认 20 张</li>
+        </ul>
+      </section>
+      <section class="feature ai-section wrap reveal">
+        <div class="ai-picture">
+          <picture class=""
+            ><source
+              media="(prefers-color-scheme: dark)"
+              srcset="/assets/models-dark.webp" />
+            <img
+              src="/assets/models-light.webp"
+              width="1040"
+              height="620"
+              alt="RockType 按功能指定模型设置，为翻译与总结选择不同模型"
+              loading="lazy"
+              decoding="async"
+          /></picture>
+        </div>
+        <div class="feature-copy">
+          <h2>用你自己的模型。</h2>
+          <p>
+            接入自己的 AI 服务，按任务选择模型。<br />把常用提示词存成动作，再配一个顺手的快捷键。
+          </p>
+          <p class="detail">
+            服务商、密钥和费用由你掌握。<br />RockType 不要求注册账号。
+          </p>
+        </div>
+      </section>
+      <section id="privacy" class="privacy-section wrap reveal">
+        <div class="section-heading">
+          <h2>本机优先，<br />选择在你。</h2>
+          <p>哪些留在 Mac，哪些交给 AI，每一步都清楚。</p>
+        </div>
+        <div class="privacy-facts">
+          <div>
+            <span aria-hidden="true">↳</span>
+            <h3>录音本机识别</h3>
+            <p>语音识别不上传录音。</p>
+          </div>
+          <div>
+            <span aria-hidden="true">⌘</span>
+            <h3>密钥存钥匙串</h3>
+            <p>不写入普通设置文件。</p>
+          </div>
+          <div>
+            <span aria-hidden="true">⊘</span>
+            <h3>避开受保护输入</h3>
+            <p>密码框与安全输入状态不取词。</p>
+          </div>
+          <div>
+            <span aria-hidden="true">↗</span>
+            <h3>图片发送由你确认</h3>
+            <p>交给 AI 前可查看发送内容。</p>
+          </div>
+          <div>
+            <span aria-hidden="true">◎</span>
+            <h3>内容历史默认在内存</h3>
+            <p>截图保存到磁盘需要主动开启。</p>
+          </div>
+          <div>
+            <span aria-hidden="true">◌</span>
+            <h3>无需 RockType 账号</h3>
+            <p>AI 请求使用你配置的服务。</p>
+          </div>
+        </div>
+        <a class="text-link" href="/privacy/"
+          >完整隐私说明 <span aria-hidden="true">↗</span></a
+        >
+      </section>
+      <section class="shortcuts wrap reveal">
+        <h2>少挪鼠标，<br />多一点心流。</h2>
+        <dl>
+          <div>
+            <dt><kbd>Fn</kbd></dt>
+            <dd>按住说话</dd>
+          </div>
+          <div>
+            <dt><kbd>⌃</kbd><kbd>1</kbd></dt>
+            <dd>截图</dd>
+          </div>
+          <div>
+            <dt><kbd>⌃</kbd><kbd>⌥</kbd><kbd>T</kbd></dt>
+            <dd>翻译选区</dd>
+          </div>
+          <div>
+            <dt><kbd>⌃</kbd><kbd>⌥</kbd><kbd>S</kbd></dt>
+            <dd>总结选区</dd>
+          </div>
+          <div>
+            <dt><kbd>⌥</kbd><kbd>Tab</kbd></dt>
+            <dd>输入法 AI<small>需在设置开启</small></dd>
+          </div>
+          <div>
+            <dt><kbd>Tab</kbd></dt>
+            <dd>填入候选译文</dd>
+          </div>
+        </dl>
+      </section>
+      <section class="closing wrap reveal">
+        <img src="/assets/icon.png" width="64" height="64" alt="" />
+        <h2>现在，换一种<br />方式表达。</h2>
+        <a
+          class="button"
+          href="https://github.com/Roarkai/RockType/releases/latest"
+          >下载 macOS 版 <span aria-hidden="true">↓</span></a
+        >
+        <p class="small">前往 GitHub Releases，查看可用版本与安装说明。</p>
+      </section>
+    </main>
+    <footer class="wrap footer">
+      <a class="brand" href="/">RockType</a>
+      <nav aria-label="页脚导航">
+        <a href="https://github.com/Roarkai/RockType/releases/latest"
+          >版本与下载</a
+        ><a href="/privacy/">隐私</a><a href="/releases/">更新日志</a
+        ><a href="https://github.com/Roarkai/RockType/tree/main/InputMethod"
+          >输入法源码（GPL）</a
+        ><a href="https://github.com/Roarkai/RockType/issues">反馈</a>
+      </nav>
+      <p>© 2026 Roarkist</p>
+    </footer>
+  </body>
+</html>

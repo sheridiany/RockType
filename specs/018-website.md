@@ -1,7 +1,7 @@
 # SPEC-018 RockType 官网
 
 - 阶段：M7 分发（FR-F5 官网：介绍、下载、隐私说明、更新日志）
-- 状态：InProgress
+- 状态：InProgress（W1 实现完成；原生截图与发布验收待补）
 - 用户原话：“官网优化下，高级点。你看别人产品怎么写的。”
 - 现状：旧站在 `../RoType/website`（type.roarkist.com，旧品牌，只读参考，不复制旧标识）。RockType 尚无官网。
 
@@ -9,7 +9,7 @@
 
 | # | 任务 | 执行 | 状态 |
 | --- | --- | --- | --- |
-| W1 | 新建 `website/` 静态官网（首页 + 隐私 + 更新日志 + 404），高级感视觉与文案 | pi-ui | 未开始 |
+| W1 | 新建 `website/` 静态官网（首页 + 隐私 + 更新日志 + 404），高级感视觉与文案 | pi-ui | 实现完成；验收限制见 [证据](evidence/018-W1.md) |
 
 ## 参考结论（Claude 调研 Typeless / CleanShot X / Raycast / Bob）
 
@@ -41,7 +41,7 @@
 - 高级感：大字号紧字距标题、充足留白、12 列栅格最大宽 1120、深浅色自适应（深色为主视觉）、柔和渐变光晕背景、玻璃质感卡片、细描边；滚动进入轻微淡入上移（尊重 prefers-reduced-motion）。
 - 产品画面使用仓库里真实的离屏渲染图（`specs/evidence/`、各 worktree `.build/` 中的 PNG，复制到 `website/assets/` 并压缩为 webp/png，每张 < 300KB），必要时新渲染更干净的展示图；不使用示例占位文字“合成”“Preview model”等。
 - 移动端适配（≥ 360px）、可访问性（alt、对比度、键盘焦点）、Lighthouse 性能/可访问性尽量 ≥ 95。
-- SEO：title、description、OG 图（1200×630，新做）、canonical 先用 `https://rocktype.roarkist.com/` 占位并在 README 标注待定域名。
+- SEO：title、description、OG 图（1200×630，新做）、canonical、OG、robots、sitemap 使用用户确定的 `https://type.roarkist.com/`。
 - 下载链接：暂指向 `https://github.com/Roarkai/RockType/releases/latest` 并在 README 标“待发布确认”。
 
 ## 交付
@@ -49,3 +49,14 @@
 - `website/` 下文件 + `website/README.md`（结构、本地预览 `python3 -m http.server`、待确认项）。不部署、不 push。
 - 本地预览截图（桌面 1440、移动 390，深浅色）放 `.build/w1/`，写入 `specs/evidence/018-W1.md`。
 - 文案不得出现 RoType/洛克/RoarkTools 等旧标识。一个 commit。
+
+## 部署补充（用户确定，2026-10-12）
+
+- 目标是 Rocky Linux 9 + nginx + certbot 的共享服务器，不能替换全局 nginx 配置或影响其他站点。
+- 根目录 `/var/www/rocktype/current`，使用 `releases/<时间戳>` + `current` 软链。
+- 独立配置 `/etc/nginx/conf.d/type.roarkist.com.conf`；证书由 `certbot --nginx` 管理。
+- 交付 `scripts/deploy-website.sh` 与 `website/deploy/`；凭据由操作者提供为 `DEPLOY_HOST` / `DEPLOY_KEY`。只准备与离线校验，不执行部署。
+
+## 验收证据
+
+见 [018-W1](evidence/018-W1.md)。四个静态页面、真实产品图、SEO 与部署准备已实现；测试与构建通过。ego 原生截图超时，已保留同一浏览器 screen-media 打印预览与自动交互/无障碍证据；不冒充截图。Lighthouse、真实设备与生产服务器验收待补。未 push、未部署。

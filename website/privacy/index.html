@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>隐私说明 | RockType</title>
+    <meta
+      name="description"
+      content="了解 RockType 的本机处理、AI 发送、钥匙串和内容保存边界。"
+    />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="canonical" href="https://type.roarkist.com/privacy/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="zh_CN" />
+    <meta property="og:title" content="隐私说明 | RockType" />
+    <meta
+      property="og:description"
+      content="了解 RockType 的本机处理、AI 发送、钥匙串和内容保存边界。"
+    />
+    <meta property="og:url" content="https://type.roarkist.com/privacy/" />
+    <meta
+      property="og:image"
+      content="https://type.roarkist.com/assets/og.png"
+    />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="/assets/icon.png" />
+    <link rel="stylesheet" href="/style.css" />
+    <script src="/site.js" defer></script>
+    <noscript><link rel="stylesheet" href="/no-script.css" /></noscript>
+  </head>
+  <body>
+    <a class="skip" href="#main">跳到正文</a>
+    <header class="site-header">
+      <div class="wrap nav-row">
+        <a class="brand" href="/" aria-label="RockType 首页"
+          ><img
+            src="/assets/icon.png"
+            width="32"
+            height="32"
+            alt=""
+          />RockType</a
+        ><button
+          class="menu-toggle"
+          aria-expanded="false"
+          aria-controls="navigation"
+        >
+          菜单
+        </button>
+        <nav id="navigation" aria-label="主导航">
+          <a href="/#features">功能</a><a href="/privacy/">隐私</a
+          ><a href="/releases/">更新日志</a
+          ><a href="https://github.com/Roarkai/RockType"
+            >GitHub <span aria-hidden="true">↗</span></a
+          >
+        </nav>
+        <a
+          class="button nav-download"
+          href="https://github.com/Roarkai/RockType/releases/latest"
+          >下载 macOS 版 <span aria-hidden="true">↓</span></a
+        >
+      </div>
+    </header>
+    <main id="main" class="wrap document">
+      <a class="back-link" href="/">← 回到首页</a>
+      <h1>隐私，讲清楚。</h1>
+      <p class="lede">
+        RockType 优先使用本机能力。联网 AI 与内容保存，由你选择。
+      </p>
+      <p class="small">更新于 2026 年 10 月 12 日</p>
+      <section>
+        <h2>语音与本机处理</h2>
+        <p>
+          录音通过本地模型识别，不上传录音。语音模型需主动下载，下载会连接模型托管服务。开启
+          AI 润色时，识别后的文字会发送到你配置的 AI 服务。系统朗读使用 macOS
+          声音。
+        </p>
+        <p>
+          文字识别使用本机 Vision。本机词典查询不经过网络或 AI。Apple
+          离线翻译依赖系统支持和已安装语言包，语言包准备可能需要联网。
+        </p>
+      </section>
+      <section>
+        <h2>什么时候发送给 AI</h2>
+        <p>
+          你选择 AI 翻译、总结、润色或其他 AI
+          动作时，相关文字、提示词和本次对话上下文会发送到所选服务。离线翻译不可用时，可按你的配置回退到
+          AI。
+        </p>
+        <p>
+          图片 AI
+          会在发送前展示待发送内容并请求确认；若你选择记住允许，后续按已保存的选择执行。可在设置中管理该选择。AI
+          服务商的数据处理和保留规则以其隐私政策为准。
+        </p>
+      </section>
+      <section>
+        <h2>密钥与输入保护</h2>
+        <p>
+          AI 密钥存入 macOS 钥匙串，不写入普通设置文件。RockType
+          不提供账号系统，也不提供内容云同步。
+        </p>
+        <p>
+          安全输入开启或焦点位于受保护的输入区时，不取词、不请求
+          AI、不填入语音结果，也不写响应缓存。相关功能需要系统权限，权限可在
+          macOS 系统设置中撤销。
+        </p>
+      </section>
+      <section>
+        <h2>剪贴板与保存</h2>
+        <p>
+          取词优先直接读取选区。复制回退与替换原文会临时使用剪贴板，并仅在剪贴板仍属于本次操作时恢复，避免覆盖你随后复制的内容。
+        </p>
+        <p>
+          最近结果与截图历史默认保存在内存。截图历史默认最多 20
+          张；主动开启磁盘历史或执行保存后，图片保存在本机，需按需清理。输入法词频、个人词表和设置等本地数据会持久保存。
+        </p>
+      </section>
+      <section>
+        <h2>这个网站</h2>
+        <p>
+          本站不添加分析脚本、外部字体或追踪 Cookie。页面资源由本站提供。点击
+          GitHub 链接后，将适用 GitHub 的隐私政策。
+        </p>
+        <p>
+          托管服务器可能记录
+          IP、请求路径、时间等访问日志，用于运行维护。网站不会申请麦克风、摄像头或位置权限；首页波形只是演示。
+        </p>
+      </section>
+      <section>
+        <h2>反馈与源码</h2>
+        <p>
+          提交反馈前，请移除密钥、个人文字和屏幕内容。你可以在
+          <a href="https://github.com/Roarkai/RockType/issues">GitHub Issues</a>
+          提交问题，也可以查看
+          <a href="https://github.com/Roarkai/RockType">项目源码</a
+          >。输入法部分以 GPL v3 提供，其他部分的授权以仓库许可证为准。
+        </p>
+      </section>
+    </main>
+    <footer class="wrap footer">
+      <a class="brand" href="/">RockType</a>
+      <nav aria-label="页脚导航">
+        <a href="https://github.com/Roarkai/RockType/releases/latest"
+          >版本与下载</a
+        ><a href="/privacy/">隐私</a><a href="/releases/">更新日志</a
+        ><a href="https://github.com/Roarkai/RockType/tree/main/InputMethod"
+          >输入法源码（GPL）</a
+        ><a href="https://github.com/Roarkai/RockType/issues">反馈</a>
+      </nav>
+      <p>© 2026 Roarkist</p>
+    </footer>
+  </body>
+</html>
