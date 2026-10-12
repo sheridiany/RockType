@@ -12,7 +12,7 @@
 
 | # | 任务 | 执行 | 状态 |
 | --- | --- | --- | --- |
-| G1 | 功能开关运行时生效（App 侧） | pi-platform | 未开始 |
+| G1 | 功能开关运行时生效（App 侧） | pi-platform | 完成（test/build 0；独立审查阻塞，真实交互待验） |
 | G2 | 输入法内 AI 开关在输入法侧生效 | pi-ime | 未开始 |
 | G3 | 设置界面按 Magpie 风格重做 + “功能”总览页 | pi-ui | 未开始 |
 | G4 | 截图时右键取消；修复整套测试中偶发失败的 `AnnotationStyleTests.testToolbarStyleChangeIsRememberedOnlyForThatTool`（单跑通过，整套偶发失败，疑似共享设置状态） | pi-xpc | 未开始 |
@@ -45,3 +45,7 @@
 ## 通用
 
 遵守 AGENTS.md；先 `git merge main`；test/build 真实退出码 0；更新本表与 `specs/evidence/019-<编号>.md`；每任务一个 commit；需真实交互的标“待人工验证”。
+
+## 验收证据
+
+- G1：[App 侧运行时功能开关](evidence/019-G1.md)。沿用既定 FeatureSettings 契约，覆盖热键、语音、划词、截图/历史/贴图及 App 侧输入法 AI 配置撤销；新增 9 项回归。最终 test/build 实际退出 0；独立审查因提供方凭证缺失及 `fire-review did not start` 未完成，真实桌面/输入法交互待人工验证。

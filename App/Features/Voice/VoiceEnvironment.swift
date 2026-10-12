@@ -11,6 +11,7 @@ import RoarkTPlatform
     var microphoneGranted: () -> Bool
     var validate: @MainActor (VoiceModel) async throws -> URL
     var shortcutEnabled: () -> Bool
+    var featureEnabled: () -> Bool = { true }
     var modelPresent: (VoiceModel) -> Bool = { _ in true }
     var inputSourceSelected: () -> Bool = { false }
     var modelRevision: () -> Int = { 0 }
@@ -24,6 +25,7 @@ import RoarkTPlatform
              microphoneGranted: { AVCaptureDevice.authorizationStatus(for: .audio) == .authorized },
              validate: { try await models.validate($0) },
              shortcutEnabled: { store.settings.shortcuts.bindings[.voiceHoldToTalk] == Shortcut(key: nil, modifiers: .function) },
+             featureEnabled: { store.settings.enabledFeatures.voice },
              modelPresent: { models.isPresent($0) },
              inputSourceSelected: { InputSourceSnapshot.current().selectedRoarkTID != nil },
              modelRevision: { models.revision },

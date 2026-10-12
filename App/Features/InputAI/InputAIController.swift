@@ -114,6 +114,7 @@ import RoarkTPlatform
 
     private func configuration() -> [String: String] {
         let settings = store.settings
+        guard settings.enabledFeatures.inputMethodAI else { return [:] }
         let input = settings.input.inputAI ?? InputAISettings()
         guard let route = try? AIProviderRouting.resolve(settings, task: .inputAI) else { return [:] }
         let connection = route.connection

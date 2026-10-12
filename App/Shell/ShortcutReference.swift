@@ -1,9 +1,12 @@
 import SwiftUI
+import RoarkTCore
 
 /// Audited against CaptureCanvas and PinnedImageView, not the roadmap.
 struct ShortcutReference: View {
     @Environment(\.colorScheme) private var scheme
+    private var features: FeatureSettings { SettingsStore.shared.settings.enabledFeatures }
     var body: some View {
+        if features.screenshot {
         DesignSectionTitle(title: "截图遮罩内")
         DesignCard {
             row("↩ / ⌘C", "复制选区图片")
@@ -11,7 +14,7 @@ struct ShortcutReference: View {
             row("C", "复制放大镜处的 HEX 颜色值")
             row("⇧↩", "快速保存 PNG，并复制文件路径")
             row("R", "恢复上次选区（同一显示器）")
-            row("P", "将选区贴到屏幕")
+            if features.pinning { row("P", "将选区贴到屏幕") }
             row("⇧C", "识别选区文字并复制")
             ForEach(ScreenshotTool.allCases, id: \.rawValue) { tool in row(tool.shortcut, tool.title) }
             row("V", "退出标注工具，选择或移动")
@@ -30,6 +33,8 @@ struct ShortcutReference: View {
                 .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(Tokens.palette(scheme).secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        }
+        if features.pinning {
         DesignSectionTitle(title: "贴图内")
         DesignCard {
             row("⌘C", "复制图片")
@@ -43,6 +48,7 @@ struct ShortcutReference: View {
                 .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(Tokens.palette(scheme).secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
     }
     private func row(_ key: String, _ action: String) -> some View {
         HStack(alignment: .top, spacing: Tokens.Space.md) {

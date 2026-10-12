@@ -172,7 +172,9 @@ import RoarkTPlatform
         config.translation.engine = overlayUsesAI ? .ai : .offlineFirst
         overlay.run(image: image, lines: ocrLines, settings: config)
     }
+    var pinningEnabled: Bool { settings().enabledFeatures.pinning }
     func pinDisplayedImage() {
+        guard pinningEnabled else { return }
         guard check(), let image = displayedImage else { return }
         notice = onPin(image) ? "图片已贴图" : "无法贴图，请检查安全输入状态。"
     }

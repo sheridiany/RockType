@@ -38,9 +38,10 @@ import RoarkTPlatform
         var core: ShortcutAction? { ShortcutAction(rawValue: rawValue) }
     }
     enum Status: Equatable {
-        case unassigned, registered, conflict, unsupported, needsAccessibility, unavailable, system(Int32), recording
+        case disabled, unassigned, registered, conflict, unsupported, needsAccessibility, unavailable, system(Int32), recording
         var text: String {
             switch self {
+            case .disabled: "已停用（功能关闭）"
             case .unassigned: "未设置"
             case .registered: "已注册"
             case .conflict: "快捷键冲突，请重新录制"
@@ -52,6 +53,8 @@ import RoarkTPlatform
             }
         }
     }
+    private(set) var features = FeatureSettings()
+    @ObservationIgnored private let readFeatures: @MainActor () -> FeatureSettings
     private(set) var settings = ShortcutSettings()
     private(set) var statuses: [Action: Status] = [:]
     private(set) var recording: Action?
@@ -82,12 +85,14 @@ import RoarkTPlatform
          write: @escaping @MainActor (ShortcutSettings) -> Void,
          showSettings: @escaping @MainActor () -> Void,
          readTemplates: @escaping @MainActor () -> [OperationTemplate] = { [] },
+         readFeatures: @escaping @MainActor () -> FeatureSettings = { FeatureSettings() },
          unavailableAction: @escaping @MainActor (Action) -> Void = { _ in },
          selection: @escaping @MainActor (ShortcutAction) -> Void = { _ in },
          registrar: (any HotkeyRegistering)? = nil,
          allowed: @escaping @MainActor () -> Bool = { SecureInput.status() == .allowed },
          trusted: @escaping @MainActor () -> Bool = { Accessibility.isTrusted() },
          voiceListening: @escaping @MainActor (Bool) -> Bool = { _ in true }) {
+        self.readFeatures = readFeatures
         self.readTemplates = readTemplates
         self.readSettings = read; self.writeSettings = write; self.showSettings = showSettings
         self.unavailableAction = unavailableAction; self.selection = selection
@@ -126,13 +131,13 @@ import RoarkTPlatform
         guard running else { return }
         observationGeneration += 1
         let generation = observationGeneration
-        let updated = withObservationTracking { (readSettings(), readTemplates()) } onChange: { [weak self] in
+        let updated = withObservationTracking { (readSettings(), readTemplates(), readFeatures()) } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self, self.running, self.observationGeneration == generation else { return }
                 self.observeSettings()
             }
         }
-        settings = updated.0; templates = updated.1
+        settings = updated.0; templates = updated.1; features = updated.2
         registerAll()
     }
 
@@ -170,35 +175,41 @@ import RoarkTPlatform
     func beginRecording(_ action: Action) {
         recordingTemplate = nil; recording = action; registrationGeneration += 1; registrar.stop()
         suspendVoice()
-        statuses = Dictionary(uniqueKeysWithValues: Action.allCases.map { ($0, .recording) })
+        statuses = Dictionary(uniqueKeysWithValues: Action.allCases.map { ($0, FeatureAvailability.allows($0, readFeatures()) ? .recording : .disabled) })
     }
     func beginTemplateRecording(_ id: String) {
         recordingTemplate = id; recording = nil; registrationGeneration += 1; registrar.stop(); suspendVoice()
-        statuses = Dictionary(uniqueKeysWithValues: Action.allCases.map { ($0, .recording) })
-        templateStatuses = Dictionary(templates.map { ($0.id, .recording) }, uniquingKeysWith: { first, _ in first })
+        statuses = Dictionary(uniqueKeysWithValues: Action.allCases.map { ($0, FeatureAvailability.allows($0, readFeatures()) ? .recording : .disabled) })
+        templateStatuses = Dictionary(templates.map { ($0.id, FeatureAvailability.allows($0, readFeatures()) ? .recording : .disabled) }, uniquingKeysWith: { first, _ in first })
     }
     func cancelRecording() { recording = nil; recordingTemplate = nil; retry() }
     func retry() {
-        settings = readSettings(); templates = readTemplates()
-        suspendVoice()
+        settings = readSettings(); templates = readTemplates(); features = readFeatures()
         registerAll()
     }
 
     private func registerAll() {
-        guard running, recording == nil, recordingTemplate == nil else { return }
+        guard running else { return }
+        guard recording == nil, recordingTemplate == nil else {
+            statuses = Dictionary(uniqueKeysWithValues: Action.allCases.map { ($0, FeatureAvailability.allows($0, features) ? .recording : .disabled) })
+            templateStatuses = Dictionary(templates.map { ($0.id, FeatureAvailability.allows($0, features) ? .recording : .disabled) }, uniquingKeysWith: { first, _ in first })
+            return
+        }
         registrationGeneration += 1
         let generation = registrationGeneration
         registrar.stop(); statuses = [:]; templateStatuses = [:]
         for action in Action.allCases {
+            guard FeatureAvailability.allows(action, features) else { statuses[action] = .disabled; continue }
             guard let shortcut = shortcut(for: action) else { statuses[action] = .unassigned; continue }
             let duplicate = Action.allCases.contains { other in
-                guard other != action, let candidate = self.shortcut(for: other) else { return false }
+                guard other != action, FeatureAvailability.allows(other, features), let candidate = self.shortcut(for: other) else { return false }
                 return candidate.modifiers == shortcut.modifiers && candidate.key?.lowercased() == shortcut.key?.lowercased()
             }
-            let templateDuplicate = templates.contains { Self.same($0.shortcut, shortcut) }
+            let templateDuplicate = templates.contains { FeatureAvailability.allows($0, features) && Self.same($0.shortcut, shortcut) }
             guard !duplicate && !templateDuplicate else { statuses[action] = .conflict; continue }
             let handler: @MainActor () -> Void = { [weak self] in
                 guard let self, self.running, self.registrationGeneration == generation, self.recording == nil, self.recordingTemplate == nil else { return }
+                guard FeatureAvailability.allows(action, self.readFeatures()) else { return }
                 if action == .showSettings { self.showSettings(); return }
                 guard self.allowed() else { return }
                 if let core = action.core, Self.groupActions.contains(core) {
@@ -236,9 +247,10 @@ import RoarkTPlatform
               catch { statuses[action] = .unavailable }
         }
         for template in templates {
+            guard FeatureAvailability.allows(template, features) else { templateStatuses[template.id] = .disabled; continue }
             guard let shortcut = template.shortcut else { templateStatuses[template.id] = .unassigned; continue }
-            guard !Action.allCases.contains(where: { Self.same(self.shortcut(for: $0), shortcut) }),
-                  !templates.contains(where: { $0.id != template.id && Self.same($0.shortcut, shortcut) }) else {
+            guard !Action.allCases.contains(where: { FeatureAvailability.allows($0, features) && Self.same(self.shortcut(for: $0), shortcut) }),
+                  !templates.contains(where: { $0.id != template.id && FeatureAvailability.allows($0, features) && Self.same($0.shortcut, shortcut) }) else {
                 templateStatuses[template.id] = .conflict; continue
             }
             guard !shortcut.modifiers.intersection([.control, .option, .command]).isEmpty else {
@@ -247,7 +259,7 @@ import RoarkTPlatform
             do {
                 try registrar.register(shortcut) { [weak self] in
                     guard let self, self.running, self.registrationGeneration == generation,
-                          self.recording == nil, self.recordingTemplate == nil, self.allowed() else { return }
+                          self.recording == nil, self.recordingTemplate == nil, FeatureAvailability.allows(template, self.readFeatures()), self.allowed() else { return }
                     self.templateAction?(template.id)
                 }
                 templateStatuses[template.id] = .registered
@@ -274,5 +286,26 @@ import RoarkTPlatform
     isolated deinit {
         permissionTask?.cancel(); registrar.stop()
         if voiceEnabled { _ = voiceListening(false) }
+    }
+}
+
+
+/// Shared runtime policy for registration and presentation. Closing existing pins stays available.
+enum FeatureAvailability {
+    static func allows(_ snapshot: ContentSnapshot, _ features: FeatureSettings) -> Bool {
+        snapshot.method == .screenshotOCR ? features.screenshot : (features.selectionToolbar || features.selectionShortcuts)
+    }
+    static func allows(_ action: HotkeyCenter.Action, _ features: FeatureSettings) -> Bool {
+        switch action {
+        case .voiceHoldToTalk: features.voice
+        case .translateSelection, .summarizeSelection: features.selectionShortcuts
+        case .screenshot: features.screenshot
+        case .screenshotHistory: features.screenshot && features.screenshotHistory
+        case .togglePins, .nextPin, .closePins: features.pinning
+        case .showSettings: true
+        }
+    }
+    static func allows(_ template: OperationTemplate, _ features: FeatureSettings) -> Bool {
+        template.input == .image ? features.screenshot : features.selectionShortcuts
     }
 }

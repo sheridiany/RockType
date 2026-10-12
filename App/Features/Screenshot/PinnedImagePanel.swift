@@ -59,6 +59,8 @@ enum PinnedImageAction { case save, ocr, copyText, translate, translateImage, ba
     static let shared = PinnedImageController()
     private(set) var panels: [NSPanel] = []
     private(set) var history = PinnedImageHistory()
+    var imageActionsEnabled = true
+    var featureEnabled = true { didSet { if !featureEnabled { showAll(); exitMousePassthrough() }; updateMenu() } }
     var onAction: (CGImage, PinnedImageAction) -> Void = { _, _ in }
     private let allowed: () -> Bool
     private let copyImage: (CGImage) throws -> Void
@@ -85,7 +87,7 @@ enum PinnedImageAction { case save, ocr, copyText, translate, translateImage, ba
 
     /// Global AppKit points, bottom-left origin. Output pixels remain untouched.
     @discardableResult func pin(_ image: CGImage, at rect: CGRect) -> Bool {
-        guard allowed(), rect.width.isFinite, rect.height.isFinite,
+        guard featureEnabled, allowed(), rect.width.isFinite, rect.height.isFinite,
               rect.origin.x.isFinite, rect.origin.y.isFinite, rect.width > 0, rect.height > 0,
               let screen = NSScreen.screens.first(where: { $0.frame.contains(CGPoint(x: rect.midX, y: rect.midY)) }) ?? NSScreen.main else { return false }
         let frame = PinnedImageGeometry.fitted(rect, in: screen.visibleFrame)
@@ -144,6 +146,7 @@ enum PinnedImageAction { case save, ocr, copyText, translate, translateImage, ba
     }
 
     @discardableResult func restoreLast() -> Bool {
+        guard featureEnabled else { return false }
         guard allowed(), let entry = history.entries.last, pin(entry.image, at: entry.frame),
               let panel = panels.last, let view = panel.contentView as? PinnedImageView else { return false }
         history.removeLast()
@@ -200,7 +203,7 @@ enum PinnedImageAction { case save, ocr, copyText, translate, translateImage, ba
         let restore = NSMenuItem(title: "恢复最近关闭的贴图", action: #selector(restoreFromMenu), keyEquivalent: "z")
         restore.keyEquivalentModifierMask = [.command, .shift]; restore.target = self
         restore.image = ScreenshotSymbols.image(ScreenshotSymbols.history)
-        restore.isEnabled = !history.entries.isEmpty; menu.addItem(restore)
+        restore.isEnabled = !history.entries.isEmpty; if featureEnabled { menu.addItem(restore) }
         let exit = NSMenuItem(title: "退出全部鼠标穿透", action: #selector(exitMousePassthrough), keyEquivalent: "")
         exit.image = ScreenshotSymbols.image(ScreenshotSymbols.passthrough)
         exit.target = self; exit.isEnabled = panels.contains(where: \.ignoresMouseEvents); menu.addItem(exit)
@@ -331,12 +334,14 @@ private final class PinnedImagePanel: NSPanel {
             item.target = self; item.state = checked ? .on : .off; menu.addItem(item)
         }
         add("复制图片    ⌘C", #selector(copyPicture), symbol: ScreenshotSymbols.copy)
+        if controller?.imageActionsEnabled != false {
         add("另存为…", #selector(savePicture), symbol: ScreenshotSymbols.save)
         add("识别文字…", #selector(recognizeText), symbol: ScreenshotSymbols.ocr)
         add("识别并复制文字    ⇧C", #selector(copyRecognizedText), symbol: ScreenshotSymbols.recognizedText)
         add("翻译…（先核对识别文字）", #selector(translateText), symbol: ScreenshotSymbols.translate)
         add("覆盖式图片翻译…", #selector(translatePicture), symbol: ScreenshotSymbols.translate)
         add("识别二维码 / 条码…", #selector(recognizeCodes), symbol: ScreenshotSymbols.codes)
+        }
         menu.addItem(.separator())
         add("锁定位置与大小", #selector(toggleLock), symbol: ScreenshotSymbols.lock, checked: locked)
         add("鼠标穿透（从菜单栏“贴图”退出）", #selector(togglePassthrough), symbol: ScreenshotSymbols.passthrough, checked: window?.ignoresMouseEvents == true)
@@ -351,7 +356,7 @@ private final class PinnedImagePanel: NSPanel {
         }
         opacity.submenu = values; menu.addItem(opacity)
         menu.addItem(.separator())
-        add("恢复最近关闭    ⌘⇧Z", #selector(restoreRecent), symbol: ScreenshotSymbols.history)
+        if controller?.featureEnabled == true { add("恢复最近关闭    ⌘⇧Z", #selector(restoreRecent), symbol: ScreenshotSymbols.history) }
         add("关闭    Esc", #selector(closePicture), symbol: ScreenshotSymbols.cancel)
         return menu
     }

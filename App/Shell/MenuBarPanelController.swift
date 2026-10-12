@@ -79,6 +79,8 @@ struct ShellMenuBarPanel: View {
     let clock: MenuBarClock
     let showClock: Bool
     let aiStatus: String
+    var features = FeatureSettings()
+    var hasPins = false
     var recent: [OperationResult] = []
     var reopen: (OperationResult) -> Void = { _ in }
     var clear: () -> Void = {}
@@ -139,12 +141,19 @@ struct ShellMenuBarPanel: View {
                     .background(p.card, in: RoundedRectangle(cornerRadius: Tokens.Radius.card))
             }
             Button("清除当前内容", action: clear).buttonStyle(DesignButtonStyle(variant: .ghost))
+            if features.screenshot {
             Button(action: capture) {
                 HStack { Label("截图", systemImage: "viewfinder"); Spacer(); Text("框选屏幕").font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(p.secondary) }
             }.buttonStyle(DesignButtonStyle(variant: .secondary))
             if let screenshot { ScreenshotImportControls(coordinator: screenshot, prepare: prepareImageAction) }
+            }
+            if features.pinning {
             Button("找回最近关闭的贴图（\(pinHistoryCount)）", action: restorePin)
                 .buttonStyle(DesignButtonStyle(variant: .ghost)).disabled(pinHistoryCount == 0)
+            }
+            if !features.pinning && hasPins {
+                Button("关闭已有贴图") { PinnedImageController.shared.closeGroup() }.buttonStyle(DesignButtonStyle(variant: .ghost))
+            }
             if hasPassthroughPins {
                 Button("退出贴图鼠标穿透", action: exitPinPassthrough)
                     .buttonStyle(DesignButtonStyle(variant: .secondary))

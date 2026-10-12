@@ -59,8 +59,10 @@ import RoarkTPlatform
         }
     }
 
+    private var isAllowed: Bool { environment.featureEnabled() && environment.allowed() }
+
     func start(monitorEvents: Bool = true) {
-        guard !running else { return }
+        guard environment.featureEnabled(), !running else { return }
         running = true
         if monitorEvents {
             monitor.onEvent = { [weak self] event in
@@ -125,7 +127,7 @@ import RoarkTPlatform
     }
 
     func press() {
-        guard running, environment.shortcutEnabled(), environment.allowed(), environment.held() else { return }
+        guard running, environment.shortcutEnabled(), isAllowed, environment.held() else { return }
         let idle = ![.preparing, .loading, .recording, .recognizing, .polishing].contains(state.phase)
         let keepPrepared = idle && environment.settings().automaticallyPrepareModel && environment.inputSourceSelected() &&
             preparedModel == VoiceModel(environment.settings().model)
@@ -158,16 +160,16 @@ import RoarkTPlatform
                     Self.log.notice("voice binding unavailable reason=\(reason, privacy: .public); recording continues")
                     bridge.cancel(nil)
                 }
-                guard environment.held(), environment.allowed(), environment.pid() == pid else { cancel(); return }
+                guard environment.held(), isAllowed, environment.pid() == pid else { cancel(); return }
                 if preparedModel != model {
                     show(.loading, "模型加载中…")
                     let directory = try await environment.validate(model)
-                    guard session == id, !Task.isCancelled, environment.allowed() else { return }
+                    guard session == id, !Task.isCancelled, isAllowed else { return }
                     try await worker.prepare(directory: directory)
-                    guard session == id, !Task.isCancelled, environment.allowed() else { return }
+                    guard session == id, !Task.isCancelled, isAllowed else { return }
                     preparedModel = model
                 }
-                guard environment.held(), environment.allowed(), environment.pid() == pid else { cancel(); return }
+                guard environment.held(), isAllowed, environment.pid() == pid else { cancel(); return }
                 startingMicrophone = true
                 try recorder.start()
                 recordingStarted = environment.now()
@@ -199,7 +201,7 @@ import RoarkTPlatform
         latency.resamplingDuringCapture = recorder.resamplingSeconds
         let pendingPreview = previewTask
         recordingStarted = nil
-        guard environment.allowed() else { cancel(); return }
+        guard isAllowed else { cancel(); return }
         guard !audio.isEmpty else {
             bridge.cancel(target); self.target = nil; self.pasteTarget = nil
             showNoSpeech()
@@ -215,21 +217,21 @@ import RoarkTPlatform
                 // release (which would lose its warm model), and never commit preview text.
                 await pendingPreview?.value
                 latency.previewWait = environment.now() - stage
-                guard session == id, !Task.isCancelled, environment.allowed() else { return }
+                guard session == id, !Task.isCancelled, isAllowed else { return }
                 if preparedModel == nil {
                     stage = environment.now()
                     let model = VoiceModel(environment.settings().model)
                     let directory = try await environment.validate(model)
-                    guard session == id, !Task.isCancelled, environment.allowed() else { return }
+                    guard session == id, !Task.isCancelled, isAllowed else { return }
                     try await worker.prepare(directory: directory)
-                    guard session == id, !Task.isCancelled, environment.allowed() else { return }
+                    guard session == id, !Task.isCancelled, isAllowed else { return }
                     preparedModel = model
                     latency.modelRecovery = environment.now() - stage
                 }
                 stage = environment.now()
                 let text = try await worker.transcribe(audio)
                 latency.recognition = environment.now() - stage
-                guard session == id, !Task.isCancelled, environment.allowed() else { return }
+                guard session == id, !Task.isCancelled, isAllowed else { return }
                 stage = environment.now()
                 let normalized = environment.settings().cleanUpLocally
                     ? VoiceTextCleaner.clean(text)
@@ -248,7 +250,7 @@ import RoarkTPlatform
                 stage = environment.now()
                 let polished = await environment.polish(normalized)
                 latency.polish = environment.now() - stage
-                guard session == id, !Task.isCancelled, environment.allowed() else { return }
+                guard session == id, !Task.isCancelled, isAllowed else { return }
                 state.result = polished
                 let eligible = !insertionInvalidated && environment.pid() == sourcePID &&
                     VoiceInsertionPolicy.allowsAutomaticInsertion(text: polished, applicationID: target?.applicationID ?? pasteTarget?.applicationID)
@@ -260,10 +262,10 @@ import RoarkTPlatform
                 } else if eligible, let pasteTarget {
                     accepted = (try? await paste.paste(polished, target: pasteTarget, allowed: { [weak self] in
                         guard let self else { return false }
-                        return self.session == id && !self.insertionInvalidated && self.environment.allowed() && self.environment.pid() == self.sourcePID
+                        return self.session == id && !self.insertionInvalidated && self.isAllowed && self.environment.pid() == self.sourcePID
                     })) ?? false
                 } else { accepted = false }
-                guard session == id, !Task.isCancelled, environment.allowed() else { return }
+                guard session == id, !Task.isCancelled, isAllowed else { return }
                 latency.commit = environment.now() - stage
                 latency.total = environment.now() - releasedAt
                 lastLatency = latency
@@ -318,11 +320,12 @@ import RoarkTPlatform
         hud?.hide()
     }
     func tick() {
+        guard environment.featureEnabled() else { stop(); return }
         guard running else { return }
         idleTicks += 1
         if idleTicks >= 20 { idleTicks = 0; refreshPreparation() }
         guard state.phase != .hidden else { return }
-        if !environment.allowed() {
+        if !isAllowed {
             if [.preparing, .loading, .recording, .recognizing, .polishing].contains(state.phase) || !state.result.isEmpty { cancel() }
             return // Keep permission guidance visible; it contains no captured content.
         }
@@ -344,7 +347,7 @@ import RoarkTPlatform
     private func requestPreview() {
         let model = VoiceModel(environment.settings().model)
         guard previewTask == nil, !previewPolicy.disabled.contains(model),
-              environment.allowed(), let audio = recorder.preview(after: previewOffset) else { return }
+              isAllowed, let audio = recorder.preview(after: previewOffset) else { return }
         previewOffset += audio.count / MemoryLayout<Float>.size
         let id = session
         let start = environment.now()
@@ -353,13 +356,13 @@ import RoarkTPlatform
             defer { if session == id { previewTask = nil } }
             do {
                 _ = try await worker.preview(audio)
-                guard session == id, !Task.isCancelled, environment.allowed() else { return }
+                guard session == id, !Task.isCancelled, isAllowed else { return }
                 let elapsed = environment.now() - start
                 previewPolicy.observe(model: model, seconds: elapsed, audioSeconds: Double(audio.count) / 64_000)
                 Self.log.info("voice preview model=\(model.rawValue, privacy: .public) seconds=\(elapsed) audio_seconds=\(Double(audio.count) / 64_000) degraded=\(self.previewPolicy.disabled.contains(model))")
                 // SPEC-015: retain bounded recognition/fallback behavior, discard interim text.
             } catch {
-                guard session == id, !Task.isCancelled, environment.allowed() else { return }
+                guard session == id, !Task.isCancelled, isAllowed else { return }
                 previewPolicy.fail(model: model)
                 let elapsed = environment.now() - start
                 let reason = (error as? VoiceFailure) == .timeout ? "timeout" : "unavailable"
@@ -372,6 +375,7 @@ import RoarkTPlatform
 
     /// Input-source/settings changes only load a verified local model. Never opens the mic.
     func refreshPreparation() {
+        guard environment.featureEnabled() else { stop(); return }
         guard running else { return }
         let settings = environment.settings()
         if let previous = observedSettings, previous != settings { cancel() }
@@ -390,7 +394,7 @@ import RoarkTPlatform
         }
         let model = VoiceModel(settings.model)
         guard !active, !environment.held(), environment.modelPresent(model), preparedModel != model else { return }
-        guard environment.allowed() else {
+        guard isAllowed else {
             if preparation != nil { cancel() }
             attemptedPreparation = nil
             return
@@ -404,9 +408,9 @@ import RoarkTPlatform
             defer { if preparationID == id { preparation = nil } }
             do {
                 let directory = try await environment.validate(model)
-                guard preparationID == id, !Task.isCancelled, environment.allowed() else { return }
+                guard preparationID == id, !Task.isCancelled, isAllowed else { return }
                 try await worker.prepare(directory: directory)
-                guard preparationID == id, !Task.isCancelled, environment.allowed() else { return }
+                guard preparationID == id, !Task.isCancelled, isAllowed else { return }
                 preparedModel = model
             } catch {
                 guard preparationID == id else { return }
