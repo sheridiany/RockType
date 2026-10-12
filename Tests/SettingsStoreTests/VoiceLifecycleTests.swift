@@ -317,7 +317,7 @@ import RoarkTCore
         h.worker.pending?.resume(throwing: failure)
         h.worker.pending = nil
         for _ in 0..<30 { await Task.yield() }
-        #expect(h.controller.state.phase == .failed)
+        #expect(h.controller.state.phase == (failure == .empty ? .noSpeech : .failed))
         #expect(h.controller.state.message == message)
         #expect(h.bridge.texts.isEmpty)
         #expect(h.controller.state.result.isEmpty)
@@ -325,7 +325,7 @@ import RoarkTCore
     }
 }
 
-@MainActor @Test func voicePreviewIsDisplayOnlyAndFinalReprocessesAllAudio() async {
+@MainActor @Test func voiceInterimTextIsDiscardedAndFinalReprocessesAllAudio() async {
     let h = VoiceHarness()
     h.recorder.audio = Data(repeating: 1, count: 12 * 64_000)
     h.recorder.enablePreviews = true
@@ -336,7 +336,6 @@ import RoarkTCore
     #expect(h.worker.previewCalls == 1, "Never enqueue a backlog")
     h.now += 0.2; h.worker.resolvePreview("临时预览，")
     for _ in 0..<30 { await Task.yield() }
-    #expect(h.controller.state.preview == "临时预览，")
     #expect(h.controller.state.result.isEmpty && h.bridge.texts.isEmpty)
     h.controller.tick()
     for _ in 0..<30 { await Task.yield() }
@@ -345,7 +344,7 @@ import RoarkTCore
     #expect(!h.recorder.active && h.worker.pending == nil, "Stop capture first; serialize behind preview")
     h.worker.resolvePreview("松键后迟到的预览")
     for _ in 0..<30 { await Task.yield() }
-    #expect(h.controller.state.preview.isEmpty)
+    #expect(h.controller.state.result.isEmpty)
     #expect(h.worker.finalAudio == h.recorder.audio, "Final pass includes already previewed audio")
     h.worker.resolve("最终的完整结果。")
     for _ in 0..<30 { await Task.yield() }
@@ -363,7 +362,7 @@ import RoarkTCore
     h.worker.resolvePreview("慢速预览")
     for _ in 0..<30 { await Task.yield() }
     #expect(h.recorder.active)
-    #expect(h.controller.state.previewStatus.contains("跟不上"))
+    #expect(h.controller.state.phase == .recording)
     h.controller.tick()
     for _ in 0..<30 { await Task.yield() }
     #expect(h.worker.previewCalls == 1)
@@ -390,7 +389,7 @@ import RoarkTCore
             h.worker.previewPending?.resume(throwing: VoiceFailure.timeout); h.worker.previewPending = nil
         }
         for _ in 0..<30 { await Task.yield() }
-        #expect(h.controller.state.preview.isEmpty && h.bridge.texts.isEmpty)
+        #expect(h.controller.state.result.isEmpty && h.bridge.texts.isEmpty)
         if !secure {
             #expect(h.recorder.active)
             await h.recognize()
@@ -432,10 +431,10 @@ import RoarkTCore
     for _ in 0..<30 { await Task.yield() }
     h.controller.tick()
     #expect(h.worker.previewCalls == 2, "Old defer must not clear the new in-flight task")
-    #expect(h.controller.state.preview.isEmpty)
+    #expect(h.controller.state.result.isEmpty)
     h.worker.resolvePreview("新的会话预览")
     for _ in 0..<30 { await Task.yield() }
-    #expect(h.controller.state.preview == "新的会话预览")
+    #expect(h.controller.state.result.isEmpty)
     #expect(h.bridge.texts.isEmpty)
     h.controller.stop()
 }

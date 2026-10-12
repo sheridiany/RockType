@@ -13,11 +13,7 @@ enum InputVoiceGallery {
         }
     } + VoicePresentation.State.allCases.map { state in
         GalleryEntry(surface: "voice-hud", state: state.rawValue, title: "语音 HUD · " + state.title) {
-            AnyView(VoiceHUDDemo(initial: state, expanded: false).id(state.rawValue))
-        }
-    } + [VoicePresentation.State.failed, .missingModel].map { state in
-        GalleryEntry(surface: "voice-hud", state: state.rawValue + "-detail", title: "语音 HUD · " + state.title + "详情") {
-            AnyView(VoiceHUDDemo(initial: state, expanded: true).id(state.rawValue + "-detail"))
+            AnyView(VoiceHUDDemo(initial: state).id(state.rawValue))
         }
     }
 }
