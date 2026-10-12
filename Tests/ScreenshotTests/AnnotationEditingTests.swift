@@ -59,7 +59,7 @@ final class AnnotationEditingTests: XCTestCase {
         canvas.keyDown(with: try key(51)) // Undo clears selection: no accidental deletion by stale index.
         XCTAssertEqual(canvas.annotations.count, 1)
     }
-    @MainActor func testClickDoesNotCreateUndoAndEraserDeletionCanBeUndone() throws {
+    @MainActor func testClickDoesNotCreateUndoAndEraserDeletionCanBeUndone() async throws {
         let canvas = try canvas(); try draw(canvas)
         canvas.selectTool(nil)
         try mouse(canvas, .leftMouseDown, CGPoint(x: 150, y: 100))
@@ -70,6 +70,9 @@ final class AnnotationEditingTests: XCTestCase {
         canvas.keyDown(with: try key(14, text: "e"))
         try mouse(canvas, .leftMouseDown, CGPoint(x: 150, y: 100))
         try mouse(canvas, .leftMouseUp, CGPoint(x: 150, y: 100))
+        let deadline = ContinuousClock.now + .seconds(3)
+        while canvas.isErasing && ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(1)) }
+        XCTAssertFalse(canvas.isErasing)
         XCTAssertTrue(canvas.annotations.isEmpty)
         XCTAssertTrue(canvas.performKeyEquivalent(with: try key(6, flags: .command, text: "z")))
         XCTAssertEqual(canvas.annotations.count, 1)

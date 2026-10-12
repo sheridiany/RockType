@@ -15,7 +15,7 @@ enum ScreenshotTool: String, CaseIterable, Sendable {
         case .mosaic: "马赛克"
         case .text: "文字"
         case .number: "序号"
-        case .eraser: "删除标注"
+        case .eraser: "橡皮擦"
         }
     }
     var symbol: String {
@@ -39,7 +39,7 @@ enum ScreenshotTool: String, CaseIterable, Sendable {
     }
 }
 
-struct ScreenshotAnnotation: Equatable {
+struct ScreenshotAnnotation: Equatable, Sendable {
     var tool: ScreenshotTool
     var points: [CGPoint]
     var text = ""
@@ -82,6 +82,10 @@ struct ScreenshotAnnotationHistory {
         guard items.indices.contains(index) else { return }
         checkpoint(); items.remove(at: index)
     }
+    mutating func replaceAll(with next: [ScreenshotAnnotation]) {
+        guard next != items else { return }
+        checkpoint(); items = next
+    }
     mutating func undo() {
         guard let previous = past.popLast() else { return }
         future.append(items); items = previous
@@ -111,18 +115,19 @@ enum ScreenshotCompositor {
         for annotation in annotations { draw(annotation, image: image, size: size, context: ctx) }
         return ctx.makeImage()
     }
-    static func draw(_ a: ScreenshotAnnotation, image: CGImage, size: CGSize, context c: CGContext) {
+    static func draw(_ a: ScreenshotAnnotation, image: CGImage, size: CGSize, context c: CGContext, opacity: CGFloat = 1) {
         guard let start = a.points.first, let end = a.points.last else { return }
         c.saveGState(); defer { c.restoreGState() }
         c.setStrokeColor(a.color.cgColor); c.setFillColor(a.color.cgColor)
         c.setLineWidth(a.width); c.setLineCap(.round); c.setLineJoin(.round)
+        c.setAlpha(opacity * (a.tool == .highlighter ? 0.3 : 1))
         switch a.tool {
         case .rectangle:
             c.addPath(CGPath(roundedRect: a.rect, cornerWidth: min(8, a.rect.width / 2),
                              cornerHeight: min(8, a.rect.height / 2), transform: nil)); c.strokePath()
         case .ellipse: c.strokeEllipse(in: a.rect)
         case .pen, .highlighter, .line:
-            if a.tool == .highlighter { c.setAlpha(0.3); c.setLineCap(.butt) }
+            if a.tool == .highlighter { c.setLineCap(.butt) }
             if a.points.allSatisfy({ $0 == start }) {
                 c.fillEllipse(in: CGRect(x: start.x - a.width / 2, y: start.y - a.width / 2, width: a.width, height: a.width))
             } else { c.addLines(between: a.points); c.strokePath() }
@@ -246,10 +251,11 @@ extension ScreenshotTool {
         case .text: 17
         case .highlighter: 20
         case .mosaic: 16
+        case .eraser: 24
         default: 5
         }
     }
-    var widthRange: ClosedRange<Double> { self == .text ? 8...96 : 1...40 }
+    var widthRange: ClosedRange<Double> { self == .text ? 8...96 : self == .eraser ? 8...48 : 1...40 }
     func style(from styles: [String: ScreenshotAnnotationStyle]) -> ScreenshotAnnotationStyle {
         var style = styles[rawValue] ?? .init(width: defaultWidth)
         if !style.width.isFinite { style.width = defaultWidth }

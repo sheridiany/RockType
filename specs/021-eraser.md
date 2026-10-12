@@ -1,12 +1,12 @@
 # SPEC-021 截图橡皮擦体验
 
-- 状态：InProgress（2026-10-12）
+- 状态：Implemented（2026-10-12；自动化通过，真实手感待人工验收）
 - 用户原话：“截图中的橡皮擦功能可以优化下吗？做得像一点，加动效？”
 - 现状：橡皮擦 = 点击整条标注删除，无预览、无动效。
 
 | # | 任务 | 执行 | 状态 |
 | --- | --- | --- | --- |
-| E1 | 橡皮擦重做 | pi-surfaces | 未开始 |
+| E1 | 橡皮擦重做 | pi-surfaces | 完成实现与自动化验证；真实手感待人工 |
 
 ## 设计（参考 CleanShot X、Snipaste、PixPin、Procreate/Freeform 橡皮）
 
@@ -24,3 +24,10 @@
 - 单元测试：路径与标注命中、笔画切分（含首尾、中段、全擦）、一次拖动一步撤销、导出无残影。
 - 离屏：擦头光标、悬停高亮、擦除过程关键帧（深浅背景）放 `.build/e1/`。
 - 真实手感待人工验证。遵守 AGENTS.md；先 `git merge main`；test/build 真实退出码 0；更新本表与 `specs/evidence/021-E1.md`；一个 commit。
+
+## 验收证据
+
+- [E1 实现、验证与未验证项](evidence/021-E1.md)。已合并 main `796a961`。
+- 圆形擦头、悬停预告、连续擦除、自由笔画局部切分、单次拖动一次撤销、缩小淡出与碎屑、撤销淡入、减少动态效果、导出隔离均已实现。
+- `scripts/test.sh` 与 `scripts/build.sh` 真实退出码均为 0；最终日志分别为 `.build/e1/final-test.log`、`.build/e1/verified-build.log`，对应 `.exit` 留档。272 XCTest（5 项显式跳过），Swift Testing 报告 338 项（9 项 opt-in 跳过）；完整门禁通过。
+- 深浅色离屏关键帧、工具栏及导出图见 `.build/e1/`。真实输入手感、端到端 60fps、多屏光标恢复和 VoiceOver 待从 main 安装后人工验收；未安装/注册或启动本 worktree 输入法。

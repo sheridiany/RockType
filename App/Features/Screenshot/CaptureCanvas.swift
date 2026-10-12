@@ -77,9 +77,10 @@ import os
         return (tool ?? .rectangle).style(from: toolStyles)
     }
     private func setStyle(_ style: ScreenshotAnnotationStyle) {
-        guard allowed() else { onCancel(); return }
+        if tool != .eraser, deferUntilErased({ [weak self] in self?.setStyle(style) }) { return }
+        guard allowed() else { cancelCapture(); return }
         finishTextEditing()
-        guard let tool, tool != .eraser else { return }
+        guard let tool else { return }
         toolStyles[tool.rawValue] = style
         let sanitized = tool.style(from: toolStyles)
         toolStyles[tool.rawValue] = sanitized; onStyleChange(tool, sanitized)
@@ -92,6 +93,7 @@ import os
             history.replace(at: index, with: item); updateAnnotations()
         }
         updateToolbar()
+        if let pointer { updateEraserPointer(at: pointer) }
     }
     private func annotation(tool: ScreenshotTool, at point: CGPoint) -> ScreenshotAnnotation {
         let style = tool.style(from: toolStyles)
@@ -109,7 +111,7 @@ import os
             for _ in 0..<min(12, abs(steps)) { cycleElement(parent: steps > 0) }
             return
         }
-        guard let tool, tool != .eraser else { return }
+        guard tool != nil else { return }
         scrollRemainder += event.scrollingDeltaY / (event.hasPreciseScrollingDeltas ? 12 : 1)
         let steps = scrollRemainder.rounded(.towardZero)
         guard steps != 0 else { return }
@@ -117,25 +119,122 @@ import os
         var style = activeStyle; style.width += steps; setStyle(style)
     }
     private var history = ScreenshotAnnotationHistory()
+    private var eraserEffects: CaptureEraserEffects!
+    private var eraserSession: ScreenshotEraseSession?
+    private var eraserPreview: [ScreenshotAnnotation]?
+    private var eraserPrevious = CGPoint.zero
+    private var eraserActions: [@MainActor () -> Void] = []
+    private var hoverTask: Task<Void, Never>?
+    private var hoverRevision = 0
+    private var eraserGeneration = 0
+    var isErasing: Bool { eraserSession != nil }
+    private static let eraserCursor = NSCursor(image: NSImage(size: NSSize(width: 1, height: 1), flipped: false) { _ in true }, hotSpot: .zero)
+
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        guard tool == .eraser, allowed() else { return }
+        let rect = selection.intersection(bounds)
+        guard !rect.isEmpty else { return }
+        let cut = toolbar?.isHidden == false ? rect.intersection(toolbar!.frame) : .null
+        if cut.isNull || cut.isEmpty { addCursorRect(rect, cursor: Self.eraserCursor); return }
+        for area in [CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: cut.minY - rect.minY),
+                     CGRect(x: rect.minX, y: cut.maxY, width: rect.width, height: rect.maxY - cut.maxY),
+                     CGRect(x: rect.minX, y: cut.minY, width: cut.minX - rect.minX, height: cut.height),
+                     CGRect(x: cut.maxX, y: cut.minY, width: rect.maxX - cut.maxX, height: cut.height)] where !area.isEmpty {
+            addCursorRect(area, cursor: Self.eraserCursor)
+        }
+    }
+    private func clearEraserHover() {
+        hoverRevision += 1; hoverTask?.cancel(); hoverTask = nil
+        if !annotationView.hoveredIndices.isEmpty { annotationView.hoveredIndices = []; annotationView.needsDisplay = true }
+    }
+    private func updateEraserPointer(at point: CGPoint) {
+        let inside = tool == .eraser && allowed() && selection.contains(point) && toolbar?.frame.contains(point) != true
+        eraserEffects.center = inside ? point : nil
+        eraserEffects.diameter = CGFloat(ScreenshotTool.eraser.style(from: toolStyles).width)
+        clearEraserHover()
+        guard inside, eraserSession == nil else { return }
+        let items = history.items, revision = hoverRevision
+        let sweep = ScreenshotEraser.Sweep(from: point, to: point, radius: eraserEffects.diameter / 2)
+        hoverTask = Task { [weak self] in
+            let work = Task.detached(priority: .userInitiated) { try ScreenshotEraser.hovered(items, sweep: sweep) }
+            let indices = await withTaskCancellationHandler(operation: { try? await work.value }, onCancel: { work.cancel() })
+            guard let self, !Task.isCancelled, self.hoverRevision == revision, self.allowed() else { return }
+            self.annotationView.hoveredIndices = indices ?? []; self.annotationView.needsDisplay = true
+        }
+    }
+    private func deferUntilErased(_ action: @escaping @MainActor () -> Void) -> Bool {
+        guard let session = eraserSession else { return false }
+        eraserActions.append(action); session.finish(); return true
+    }
+    private func beginErasing(at point: CGPoint) {
+        selectedAnnotation = nil; clearEraserHover()
+        annotationView.restoredIndices = []; annotationView.restorationOpacity = 1
+        let session = ScreenshotEraseSession(items: history.items)
+        eraserSession = session; eraserPreview = history.items; eraserPrevious = point; dragging = true
+        session.allowed = { [weak self] in self?.allowed() == true }
+        session.onDenied = { [weak self] in self?.cancelCapture() }
+        session.onChange = { [weak self] result in
+            guard let self else { return }
+            self.eraserPreview = result.items
+            for removal in result.removed { self.eraserEffects.removed([removal.annotation], sweep: removal.sweep) }
+            self.updateAnnotations()
+        }
+        session.onFinish = { [weak self] items in
+            guard let self else { return }
+            self.history.replaceAll(with: items); self.eraserPreview = nil; self.eraserSession = nil
+            self.dragging = false; self.updateAnnotations(); self.updateToolbar()
+            let actions = self.eraserActions, generation = self.eraserGeneration; self.eraserActions.removeAll()
+            for action in actions { guard self.eraserGeneration == generation else { break }; action() }
+            if self.eraserSession == nil, let pointer = self.pointer { self.updateEraserPointer(at: pointer) }
+        }
+        erase(to: point)
+    }
+    private func erase(to point: CGPoint) {
+        let sweep = ScreenshotEraser.Sweep(from: eraserPrevious, to: point,
+            radius: CGFloat(ScreenshotTool.eraser.style(from: toolStyles).width) / 2)
+        eraserPrevious = point
+        updateEraserPointer(at: point)
+        if let clipped = sweep.clipped(to: selection) { eraserEffects.trail(clipped); eraserSession?.append(clipped) }
+    }
+    private func cancelCapture() { cancelEraser(); onCancel() }
+    func cancelEraser() {
+        eraserGeneration += 1; eraserSession?.cancel(); eraserSession = nil; eraserPreview = nil
+        eraserActions.removeAll(); hoverTask?.cancel(); hoverTask = nil; hoverRevision += 1
+        eraserEffects?.clear(); annotationView?.hoveredIndices = []; annotationView?.restoredIndices = []
+        dragging = false
+    }
     private var draft: ScreenshotAnnotation?
     private(set) var selectedAnnotation: Int?
     private var annotationOriginal: ScreenshotAnnotation?
     private var annotationHandle: ScreenshotHandle?
     private var annotationChanged = false
-    var annotations: [ScreenshotAnnotation] { history.items }
+    var annotations: [ScreenshotAnnotation] { eraserPreview ?? history.items }
 
     func selectTool(_ value: ScreenshotTool?) {
+        if deferUntilErased({ [weak self] in self?.selectTool(value) }) { return }
+        eraserEffects.clear(); clearEraserHover()
         finishTextEditing(); tool = value; selectedAnnotation = nil; scrollRemainder = 0
         if value != nil { hideMagnifier() }
         updateAnnotations(); updateToolbar()
+        window?.invalidateCursorRects(for: self)
+        if let pointer { updateEraserPointer(at: pointer) }
         window?.makeFirstResponder(self)
     }
     private func undoAnnotation(redo: Bool = false) {
+        if deferUntilErased({ [weak self] in self?.undoAnnotation(redo: redo) }) { return }
         finishTextEditing()
+        let previous = history.items
+        eraserEffects.clear(); clearEraserHover()
         if redo { history.redo() } else { history.undo() }
         selectedAnnotation = nil; updateAnnotations(); updateToolbar()
+        annotationView.restoredIndices = Set(history.items.indices.filter { !previous.contains(history.items[$0]) })
+        if !redo, !annotationView.restoredIndices.isEmpty {
+            annotationView.restorationOpacity = 0; eraserEffects.restore()
+        }
     }
     private func deleteSelectedAnnotation() {
+        if deferUntilErased({ [weak self] in self?.deleteSelectedAnnotation() }) { return }
         guard let index = selectedAnnotation else { return }
         history.remove(at: index); selectedAnnotation = nil
         updateAnnotations(); updateToolbar()
@@ -159,8 +258,9 @@ import os
     private var editingTextIndex: Int?
     var isEditingText: Bool { textEditor != nil }
     private func complete(_ output: Output = .copy) {
+        if deferUntilErased({ [weak self] in self?.complete(output) }) { return }
         guard output != .pin || pinningEnabled else { return }
-        guard allowed() else { onCancel(); return }
+        guard allowed() else { cancelCapture(); return }
         finishTextEditing()
         guard let composed = ScreenshotCompositor.render(image: image, size: bounds.size, selection: selection, annotations: history.items) else { return }
         // OCR needs every edge pixel. Other outputs share the same rounded appearance.
@@ -184,7 +284,7 @@ import os
             select: { [weak self] in self?.selectTool($0) },
             undo: { [weak self] in self?.undoAnnotation() },
             redo: { [weak self] in self?.undoAnnotation(redo: true) },
-            cancel: { [weak self] in self?.onCancel() }, complete: { [weak self] in self?.complete() }, preview: { [weak self] in self?.complete(.preview) }, pinningEnabled: pinningEnabled)
+            cancel: { [weak self] in self?.cancelCapture() }, complete: { [weak self] in self?.complete() }, preview: { [weak self] in self?.complete(.preview) }, pinningEnabled: pinningEnabled)
         let view: NSHostingView<CaptureToolbar>
         if let toolbar { view = toolbar; view.rootView = root }
         else { view = NSHostingView(rootView: root); addSubview(view); toolbar = view }
@@ -196,7 +296,7 @@ import os
     @discardableResult func finishTextEditing() -> Bool {
         guard let editor = textEditor else { return false }
         guard allowed() else {
-            discardTextEditor(); onCancel(); return true
+            discardTextEditor(); cancelCapture(); return true
         }
         editor.unmarkText()
         var annotation = editor.annotation
@@ -220,7 +320,7 @@ import os
         finishTextEditing()
     }
     private func beginTextEditing(at point: CGPoint, replacing index: Int? = nil) {
-        guard allowed() else { onCancel(); return }
+        guard allowed() else { cancelCapture(); return }
         var annotation = index.map { history.items[$0] } ?? self.annotation(tool: .text, at: point)
         let origin = annotation.points.first ?? point
         let available = CGSize(width: max(1, selection.maxX - origin.x), height: max(1, selection.maxY - origin.y))
@@ -256,6 +356,14 @@ import os
         annotationView.wantsLayer = true
         annotationView.layer?.mask = annotationClip
         addSubview(annotationView)
+        eraserEffects = CaptureEraserEffects(frame: bounds, image: image)
+        eraserEffects.wantsLayer = true; addSubview(eraserEffects)
+        eraserEffects.onFrame = { [weak self] progress in
+            guard let self else { return }
+            self.annotationView.restorationOpacity = progress
+            if progress == 1 { self.annotationView.restoredIndices = [] }
+            self.annotationView.needsDisplay = true
+        }
         magnifier.isHidden = true; magnifier.wantsLayer = true; addSubview(magnifier)
         maskLayer.fillRule = .evenOdd
         maskLayer.fillColor = NSColor.black.withAlphaComponent(0.48).cgColor
@@ -275,6 +383,7 @@ import os
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        if window == nil { cancelEraser() }
         displayLink?.invalidate(); displayLink = nil
         labelLayer.contentsScale = window?.backingScaleFactor ?? 2
     }
@@ -283,7 +392,8 @@ import os
         updateSelectionLayers()
     }
     private func updateAnnotations() {
-        annotationView.items = history.items.enumerated().compactMap { index, annotation in
+        clearEraserHover()
+        annotationView.items = (eraserPreview ?? history.items).enumerated().compactMap { index, annotation in
             if index == editingTextIndex { return nil }
             if index == selectedAnnotation && annotationOriginal != nil { return draft }
             return annotation
@@ -301,6 +411,8 @@ import os
         defer { CATransaction.commit() }
         frozenLayer.frame = bounds
         annotationView.frame = bounds
+        eraserEffects.frame = bounds; eraserEffects.selection = selection
+        window?.invalidateCursorRects(for: self)
         // Give the compositor real drawable bounds; render(in:) alone can still paint
         // paths outside a zero-sized layer and therefore misses this geometry error.
         for shape in [maskLayer, borderContrastLayer, borderLayer, handlesLayer] { shape.frame = bounds }
@@ -357,6 +469,7 @@ import os
     }
     func updateHover(at point: CGPoint) {
         updateMagnifier(at: point)
+        updateEraserPointer(at: point)
         guard selection.isEmpty, !dragging else { return }
         smartSelection.update(at: point)
         if hoveredWindow != smartSelection.current { hoveredWindow = smartSelection.current }
@@ -380,9 +493,10 @@ import os
         }
         mouseMoved(with: event)
     }
-    override func mouseExited(with event: NSEvent) { hideMagnifier(); pointer = nil; if !dragging { hoveredWindow = nil } }
+    override func mouseExited(with event: NSEvent) { eraserEffects.center = nil; clearEraserHover(); hideMagnifier(); pointer = nil; if !dragging { hoveredWindow = nil } }
     override func mouseDown(with event: NSEvent) {
-        guard allowed() else { onCancel(); return }
+        if deferUntilErased({ [weak self] in self?.mouseDown(with: event) }) { return }
+        guard allowed() else { cancelCapture(); return }
         finishTextEditing()
         window?.makeKey(); window?.makeFirstResponder(self)
         anchor = convert(event.locationInWindow, from: nil); original = selection
@@ -391,6 +505,7 @@ import os
         didDrag = false; freeSelecting = false
         smartSelection.update(at: anchor); clickWindow = smartSelection.current
         if selection.contains(anchor) {
+            if tool == .eraser { beginErasing(at: anchor); return }
             if tool != .eraser, event.clickCount >= 2, let index = CaptureHitTesting.text(at: anchor, items: history.items, selection: selection) {
                 selectedAnnotation = nil; beginTextEditing(at: anchor, replacing: index); return
             }
@@ -404,12 +519,10 @@ import os
                 complete(); return
             }
             if let index = hit {
-                if tool == .eraser { history.remove(at: index); selectedAnnotation = nil; updateAnnotations(); updateToolbar(); return }
                 selectedAnnotation = index; annotationOriginal = history.items[index]; tool = history.items[index].tool
                 draft = history.items[index]; dragging = true; hideMagnifier(); updateAnnotations(); updateToolbar(); return
             }
             selectedAnnotation = nil; updateAnnotations()
-            if tool == .eraser { return }
             if tool == .text { beginTextEditing(at: anchor); return }
         }
         dragging = true; lastFrame = nil; frameTotal = 0; frameCount = 0
@@ -430,10 +543,16 @@ import os
         }
     }
     override func mouseDragged(with event: NSEvent) {
-        guard allowed() else { onCancel(); return }
+        if eraserSession?.ending == true {
+            let point = convert(event.locationInWindow, from: nil)
+            updateMagnifier(at: point); updateEraserPointer(at: point)
+            eraserActions.append { [weak self] in self?.mouseDragged(with: event) }; return
+        }
+        guard allowed() else { cancelCapture(); return }
         guard dragging, textEditor == nil else { return }
         let p = convert(event.locationInWindow, from: nil)
         updateMagnifier(at: p)
+        if eraserSession != nil { erase(to: p); return }
         if hypot(p.x - anchor.x, p.y - anchor.y) >= 3 { didDrag = true }
         if freeSelecting && !didDrag { return }
         if freeSelecting { hoveredWindow = nil }
@@ -463,6 +582,13 @@ import os
         else { selection = CaptureGeometry.selection(from: anchor, to: p, bounds: bounds) }
     }
     override func mouseUp(with event: NSEvent) {
+        if eraserSession?.ending == true {
+            eraserActions.append { [weak self] in self?.mouseUp(with: event) }; return
+        }
+        if let session = eraserSession {
+            guard allowed() else { cancelCapture(); return }
+            erase(to: convert(event.locationInWindow, from: nil)); session.finish(); return
+        }
         if freeSelecting && !didDrag { selection = clickWindow ?? .zero }
         freeSelecting = false; clickWindow = nil
         dragging = false; displayLink?.invalidate(); displayLink = nil
@@ -480,6 +606,7 @@ import os
     }
     func showNotice(_ message: String) { notice = message; updateSelectionLayers() }
     func restore(_ rect: CGRect) {
+        cancelEraser()
         discardTextEditor()
         selectedAnnotation = nil; annotationOriginal = nil
         tool = nil; draft = nil; history = ScreenshotAnnotationHistory()
@@ -507,9 +634,9 @@ import os
         execute(command)
     }
     private func execute(_ command: CaptureKeyCommand) {
-        guard allowed() else { hideMagnifier(); onCancel(); return }
+        guard allowed() else { hideMagnifier(); cancelCapture(); return }
         switch command {
-        case .cancel: onCancel()
+        case .cancel: cancelCapture()
         case .copy: complete()
         case .quickSave: complete(.save)
         case .saveAs: complete(.saveAs)
@@ -531,6 +658,7 @@ import os
         }
     }
     private func nudge(_ direction: CaptureDirection, edge: CaptureEdge?, step: CGFloat) {
+        if deferUntilErased({ [weak self] in self?.nudge(direction, edge: edge, step: step) }) { return }
         if let edge {
             selection = CaptureGeometry.nudged(selection, direction: direction, edge: edge, step: step, bounds: bounds)
         } else if let index = selectedAnnotation, history.items.indices.contains(index) {
