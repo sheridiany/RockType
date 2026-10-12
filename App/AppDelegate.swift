@@ -99,6 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         inputAI.start()
         permissions.start()
         operationsEnvironment.start()
+        operations.rememberTranslationTarget = { [weak self] in self?.store.settings.translation.targetLanguage = $0 }
         selectionController.start()
         PinnedImageController.shared.setHistoryLimit(store.settings.screenshot.pinHistoryLimit ?? 10)
         screenshot.start()
