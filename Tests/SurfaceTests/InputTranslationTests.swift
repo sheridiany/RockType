@@ -153,6 +153,25 @@ import RoarkTPlatform
         controller.clearCurrentContent(); allowed = false; controller.openInputTranslation()
         #expect(controller.translationWindow == nil && runner.requests.count == count)
     }
+    @Test func renderPolishReplacementInMergedCompactFooter() throws {
+        _ = NSApplication.shared
+        let directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(".build/t1-t3-merge")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        for dark in [false, true] {
+            for width in [340, 420] {
+                let snapshot = ContentSnapshot(text: "Synthetic writing for a compact result window.", source: .init(pid: 0, applicationName: "Synthetic"), method: .paste)
+                let controller = ResultWindowController(runner: InputTestRunner(), settings: { .defaults }, feedback: { _ in }, readable: { true })
+                controller.show(.init(session: .init(snapshot: snapshot), templateID: "polish", text: "A concise synthetic result, ready to review.", engine: "synthetic-model"), template: .defaults[2])
+                let hosting = NSHostingView(rootView: LiveResultWindowView(controller: controller).environment(\.colorScheme, dark ? .dark : .light).frame(width: CGFloat(width), height: 360))
+                let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: width, height: 360), styleMask: [.borderless], backing: .buffered, defer: false)
+                window.isReleasedWhenClosed = false; window.contentView = hosting
+                hosting.layoutSubtreeIfNeeded(); RunLoop.main.run(until: Date().addingTimeInterval(0.05)); hosting.displayIfNeeded()
+                let bitmap = try #require(hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds)); hosting.cacheDisplay(in: hosting.bounds, to: bitmap)
+                try #require(bitmap.representation(using: .png, properties: [:])).write(to: directory.appendingPathComponent("polish-\(width)-\(dark ? "dark" : "light").png"))
+                window.close(); controller.stop()
+            }
+        }
+    }
     @Test func renderEmptyAndReplacementAvailability() throws {
         _ = NSApplication.shared
         let directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(".build/t3")
