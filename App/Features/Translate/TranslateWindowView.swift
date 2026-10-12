@@ -45,10 +45,8 @@ struct TranslateSourceEditor: NSViewRepresentable {
     }
 }
 
-/// Phase-B integrations can supply a dictionary card and speech button without changing the layout.
+/// Optional actions owned by the window controller.
 struct TranslateWindowSlots {
-    var dictionary: (String) -> AnyView = { _ in AnyView(EmptyView()) }
-    var speech: (String) -> AnyView = { _ in AnyView(Image(systemName: "speaker.wave.2").foregroundStyle(.tertiary).help("朗读将在组件接入后可用")) }
     var replacement: () -> AnyView = { AnyView(EmptyView()) }
     var close: () -> Void = {}
 }
@@ -80,6 +78,8 @@ struct TranslateWindowView: View {
                         HStack {
                             Text("原文").font(.system(size: 11, weight: .medium)).foregroundStyle(p.secondary)
                             Spacer()
+                            SpeakButton(speaker: state.sourceSpeaker, text: state.original)
+                                .accessibilityLabel(state.sourceSpeaker.isActive ? "停止朗读原文" : "朗读原文")
                             Button(state.expanded ? "收起" : "展开") { state.expanded.toggle() }
                                 .font(.system(size: 11)).buttonStyle(.plain).foregroundStyle(p.secondary).help("展开或收起原文")
                         }
@@ -91,7 +91,7 @@ struct TranslateWindowView: View {
                         }
                     }
                     languageBar
-                    slots.dictionary(state.dictionaryInput)
+                    if let definition = state.definition { WordDefinitionCard(definition: definition) }
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("译文").font(.system(size: 11, weight: .medium)).foregroundStyle(p.secondary)
@@ -127,7 +127,9 @@ struct TranslateWindowView: View {
                 } label: { Text(state.engineLabel).font(.system(size: 10)).lineLimit(1).truncationMode(.middle) }
                     .menuStyle(.borderlessButton).help("临时切换翻译引擎；Apple 不可用时沿用配置回退")
                 Spacer(minLength: 0)
-                slots.speech(state.result.answer)
+                SpeakButton(speaker: state.translationSpeaker, text: state.result.answer)
+                    .disabled(state.result.isBusy)
+                    .accessibilityLabel(state.translationSpeaker.isActive ? "停止朗读译文" : "朗读译文")
                 slots.replacement()
                 Button { copy(true, false) } label: { Image(systemName: "doc.on.doc") }
                     .buttonStyle(.plain).help("复制原文").accessibilityLabel("复制原文").disabled(state.original.isEmpty)
