@@ -22,8 +22,8 @@ private final class TranslatePanel: NSPanel {
     private var monitor: Any?
     private var watch: Task<Void, Never>?
     private var placing = false
-    private var userSized = false
-    private var lastHeight: CGFloat = 0
+    private var naturalHeight: CGFloat = 240
+    private var manualHeightLimit: CGFloat?
     private var anchor: CGRect?
     var slots = TranslateWindowSlots()
     var onClose: () -> Void = {}
@@ -37,12 +37,14 @@ private final class TranslatePanel: NSPanel {
          completed: @escaping @MainActor (OperationResult) -> Void = { _ in }, defaults: UserDefaults? = .standard, feedback: @escaping @MainActor (String) -> Void = { _ in },
          wordLookup: WordLookup? = nil, sourceSpeaker: TextSpeaker? = nil, translationSpeaker: TextSpeaker? = nil) {
         self.settings = settings; self.allowed = allowed; self.defaults = defaults; self.feedback = feedback
+        if let height = defaults?.object(forKey: "translateWindowHeightLimit") as? Double,
+           height.isFinite, height >= TranslateWindowLayout.minimumHeight { manualHeightLimit = height }
         state = TranslateWindowState(request: request, runner: runner, settings: settings, rememberTarget: rememberTarget, allowed: allowed, completed: completed, feedback: feedback, wordLookup: wordLookup, sourceSpeaker: sourceSpeaker, translationSpeaker: translationSpeaker)
         super.init()
         panel.isFloatingPanel = true; panel.hidesOnDeactivate = false; panel.becomesKeyOnlyIfNeeded = true
         panel.isReleasedWhenClosed = false; panel.backgroundColor = .clear; panel.isOpaque = false; panel.hasShadow = true
         panel.level = .floating; panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        panel.minSize = NSSize(width: 360, height: 260); panel.delegate = self
+        panel.minSize = NSSize(width: 360, height: TranslateWindowLayout.minimumHeight); panel.delegate = self
     }
     func show(source: OperationSource?, anchor: CGRect?, focus: Bool = false, completed: OperationResult? = nil) {
         guard allowed() else { return }
@@ -52,11 +54,12 @@ private final class TranslatePanel: NSPanel {
         slots.replacement = { [weak self] in
             guard let self else { return AnyView(EmptyView()) }
             return AnyView(SourceReplacementButton(replacement: replacement, text: self.state.result.answer,
-                enabled: self.state.result.phase == .done && self.state.result.currentQuestion == nil,
+                enabled: self.state.result.phase == .done && self.state.result.currentQuestion == nil, compact: true,
                 feedback: { [weak self] in self?.state.result.notice = $0 }))
         }
         panel.contentView = NSHostingView(rootView: TranslateWindowView(state: state, close: { [weak self] in self?.close() },
-            focusEditor: { [weak self] in self?.activateEditing() }, copy: { [weak self] in self?.copy(original: $0, returning: $1) }, slots: slots, copyCode: { [weak self] in self?.copyCode($0) }))
+            focusEditor: { [weak self] in self?.activateEditing() }, copy: { [weak self] in self?.copy(original: $0, returning: $1) }, slots: slots, copyCode: { [weak self] in self?.copyCode($0) },
+            contentHeight: { [weak self] in self?.naturalHeight = $0 }))
         applyAppearance()
         place(initial: true)
         panel.alphaValue = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion || focus ? 1 : 0
@@ -145,20 +148,19 @@ private final class TranslatePanel: NSPanel {
     }
     static func fittedSize(_ requested: CGSize, screen: CGRect) -> CGSize {
         CGSize(width: min(max(360, requested.width), max(1, screen.width - 24)),
-               height: min(max(260, requested.height), max(1, screen.height * 0.6)))
+               height: min(max(TranslateWindowLayout.minimumHeight, requested.height), max(1, screen.height * 0.6)))
     }
     private func place(initial: Bool) {
         let point = anchor.map { CGPoint(x: $0.midX, y: $0.midY) } ?? NSEvent.mouseLocation
-        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(point) }) ?? NSScreen.main else { return }
+        guard let screen = (initial ? nil : panel.screen)
+                ?? NSScreen.screens.first(where: { $0.frame.contains(point) }) ?? NSScreen.main else { return }
         let available = screen.visibleFrame
         let saved = defaults?.array(forKey: "translateWindowFrame") as? [Double]
         let validSaved = saved?.count == 4 && saved?.allSatisfy(\.isFinite) == true
-        let answerRows = state.result.answer.prefix(480).count / 40
-        let extraHeight = (state.expanded ? 96 : 0) + (state.followupExpanded ? 72 : 0) + (state.definition == nil ? 0 : 160)
-        let desired = CGFloat(344 + answerRows * 20 + extraHeight)
-        if !initial && (userSized || validSaved || abs(desired - lastHeight) < 12) { return }
-        lastHeight = desired
-        let size = Self.fittedSize(CGSize(width: validSaved ? saved![2] : 420, height: validSaved ? saved![3] : desired), screen: available)
+        // Saved width/position are retained. A manually chosen height is a ceiling, not empty space.
+        let desired = min(naturalHeight, manualHeightLimit ?? .greatestFiniteMagnitude)
+        let size = Self.fittedSize(CGSize(width: validSaved ? saved![2] : 420, height: desired), screen: available)
+        if !initial && abs(size.height - panel.frame.height) < 1 && abs(size.width - panel.frame.width) < 1 { return }
         var frame = CGRect(x: initial ? point.x - size.width / 2 : panel.frame.minX,
                            y: initial ? point.y - size.height - 12 : panel.frame.maxY - size.height,
                            width: size.width, height: size.height)
@@ -168,12 +170,15 @@ private final class TranslatePanel: NSPanel {
         panel.setFrame(ResultWindowGeometry.fitted(frame, in: available), display: true)
         placing = false
     }
-    func windowDidResize(_ notification: Notification) { rememberFrame() }
+    func windowDidResize(_ notification: Notification) { rememberFrame(resized: true) }
     func windowDidMove(_ notification: Notification) { rememberFrame() }
-    private func rememberFrame() {
+    private func rememberFrame(resized: Bool = false) {
         guard !placing, panel.isVisible else { return }
-        userSized = true
         let frame = panel.frame
+        if resized {
+            manualHeightLimit = frame.height
+            defaults?.set(frame.height, forKey: "translateWindowHeightLimit")
+        }
         defaults?.set([frame.minX, frame.minY, frame.width, frame.height], forKey: "translateWindowFrame")
     }
     isolated deinit { watch?.cancel(); if let monitor { NSEvent.removeMonitor(monitor) } }
