@@ -119,7 +119,7 @@ public struct ClipboardSnapshot: Sendable, Equatable {
     }
 
     /// Explicit user action only. No background clipboard monitoring. Never posts paste events.
-    public func copySelectionFallback(timeout: Duration = .milliseconds(450)) async throws -> String? {
+    public func copySelectionFallback(timeout: Duration = .milliseconds(650)) async throws -> String? {
         guard !copying else { throw PlatformReadError.busy }
         copying = true
         defer { copying = false }
@@ -149,7 +149,21 @@ public struct ClipboardSnapshot: Sendable, Equatable {
             try Task.checkCancellation()
             try checkReadable()
             guard sourcePID() == pid else { throw PlatformReadError.sourceChanged }
-            let text = backend.string()
+            // WebViews may publish the pasteboard generation before fulfilling plain text.
+            // Wait within the same generation; never treat a second write as ours.
+            var text = backend.string()
+            while text == nil {
+                try Task.checkCancellation()
+                try checkReadable()
+                guard sourcePID() == pid else { throw PlatformReadError.sourceChanged }
+                guard changeCount == ours else { throw PlatformReadError.clipboardChanged }
+                guard ContinuousClock.now < deadline else { throw PlatformReadError.timeout }
+                try await Task.sleep(for: .milliseconds(15))
+                try checkReadable()
+                guard sourcePID() == pid else { throw PlatformReadError.sourceChanged }
+                guard changeCount == ours else { throw PlatformReadError.clipboardChanged }
+                text = backend.string()
+            }
             try await Task.sleep(for: .milliseconds(30))
             try checkReadable()
             guard sourcePID() == pid else { throw PlatformReadError.sourceChanged }
