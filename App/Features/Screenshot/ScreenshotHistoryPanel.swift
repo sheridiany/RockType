@@ -77,17 +77,28 @@ struct ScreenshotHistoryView: View {
     }
 }
 
+/// Settings-only controls. History storage/lifetime remains with the existing controller.
 struct ScreenshotHistorySettings: View {
-    @Binding var settings: RoarkTCore.ScreenshotSettings
+    @Binding var settings: ScreenshotSettings
     var body: some View {
         DesignSectionTitle(title: "截图历史")
         DesignCard {
-            Toggle("保存到磁盘", isOn: Binding(get: { settings.historyOnDisk ?? false }, set: { settings.historyOnDisk = $0 }))
-            Text("默认仅保留本次运行最近 20 张截图及识别文字缓存。开启后保存在本机 RockType 应用支持目录；关闭此选项会删除磁盘历史。")
-                .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            SettingsControlRow("保存到磁盘", detail: settings.historyOnDisk == true ? "已开启 · 保存在本机" : "未开启 · 仅保留本次运行", symbol: "internaldrive",
+                status: settings.historyOnDisk == true ? .on : .off) {
+                SettingsToggle(title: "截图历史保存到磁盘", isOn: Binding(get: { settings.historyOnDisk ?? false }, set: { settings.historyOnDisk = $0 }))
+            }
+            Text("默认在内存保留最近 20 张截图。关闭磁盘保存会删除磁盘历史，不影响主动另存的图片。")
+                .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if settings.historyOnDisk == true {
-                Stepper("最多 \(min(200, max(1, settings.historyDiskCount ?? 20))) 张", value: Binding(get: { min(200, max(1, settings.historyDiskCount ?? 20)) }, set: { settings.historyDiskCount = $0 }), in: 1...200)
-                Stepper("保留 \(min(365, max(1, settings.historyDiskDays ?? 7))) 天", value: Binding(get: { min(365, max(1, settings.historyDiskDays ?? 7)) }, set: { settings.historyDiskDays = $0 }), in: 1...365)
+                DesignRule()
+                SettingsControlRow("保留数量", symbol: "photo.stack") {
+                    Stepper("\(min(200, max(1, settings.historyDiskCount ?? 20))) 张", value: Binding(get: { min(200, max(1, settings.historyDiskCount ?? 20)) }, set: { settings.historyDiskCount = $0 }), in: 1...200)
+                        .frame(width: 120).accessibilityLabel("磁盘截图历史数量")
+                }
+                SettingsControlRow("保留时间", symbol: "calendar") {
+                    Stepper("\(min(365, max(1, settings.historyDiskDays ?? 7))) 天", value: Binding(get: { min(365, max(1, settings.historyDiskDays ?? 7)) }, set: { settings.historyDiskDays = $0 }), in: 1...365)
+                        .frame(width: 120).accessibilityLabel("磁盘截图历史天数")
+                }
             }
         }
     }

@@ -1,5 +1,13 @@
 import SwiftUI
 
+private struct SettingsPresentationKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    var settingsPresentation: Bool {
+        get { self[SettingsPresentationKey.self] }
+        set { self[SettingsPresentationKey.self] = newValue }
+    }
+}
+
 // Additional surface-specific values derive from the established spacing grid.
 // Existing DesignSystem interfaces remain unchanged.
 
@@ -9,13 +17,17 @@ struct DesignRule: View {
 }
 
 struct DesignCard<Content: View>: View {
+    @Environment(\.settingsPresentation) private var settingsPresentation
     @ViewBuilder var content: () -> Content
     @Environment(\.colorScheme) private var scheme
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.md, content: content)
-            .padding(Tokens.Space.md)
+            .padding(settingsPresentation ? 16 : Tokens.Space.md)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Tokens.palette(scheme).card, in: RoundedRectangle(cornerRadius: Tokens.Radius.card))
+            .background(Tokens.palette(scheme).card, in: RoundedRectangle(cornerRadius: settingsPresentation ? 18 : Tokens.Radius.card))
+            .overlay {
+                if settingsPresentation { RoundedRectangle(cornerRadius: 18).stroke(Tokens.palette(scheme).line, lineWidth: 0.5).allowsHitTesting(false) }
+            }
     }
 }
 
@@ -48,6 +60,7 @@ struct DesignProgress: View {
 
 /// Native actions, custom drawing: unlike AppKit-backed switches this is fully exportable.
 struct SettingsToggle: View {
+    @Environment(\.settingsPresentation) private var settingsPresentation
     let title: String
     @Binding var isOn: Bool
     @Environment(\.colorScheme) private var scheme
@@ -55,9 +68,9 @@ struct SettingsToggle: View {
     var body: some View {
         let p = Tokens.palette(scheme)
         Button { isOn.toggle() } label: {
-            Capsule().fill(isOn && enabled ? p.accent : p.bubble)
+            Capsule().fill(isOn && enabled ? (settingsPresentation ? p.foreground : p.accent) : p.bubble)
                 .overlay(alignment: isOn ? .trailing : .leading) {
-                    Circle().fill(enabled ? (isOn ? p.onAccent : (scheme == .dark ? p.secondary : p.card)) : p.tertiary)
+                    Circle().fill(enabled ? (isOn ? (settingsPresentation ? p.card : p.onAccent) : (scheme == .dark ? p.secondary : p.card)) : p.tertiary)
                         .frame(width: Tokens.Size.toggleKnob, height: Tokens.Size.toggleKnob)
                         .padding(Tokens.Size.toggleInset)
                 }

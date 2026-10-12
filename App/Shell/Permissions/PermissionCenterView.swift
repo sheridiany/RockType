@@ -10,25 +10,23 @@ struct PermissionCenterView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
             DesignSectionTitle(title: "系统权限 · 按需开启")
-            ForEach(center.items) { item in
-                DesignCard {
-                    HStack {
-                        Text(item.title).fontWeight(.medium)
-                        Spacer()
-                        Chip(text: item.statusText, tone: item.status == .granted ? .ok : .neutral)
-                    }
-                    Text(item.purpose).font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(Tokens.palette(scheme).secondary)
-                    if item.status != .granted {
-                        HStack {
-                            Button(center.requesting == item.kind ? "正在请求…" : "授权\(item.title)") {
-                                Task { await center.request(item.kind) }
-                            }
-                            .disabled(center.requesting != nil || item.status == .restricted)
-                            .buttonStyle(DesignButtonStyle())
-                            Button("打开系统设置") { center.openSettings(item.kind) }
-                                .buttonStyle(DesignButtonStyle(variant: .ghost))
+            DesignCard {
+                ForEach(center.items) { item in
+                    SettingsControlRow(item.title, detail: item.statusText,
+                        symbol: item.kind == .microphone ? "mic" : item.kind == .screenRecording ? "rectangle.dashed.badge.record" : "hand.raised",
+                        status: item.status == .granted ? .on : .attention) {
+                        if item.status != .granted {
+                            Button(center.requesting == item.kind ? "请求中…" : "授权") { Task { await center.request(item.kind) } }
+                                .disabled(center.requesting != nil || item.status == .restricted)
+                                .accessibilityLabel("授权" + item.title)
                         }
-                    }
+                        Button { center.openSettings(item.kind) } label: { Image(systemName: "arrow.up.right") }
+                            .accessibilityLabel("打开" + item.title + "系统设置")
+                    }.help(item.purpose)
+                    if item.id != center.items.last?.id { DesignRule() }
+                }
+                SettingsMore(title: "更多 · 权限用途") {
+                    ForEach(center.items) { item in Text(item.title + "：" + item.purpose).foregroundStyle(Tokens.palette(scheme).secondary) }
                 }
             }
             if let message = center.message { Notice(text: message, tone: .warn) }

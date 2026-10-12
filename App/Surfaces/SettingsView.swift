@@ -75,6 +75,7 @@ struct SettingsView: View {
 
     @ViewBuilder private var sectionContent: some View {
         switch section {
+        case .features: Notice(text: "功能总览请查看正式设置窗口。")
         case .general: generalPane
         case .input: inputPane
         case .translation: translationPane

@@ -14,7 +14,7 @@
 | --- | --- | --- | --- |
 | G1 | 功能开关运行时生效（App 侧） | pi-platform | 完成（test/build 0；独立审查阻塞，真实交互待验） |
 | G2 | 输入法内 AI 开关在输入法侧生效 | pi-ime | 已实现；test/build 通过；真实 IMK 待人工验证（[证据](evidence/019-G2.md)） |
-| G3 | 设置界面按 Magpie 风格重做 + “功能”总览页 | pi-ui | 未开始 |
+| G3 | 设置界面按 Magpie 风格重做 + “功能”总览页 | pi-ui | 已完成；真实交互待人工验收，见 [证据](evidence/019-G3.md) |
 | G4 | 截图时右键取消；修复整套测试中偶发失败的 `AnnotationStyleTests.testToolbarStyleChangeIsRememberedOnlyForThatTool`（单跑通过，整套偶发失败，疑似共享设置状态） | pi-xpc | 实现及 test/build 通过（0）；真实焦点/多屏待人工，见 [证据](evidence/019-G4.md) |
 
 ## G1 运行时生效（pi-platform）
@@ -49,3 +49,7 @@
 ## 验收证据
 
 - G1：[App 侧运行时功能开关](evidence/019-G1.md)。沿用既定 FeatureSettings 契约，覆盖热键、语音、划词、截图/历史/贴图及 App 侧输入法 AI 配置撤销；新增 9 项回归。最终 test/build 实际退出 0；独立审查因提供方凭证缺失及 `fire-review did not start` 未完成，真实桌面/输入法交互待人工验证。
+
+## G3 验收证据
+
+[019-G3](evidence/019-G3.md)：默认功能首页、八项开关与原有设置绑定、状态/跳转、关闭提示与禁用、Magpie 风格行卡片及 AI 服务商网格已完成。改前 48 张、改后 52 张与状态 16 张离屏图在 `.build/g3/`；最终渲染、完整测试、构建签名退出码均为 0。运行时生效属于 G1/G2，右键取消与偶发测试修复属于 G4；真实键盘/VoiceOver/权限及合并后的联动待人工验证。
