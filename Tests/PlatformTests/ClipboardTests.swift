@@ -138,3 +138,30 @@ extension ClipboardTests {
         XCTAssertEqual(board.content, latest); XCTAssertEqual(board.restores, 0)
     }
 }
+
+@MainActor private final class DeferredTextClipboard: ClipboardBackend {
+    var changeCount = 0
+    var ready = false
+    var restored = false
+    func snapshot() -> ClipboardSnapshot { .init(items: [["custom": Data([1, 2])]]) }
+    func restore(_ snapshot: ClipboardSnapshot) { restored = true; changeCount += 1 }
+    func string() -> String? { ready ? "synthetic delayed text" : nil }
+}
+extension ClipboardTests {
+    @MainActor func testDelayedPlainTextWithinSameGenerationIsReadAndRestored() async throws {
+        let board = DeferredTextClipboard()
+        let clipboard = Clipboard(backend: board, checkReadable: {}, sourcePID: { 1 }, postCopy: {
+            board.changeCount += 1
+            Task { try await Task.sleep(for: .milliseconds(65)); board.ready = true }
+        })
+        let text = try await clipboard.copySelectionFallback()
+        XCTAssertEqual(text, "synthetic delayed text"); XCTAssertTrue(board.restored)
+    }
+    @MainActor func testMissingPlainTextTimesOutAndRestoresOwnedGeneration() async {
+        let board = DeferredTextClipboard()
+        let clipboard = Clipboard(backend: board, checkReadable: {}, sourcePID: { 1 }, postCopy: { board.changeCount += 1 })
+        do { _ = try await clipboard.copySelectionFallback(timeout: .milliseconds(40)); XCTFail("Must time out") }
+        catch { XCTAssertEqual(error as? PlatformReadError, .timeout) }
+        XCTAssertTrue(board.restored)
+    }
+}

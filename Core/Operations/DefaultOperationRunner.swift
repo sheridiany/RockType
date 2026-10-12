@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Offline transport supplied by the App's authenticated XPC adapter.
 @MainActor
@@ -13,6 +14,7 @@ public protocol TextTranslationClient: AnyObject {
 public final class DefaultOperationRunner: OperationRunner {
     public typealias AIStream = @Sendable (AIConnectionSettings, String, String, String,
         @escaping @Sendable (String) async -> Void) async throws -> String
+    private var networkSession: URLSession?
     private let key: () throws -> String
     private let providerKey: ((String) throws -> String)?
     private var receivedOutput = false
@@ -27,15 +29,30 @@ public final class DefaultOperationRunner: OperationRunner {
     private var activeSession: UUID?
     private var children: [UUID: DefaultOperationRunner] = [:]
     private var canSegment = true
+    private let translationCache: TranslationResultCache?
+    private var protectionStream: TranslationProtection.Stream?
+    public enum LatencyEngine: String, Sendable { case apple, ai, cache, segmented }
+    public struct FirstTextLatency: Sendable { public let engine: LatencyEngine; public let milliseconds: Double }
+    /// Numeric-only timing; starts at run() and ends at the first user-visible text event.
+    public var onFirstText: ((FirstTextLatency) -> Void)?
+    private var startedAt = ContinuousClock.now
+    private var firstTextRecorded = false
+    private var measuresTranslation = false
+    private var latencyEngine: LatencyEngine = .ai
+    private static let timing = Logger(subsystem: Identifiers.appBundleID, category: "TranslationTiming")
 
     /// isAllowed must fail closed for Secure Input/password fields or unavailable protection state.
     /// key should fetch the current connection's credential from Keychain on demand.
     public init(offline: (any TextTranslationClient)? = nil, recent: (any RecentResults)? = nil,
                 apiKey: @escaping () throws -> String, isAllowed: @escaping () -> Bool,
-                streamAI: AIStream? = nil, providerKey: ((String) throws -> String)? = nil) {
+                streamAI: AIStream? = nil, providerKey: ((String) throws -> String)? = nil,
+                translationCache: TranslationResultCache? = nil) {
         self.offline = offline; self.recent = recent; self.key = apiKey
         self.isAllowed = isAllowed; self.streamAI = streamAI; self.providerKey = providerKey
+        self.translationCache = translationCache
     }
+
+    deinit { networkSession?.invalidateAndCancel() }
 
     public func start() {}
     public func stop() { cancel(); offline?.stop() }
@@ -46,13 +63,15 @@ public final class DefaultOperationRunner: OperationRunner {
         task?.cancel(); task = nil
         protectionTask?.cancel(); protectionTask = nil
         continuation?.yield(.cancelled); continuation?.finish(); continuation = nil
-        activeSession = nil
+        activeSession = nil; protectionStream = nil
     }
 
     public func run(_ request: OperationRequest) -> AsyncStream<OperationEvent> {
         cancel()
         generation &+= 1
-        receivedOutput = false
+        receivedOutput = false; protectionStream = nil
+        startedAt = .now; firstTextRecorded = false; latencyEngine = .ai
+        measuresTranslation = request.template.id == "translate" && request.question == nil
         let current = generation
         let (events, sink) = AsyncStream<OperationEvent>.makeStream()
         continuation = sink
@@ -77,6 +96,7 @@ public final class DefaultOperationRunner: OperationRunner {
     }
 
     private func rejectProtected() {
+        translationCache?.clear()
         if let activeSession { offline?.cancel(sessionID: activeSession, throughGeneration: generation) }
         children.values.forEach { $0.cancel() }; children.removeAll()
         task?.cancel(); task = nil
@@ -125,14 +145,25 @@ public final class DefaultOperationRunner: OperationRunner {
             if isTranslation, request.question == nil, request.settings.translation.engine == .offlineFirst,
                let offline {
                 do {
-                    let translated = try await offline.translate(sessionID: request.session.id, generation: current,
-                        text: request.session.snapshot.text, target: target)
+                    let cacheKey = translationCache?.key(request, target: target, engine: "apple", model: "system")
+                    let translated: String
+                    if let cacheKey, let cached = translationCache?.value(for: cacheKey) {
+                        translated = cached; latencyEngine = .cache
+                    } else {
+                        latencyEngine = .apple
+                        translated = try await offline.translate(sessionID: request.session.id, generation: current,
+                            text: request.session.snapshot.text, target: target)
+                        try check(current)
+                        if let cacheKey, !translated.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            translationCache?.insert(translated, for: cacheKey)
+                        }
+                    }
                     try check(current)
                     guard !translated.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                         throw OperationFailure.unavailable
                     }
                     text = translated; engine = "Apple Translation"
-                    continuation?.yield(.engine(engine)); continuation?.yield(.delta(translated))
+                    continuation?.yield(.engine(engine)); receive(translated, generation: current)
                 } catch {
                     try check(current) // cancellation/protection never falls back to network
                     if error is CancellationError || (error as? AIClientError) == .cancelled { throw CancellationError() }
@@ -143,21 +174,29 @@ public final class DefaultOperationRunner: OperationRunner {
                 let route = try AIProviderRouting.resolve(request.settings,
                     task: request.question == nil && isTranslation ? .translation : .assistant,
                     modelOverride: request.template.model)
-                let credential: String
-                do { credential = try providerKey?(route.connection.id) ?? key() }
-                catch { throw AIClientError.configuration }
-                try check(current)
+                let protection = isTranslation && request.question == nil ? try TranslationProtection(request.session.snapshot.text) : nil
+                let aiPrompt: String
+                if let protection, !protection.literals.isEmpty {
+                    aiPrompt = Self.prompt(request, target: target, content: protection.text)
+                        + "\n保留所有 ⟦RT_…⟧ 占位符，逐字且各一次，不增删、不改写，不展开其内容。"
+                } else { aiPrompt = prompt }
+                guard aiPrompt.utf8.count <= request.maximumInputBytes else {
+                    throw OperationFailure.inputTooLong(limit: request.maximumInputBytes)
+                }
                 engine = Self.engineLabel(route.connection, model: route.model)
                 continuation?.yield(.engine(engine))
+                var credential: String?
                 do {
-                    text = try await send(route.connection, prompt: prompt, credential: credential, model: route.model, current: current)
+                    text = try await translatedAI(request, target: target, connection: route.connection, model: route.model,
+                        prompt: aiPrompt, protection: protection, credential: &credential, current: current)
                 } catch {
                     try check(current)
                     guard let fallback = AIProviderRouting.fallback(for: route.connection, primary: route.model,
                         error: error, hasVisibleOutput: receivedOutput) else { throw error }
                     engine = Self.engineLabel(route.connection, model: fallback) + " · 备用模型"
                     continuation?.yield(.engine(engine))
-                    text = try await send(route.connection, prompt: prompt, credential: credential, model: fallback, current: current)
+                    text = try await translatedAI(request, target: target, connection: route.connection, model: fallback,
+                        prompt: aiPrompt, protection: protection, credential: &credential, current: current)
                 }
             }
             try check(current)
@@ -185,6 +224,7 @@ public final class DefaultOperationRunner: OperationRunner {
         let result = OperationResult(session: session, templateID: request.template.id, text: answer, engine: engine)
         if request.settings.privacy.keepRecentResultsInMemory { recent?.add(result) }
         finish(.completed(result))
+        recordFirstText()
     }
 
     private static func partTemplate(_ original: OperationTemplate) -> OperationTemplate {
@@ -268,7 +308,7 @@ public final class DefaultOperationRunner: OperationRunner {
             guard outputBytes <= 1_048_576 else { throw AIClientError.responseTooLarge }
             remember(result)
             continuation?.yield(.engine("分段处理中 · \(index + 1)/\(parts.count) · " + result.engine))
-            if translation { receive((index == 0 ? "" : "\n\n") + result.text, generation: current) }
+            if translation { latencyEngine = .segmented; receive((index == 0 ? "" : "\n\n") + result.text, generation: current) }
         })
         if translation { return (results.map(\.text).joined(separator: "\n\n"), engines.joined(separator: " / ") + " · \(parts.count)段") }
 
@@ -301,6 +341,40 @@ public final class DefaultOperationRunner: OperationRunner {
         return name.isEmpty ? model : name + " · " + model
     }
 
+    private func translatedAI(_ request: OperationRequest, target: String, connection: AIConnectionSettings,
+                              model: String, prompt: String, protection: TranslationProtection?, credential: inout String?, current: UInt64) async throws -> String {
+        try check(current)
+        let cacheKey = translationCache?.key(request, target: target, engine: "ai", model: model, connection: connection)
+        if let cacheKey, let cached = translationCache?.value(for: cacheKey) {
+            latencyEngine = .cache; protectionStream = nil
+            receive(cached, generation: current)
+            return cached
+        }
+        if credential == nil {
+            do { credential = try providerKey?(connection.id) ?? key() }
+            catch { throw AIClientError.configuration }
+        }
+        try check(current)
+        latencyEngine = .ai
+        protectionStream = protection.flatMap { $0.literals.isEmpty ? nil : .init(protection: $0) }
+        let raw = try await send(connection, prompt: prompt, credential: credential!, model: model, current: current)
+        try check(current)
+        let answer = try protection?.restore(raw) ?? raw
+        if let cacheKey, !answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            translationCache?.insert(answer, for: cacheKey)
+        }
+        return answer
+    }
+
+    private func recordFirstText() {
+        guard measuresTranslation, !firstTextRecorded else { return }
+        firstTextRecorded = true
+        let elapsed = startedAt.duration(to: .now).components
+        let ms = Double(elapsed.seconds) * 1000 + Double(elapsed.attoseconds) / 1e15
+        Self.timing.info("translation_first_text_ms \(ms, privacy: .public) backend \(self.latencyEngine.rawValue, privacy: .public)")
+        onFirstText?(.init(engine: latencyEngine, milliseconds: ms))
+    }
+
     private func send(_ connection: AIConnectionSettings, prompt: String, credential: String,
                       model: String, current: UInt64) async throws -> String {
         try check(current)
@@ -309,7 +383,8 @@ public final class DefaultOperationRunner: OperationRunner {
                 await self?.receive(delta, generation: current)
             }
         }
-        return try await AIClient(connection: connection, requestAllowed: { [weak self] in
+        if networkSession == nil { networkSession = AIClient.makeSession() }
+        return try await AIClient(connection: connection, session: networkSession!, requestAllowed: { [weak self] in
             await self?.allowedForTransport(current) ?? false
         }).stream(text: prompt, apiKey: credential,
             model: model, onThinking: { [weak self] in await self?.thinking(generation: current) }) { [weak self] delta in
@@ -330,13 +405,23 @@ public final class DefaultOperationRunner: OperationRunner {
     private func receive(_ delta: String, generation current: UInt64) {
         guard generation == current, continuation != nil else { return }
         guard isAllowed() else { rejectProtected(); return }
-        if !delta.isEmpty { receivedOutput = true; continuation?.yield(.delta(delta)) }
+        do {
+            let visible = try protectionStream?.append(delta) ?? delta
+            if !visible.isEmpty {
+                recordFirstText()
+                guard generation == current, continuation != nil else { return }
+                guard isAllowed() else { rejectProtected(); return }
+                receivedOutput = true; continuation?.yield(.delta(visible))
+            }
+        } catch {
+            task?.cancel(); finish(.failed(.unavailable))
+        }
     }
 
     private func finish(_ event: OperationEvent) {
         continuation?.yield(event); continuation?.finish(); continuation = nil
         protectionTask?.cancel(); protectionTask = nil
-        task = nil; activeSession = nil
+        task = nil; activeSession = nil; protectionStream = nil
     }
 
     public static func targetLanguage(_ configured: String, text: String) -> String {
@@ -345,12 +430,12 @@ public final class DefaultOperationRunner: OperationRunner {
             || (0x4E00...0x9FFF).contains($0.value) || (0x20000...0x3134F).contains($0.value) } ? "en" : "zh-Hans"
     }
 
-    private static func prompt(_ request: OperationRequest, target: String) -> String {
+    private static func prompt(_ request: OperationRequest, target: String, content: String? = nil) -> String {
         var text = OperationPrompts.resolved(request.template).replacingOccurrences(of: "{{target}}", with: target)
         if request.question != nil {
             text = "这是同一会话的追问。请直接回答最后一个 question，遵循该问题要求的语言与格式；最初操作仅作为背景，不要再次执行。\n<initial_task>\n" + text + "\n</initial_task>"
         }
-        text += "\n\n<content>\n" + request.session.snapshot.text + "\n</content>"
+        text += "\n\n<content>\n" + (content ?? request.session.snapshot.text) + "\n</content>"
         for turn in request.session.turns {
             text += "\n\n<question>\n" + turn.question + "\n</question>\n<answer>\n" + turn.answer + "\n</answer>"
         }
