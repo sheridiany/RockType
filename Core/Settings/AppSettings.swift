@@ -186,8 +186,9 @@ public struct InputAISettings: Codable, Equatable, Sendable {
 public struct ScreenshotAnnotationStyle: Codable, Equatable, Sendable {
     public var colorHex: String
     public var width: Double
-    public init(colorHex: String = "D84A2F", width: Double = 5) {
-        self.colorHex = colorHex; self.width = width
+    public var textBackground: Bool?
+    public init(colorHex: String = "D84A2F", width: Double = 5, textBackground: Bool? = nil) {
+        self.colorHex = colorHex; self.width = width; self.textBackground = textBackground
     }
 }
 

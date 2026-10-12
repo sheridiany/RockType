@@ -48,6 +48,7 @@ struct ScreenshotAnnotation: Equatable {
     var width: CGFloat = 5
     var fontSize: CGFloat = 17
     var textMaxWidth: CGFloat?
+    var textBackground = false
     var rect: CGRect {
         guard let first = points.first, let last = points.last else { return .zero }
         return CGRect(x: min(first.x, last.x), y: min(first.y, last.y),
@@ -68,7 +69,7 @@ struct ScreenshotAnnotationHistory {
     mutating func commitText(_ item: ScreenshotAnnotation, replacing index: Int?) {
         guard let index else { append(item); return }
         guard items.indices.contains(index) else { return }
-        if items[index].text == item.text && items[index].textMaxWidth == item.textMaxWidth { return }
+        if items[index] == item { return }
         checkpoint()
         if ScreenshotText.isEmpty(item.text) { items.remove(at: index) }
         else { items[index] = item }

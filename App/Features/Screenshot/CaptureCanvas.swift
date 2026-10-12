@@ -67,16 +67,17 @@ import os
     var onStyleChange: (ScreenshotTool, ScreenshotAnnotationStyle) -> Void = { _, _ in }
     private var scrollRemainder: CGFloat = 0
     private var activeStyle: ScreenshotAnnotationStyle {
-        if let index = selectedAnnotation, history.items.indices.contains(index) {
-            let item = history.items[index]
+        if let item = textEditor?.annotation ?? selectedAnnotation.flatMap({ history.items.indices.contains($0) ? history.items[$0] : nil }) {
             let color = item.color.usingColorSpace(.sRGB) ?? item.color
             return .init(colorHex: String(format: "%02X%02X%02X", Int((color.redComponent * 255).rounded()),
                 Int((color.greenComponent * 255).rounded()), Int((color.blueComponent * 255).rounded())),
-                width: item.tool == .text ? item.fontSize : item.width)
+                width: item.tool == .text ? item.fontSize : item.width, textBackground: item.textBackground)
         }
         return (tool ?? .rectangle).style(from: toolStyles)
     }
     private func setStyle(_ style: ScreenshotAnnotationStyle) {
+        guard allowed() else { onCancel(); return }
+        finishTextEditing()
         guard let tool, tool != .eraser else { return }
         toolStyles[tool.rawValue] = style
         let sanitized = tool.style(from: toolStyles)
@@ -84,7 +85,9 @@ import os
         if let index = selectedAnnotation, history.items.indices.contains(index) {
             var item = history.items[index]
             item.color = sanitized.nsColor
-            if item.tool == .text { item.fontSize = sanitized.width } else { item.width = sanitized.width }
+            if item.tool == .text {
+                item.fontSize = sanitized.width; item.textBackground = sanitized.textBackground == true
+            } else { item.width = sanitized.width }
             history.replace(at: index, with: item); updateAnnotations()
         }
         updateToolbar()
@@ -92,7 +95,8 @@ import os
     private func annotation(tool: ScreenshotTool, at point: CGPoint) -> ScreenshotAnnotation {
         let style = tool.style(from: toolStyles)
         return ScreenshotAnnotation(tool: tool, points: [point, point], color: style.nsColor,
-                                    width: tool == .text ? 5 : style.width, fontSize: tool == .text ? style.width : 17)
+                                    width: tool == .text ? 5 : style.width, fontSize: tool == .text ? style.width : 17,
+                                    textBackground: tool == .text && style.textBackground == true)
     }
     override func scrollWheel(with event: NSEvent) {
         guard allowed(), textEditor == nil else { return }
@@ -196,6 +200,7 @@ import os
         var annotation = editor.annotation
         annotation.text = editor.string
         history.commitText(annotation, replacing: editingTextIndex)
+        selectedAnnotation = ScreenshotText.isEmpty(annotation.text) ? nil : (editingTextIndex ?? history.items.indices.last)
         discardTextEditor()
         updateAnnotations(); updateSelectionLayers(); updateToolbar()
         return true
@@ -219,10 +224,10 @@ import os
         let available = CGSize(width: max(1, selection.maxX - origin.x), height: max(1, selection.maxY - origin.y))
         annotation.textMaxWidth = min(annotation.textMaxWidth ?? available.width, available.width)
         let editor = CaptureTextView(annotation: annotation, availableSize: available)
-        editingTextIndex = index; textEditor = editor; hideMagnifier()
+        editingTextIndex = index; textEditor = editor; tool = .text; hideMagnifier()
         editor.onCommit = { [weak self] in self?.finishTextEditing() }
         addSubview(editor)
-        updateAnnotations(); updateSelectionLayers()
+        updateAnnotations(); updateSelectionLayers(); updateToolbar()
         window?.makeFirstResponder(editor)
         editor.setSelectedRange(NSRange(location: (editor.string as NSString).length, length: 0))
     }
