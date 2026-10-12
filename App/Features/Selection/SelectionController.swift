@@ -12,6 +12,8 @@ import RoarkTPlatform
     private let notice: @MainActor (String) -> Void
     private let aiConfigured: @MainActor () -> Bool
     private let allowed: @MainActor () -> Bool
+    var inputTranslation: @MainActor (String) -> Void = { _ in }
+    private let frontmost: @MainActor () -> ContentSnapshot.Source?
     private let capture: SelectionCapture
     private let toolbar = SelectionToolbarWindow()
     private var running = false
@@ -31,9 +33,12 @@ import RoarkTPlatform
          notice: @escaping @MainActor (String) -> Void,
          aiConfigured: @escaping @MainActor () -> Bool = { true },
          allowed: @escaping @MainActor () -> Bool = { SecureInput.status() == .allowed },
-         capture: SelectionCapture = SelectionCapture()) {
+         capture: SelectionCapture = SelectionCapture(),
+         frontmost: @escaping @MainActor () -> ContentSnapshot.Source? = {
+             Accessibility.frontmostApplication.map { .init(pid: $0.pid, bundleID: $0.bundleID, applicationName: $0.name ?? "来源应用") }
+         }) {
         self.settings = settings; self.perform = perform; self.search = search
-        self.notice = notice; self.capture = capture; self.aiConfigured = aiConfigured; self.allowed = allowed
+        self.notice = notice; self.capture = capture; self.aiConfigured = aiConfigured; self.allowed = allowed; self.frontmost = frontmost
         super.init()
     }
 
@@ -165,9 +170,15 @@ import RoarkTPlatform
             if action != nil { notice("无法读取选区，请检查辅助功能权限和安全输入状态。") }
             return
         }
-        guard let app = Accessibility.frontmostApplication,
+        guard let app = frontmost(),
               app.pid != ProcessInfo.processInfo.processIdentifier,
-              SelectionPolicy.permits(app.bundleID, settings: currentSettings.selection) else { return }
+              SelectionPolicy.permits(app.bundleID, settings: currentSettings.selection) else {
+            // An explicit translation shortcut can accept typed input without reading excluded/self apps.
+            if let action, let template = currentSettings.templates.first(where: { $0.id == action }), TranslateWindowState.accepts(template) {
+                inputTranslation(action)
+            }
+            return
+        }
         let requestGeneration = generation
         pendingIsShortcut = action != nil
         pending = Task { @MainActor [weak self] in
@@ -198,7 +209,13 @@ import RoarkTPlatform
                 guard self.generation == requestGeneration else { return }
                 self.pending = nil
                 self.pendingIsShortcut = false
-                if action != nil { self.notice("未能取得选中文字，请重新选择并检查辅助功能权限。") }
+                if self.running, self.allowed(), let action,
+                   let template = self.settings().templates.first(where: { $0.id == action }),
+                   TranslateWindowState.accepts(template),
+                   (error as? PlatformReadError) != .secureInput, (error as? PlatformReadError) != .sourceChanged,
+                   (error as? SelectionCapture.Failure) != .sourceChanged {
+                    self.dismiss(); self.inputTranslation(action)
+                } else if action != nil { self.notice("未能取得选中文字，请重新选择并检查辅助功能权限。") }
             }
         }
     }

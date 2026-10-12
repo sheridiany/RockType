@@ -99,6 +99,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         inputAI.start()
         permissions.start()
         operationsEnvironment.start()
+        selectionController.inputTranslation = { [weak self] in self?.operations.openInputTranslation(templateID: $0) }
+        operations.rememberTranslationTarget = { [weak self] in self?.store.settings.translation.targetLanguage = $0 }
         selectionController.start()
         PinnedImageController.shared.setHistoryLimit(store.settings.screenshot.pinHistoryLimit ?? 10)
         screenshot.start()
@@ -230,6 +232,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         noticeController.show(message: "当前内容已清除。")
     }
 
+    @objc private func inputTranslation() { panel.close(); selectionController.dismiss(); operations.openInputTranslation() }
+
     @objc private func captureScreenshot() { panel.close(); screenshot.capture() }
 
     @objc private func showScreenshotHistory() { panel.close(); screenshot.showHistory() }
@@ -254,6 +258,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func makeMenu() -> NSMenu {
         let menu = NSMenu()
+        menu.addItem(withTitle: "输入翻译", action: #selector(inputTranslation), keyEquivalent: "").target = self
         menu.addItem(withTitle: "截图", action: #selector(captureScreenshot), keyEquivalent: "").target = self
         for (title, action) in [
             ("截图历史", #selector(showScreenshotHistory)),

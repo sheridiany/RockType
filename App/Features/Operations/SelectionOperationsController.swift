@@ -7,6 +7,8 @@ import RoarkTPlatform
     let environment: OperationsEnvironment
     private(set) var window: ResultWindowController?
     private(set) var windows: [ResultWindowController] = []
+    private(set) var translationWindow: TranslateWindowController?
+    var rememberTranslationTarget: (String) -> Void = { _ in }
     private let settings: @MainActor () -> AppSettings
     private let aiConfigured: @MainActor () -> Bool
     private let notice: @MainActor (String) -> Void
@@ -34,12 +36,19 @@ import RoarkTPlatform
         if !aiConfigured() { current.translation.engine = .offlineFirst }
         let request = OperationRequest(session: request.session, template: request.template,
             settings: current, question: request.question, maximumInputBytes: request.maximumInputBytes)
-        replaceWindow()?.show(request, source: source, toolbarRect: toolbarRect)
+        if TranslateWindowState.accepts(request.template) {
+            showTranslation(request, source: source, anchor: toolbarRect)
+        } else { replaceWindow()?.show(request, source: source, toolbarRect: toolbarRect) }
     }
 
     func presentCompleted(_ result: OperationResult, template: OperationTemplate) {
         guard readable() else { return }
         if settings().privacy.keepRecentResultsInMemory { environment.recent.add(result) }
+        if TranslateWindowState.accepts(template) {
+            let request = OperationRequest(session: result.session, template: template, settings: settings())
+            showTranslation(request, source: nil, anchor: nil, completed: result)
+            return
+        }
         replaceWindow()?.show(result, template: template, initialRetryUnavailable:
             ScreenshotSession.imageTemplate(forID: result.templateID) != nil
                 ? "追问仅基于文字解释。原图未保留在对话中；重新解释图片请从图片预览确认发送。" : nil)
@@ -52,9 +61,37 @@ import RoarkTPlatform
         let template = settings().templates.first { $0.id == result.templateID }
             ?? ScreenshotSession.imageTemplate(forID: result.templateID)
             ?? OperationTemplate(id: result.templateID, name: "最近结果", icon: "text.bubble", prompt: "")
+        if TranslateWindowState.accepts(template) {
+            let request = OperationRequest(session: result.session, template: template, settings: settings())
+            showTranslation(request, source: nil, anchor: nil, completed: result)
+            return
+        }
         replaceWindow()?.show(result, template: template, initialRetryUnavailable:
             ScreenshotSession.imageTemplate(forID: result.templateID) != nil
                 ? "追问仅基于文字解释。原图未保留在对话中；重新解释图片请从图片预览确认发送。" : nil)
+    }
+
+    func openInputTranslation(templateID: String = "translate") {
+        guard readable() else { notice("当前输入受保护或无法检查，未打开翻译。 "); return }
+        var current = settings()
+        guard let template = current.templates.first(where: { $0.id == templateID }), TranslateWindowState.accepts(template) else { return }
+        if !aiConfigured() { current.translation.engine = .offlineFirst }
+        let snapshot = ContentSnapshot(text: "", source: .init(pid: ProcessInfo.processInfo.processIdentifier,
+            bundleID: Identifiers.appBundleID, applicationName: "输入翻译"), method: .paste)
+        showTranslation(.init(session: .init(snapshot: snapshot), template: template, settings: current), source: nil, anchor: nil, focus: true)
+    }
+
+    func showTranslation(_ request: OperationRequest, source: OperationSource?, anchor: CGRect?, focus: Bool = false, completed: OperationResult? = nil) {
+        guard readable() else { return }
+        translationWindow?.close()
+        let controller = TranslateWindowController(request: request, runner: makeRunner(), settings: settings,
+            rememberTarget: { [weak self] in self?.rememberTranslationTarget($0) }, allowed: readable,
+            completed: { [weak self] result in
+                guard let self, self.readable(), self.settings().privacy.keepRecentResultsInMemory else { return }
+                self.environment.recent.add(result)
+            }, feedback: notice)
+        translationWindow = controller
+        controller.show(source: source, anchor: anchor ?? request.session.snapshot.selectionRect, focus: focus, completed: completed)
     }
 
     func search(_ snapshot: ContentSnapshot, settings: AppSettings) {
@@ -71,6 +108,7 @@ import RoarkTPlatform
     }
 
     func clearCurrentContent() {
+        translationWindow?.close(); translationWindow = nil
         windows.forEach { $0.stop() }; windows.removeAll(); window = nil
         environment.clearCurrentContent()
     }

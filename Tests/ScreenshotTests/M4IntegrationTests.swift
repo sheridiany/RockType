@@ -134,8 +134,9 @@ final class M4IntegrationTests: XCTestCase {
         preview.text = "Corrected synthetic OCR"
         for id in ["translate", "summarize"] {
             preview.runText(templateID: id)
-            await settle { operations.window?.state.phase == .done }
-            XCTAssertEqual(operations.window?.state.session?.snapshot.text, preview.text)
+            let state = id == "translate" ? operations.translationWindow?.state.result : operations.window?.state
+            await settle { state?.phase == .done }
+            XCTAssertEqual(state?.session?.snapshot.text, preview.text)
             XCTAssertEqual(environment.recent.results.first?.templateID, id)
         }
         preview.text = "Synthetic OCR"

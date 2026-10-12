@@ -118,6 +118,11 @@ struct LiveResultWindowView: View {
                     .disabled(state.asking ? state.isBusy : !state.canAsk)
                     .help(state.asking && state.isBusy ? "停止或完成生成后可收起追问" : (state.asking ? "收起追问" : "追问 · ⌘L"))
                     .accessibilityLabel(state.asking ? "收起追问" : "追问")
+                if let replacement = controller.sourceReplacement {
+                    SourceReplacementButton(replacement: replacement, text: state.answer,
+                        enabled: state.phase == .done && state.currentQuestion == nil,
+                        feedback: { state.notice = $0 })
+                }
                 Button { controller.copy() } label: { Image(systemName: "doc.on.doc") }
                     .buttonStyle(ResultActionIconStyle())
                     .disabled(!state.canCopy).help("复制结果 · ⌘C").accessibilityLabel("复制结果")

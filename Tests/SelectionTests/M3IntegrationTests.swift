@@ -152,7 +152,7 @@ import RoarkTCore
         #expect(runners[2].requests[0].settings.translation.engine == .offlineFirst)
         runners[2].streams[0].yield(.failed(.unavailable))
         try await runners[2].waitForConsumption(0)
-        try #require(operations.window?.state.phase == .failed && notices.last?.contains("服务") == true)
+        try #require(operations.translationWindow?.state.result.phase == .failed && notices.last?.contains("服务") == true)
         readable = false
         selection.performAction("translate", captured: captured, fromToolbar: true)
         #expect(runners.count == 3)

@@ -24,6 +24,7 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
     private var globalMonitor: Any?
     private var safetyTask: Task<Void, Never>?
     private var source: OperationSource?
+    private(set) var sourceReplacement: SourceReplacement?
     private let readable: @MainActor () -> Bool
     private let aiConfigured: @MainActor () -> Bool
     private var sourceChanged = false
@@ -90,6 +91,8 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
 
     func show(_ request: OperationRequest, source: OperationSource? = nil, toolbarRect: CGRect? = nil) {
         guard readable() else { feedback("当前输入受保护或无法检查，未打开结果。"); return }
+        sourceReplacement?.stop()
+        sourceReplacement = request.template.id == "polish" ? SourceReplacement(source: source, snapshot: request.session.snapshot) : nil
         start(); self.source = source; sourceChanged = false
         initialRetryUnavailable = nil
         state.show(request); present(snapshot: request.session.snapshot, toolbarRect: toolbarRect)
@@ -98,6 +101,8 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
     func show(_ result: OperationResult, template: OperationTemplate, toolbarRect: CGRect? = nil,
               initialRetryUnavailable: String? = nil) {
         guard readable() else { feedback("当前输入受保护或无法检查，未打开结果。"); return }
+        sourceReplacement?.stop()
+        sourceReplacement = template.id == "polish" ? SourceReplacement(source: nil, snapshot: result.session.snapshot) : nil
         start(); source = nil
         // A persisted-in-memory result has no retained AX window identity. Never guess a return target.
         sourceChanged = true
@@ -108,6 +113,7 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
     }
 
     func close() {
+        sourceReplacement?.stop(); sourceReplacement = nil
         safetyTask?.cancel(); safetyTask = nil
         panel.orderOut(nil); panel.acceptsKeyboard = false
         state.stop(); source = nil; anchor = nil; initialRetryUnavailable = nil
@@ -186,6 +192,7 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(200))
                 guard !Task.isCancelled, let self else { return }
+                self.sourceReplacement?.refresh()
                 if !self.readable() {
                     self.close(); self.feedback("输入状态无法安全检查，结果窗口已关闭。")
                     return
@@ -251,6 +258,7 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
 
     private func outsideClick() {
         guard panel.isVisible else { return }
+        if sourceReplacement?.busy == true { return }
         if settings().selection.automaticallyClose && !state.pinned { close() }
         else {
             state.asking = false; panel.makeFirstResponder(nil)
@@ -263,6 +271,7 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
               let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
         if app.processIdentifier != source?.pid && app.processIdentifier != ProcessInfo.processInfo.processIdentifier {
             sourceChanged = true
+            sourceReplacement?.invalidate()
             outsideClick()
         }
     }
