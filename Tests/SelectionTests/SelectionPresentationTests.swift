@@ -20,19 +20,23 @@ import RoarkTCore
                 settings.selection.toolbarActions.append(id)
             }
         }
-        for dark in [false, true] {
-            let view = LiveSelectionToolbar(actions: SelectionToolbarAction.configured(in: settings),
-                maximumWidth: Tokens.Size.resultWidth, perform: { _ in }, renderingSnapshot: true)
-                .environment(\.colorScheme, dark ? .dark : .light)
-            let renderer = ImageRenderer(content: view)
-            renderer.scale = 2
-            let image = try #require(renderer.cgImage)
-            #expect(image.width <= Int(Tokens.Size.resultWidth * 2))
-            #expect(image.height > 0)
-            if let output {
-                let bitmap = NSBitmapImageRep(cgImage: image)
-                let data = try #require(bitmap.representation(using: .png, properties: [:]))
-                try data.write(to: output.appendingPathComponent("toolbar-\(crowded ? "crowded" : "normal")-\(dark ? "dark" : "light").png"))
+        for iconsOnly in [false, true] {
+            for maximumWidth in [CGFloat(160), Tokens.Size.resultWidth] {
+                for dark in [false, true] {
+                    let view = LiveSelectionToolbar(actions: SelectionToolbarAction.configured(in: settings),
+                        maximumWidth: maximumWidth, perform: { _ in }, renderingSnapshot: true, iconsOnly: iconsOnly)
+                        .environment(\.colorScheme, dark ? .dark : .light)
+                    let renderer = ImageRenderer(content: view)
+                    renderer.scale = 2
+                    let image = try #require(renderer.cgImage)
+                    #expect(image.width <= Int(maximumWidth * 2))
+                    #expect(image.height > 0)
+                    if let output {
+                        let bitmap = NSBitmapImageRep(cgImage: image)
+                        let data = try #require(bitmap.representation(using: .png, properties: [:]))
+                        try data.write(to: output.appendingPathComponent("toolbar-\(iconsOnly ? "icons" : "labels")-\(crowded ? "crowded" : "normal")-\(dark ? "dark" : "light")-\(Int(maximumWidth)).png"))
+                    }
+                }
             }
         }
     }
@@ -44,6 +48,12 @@ import RoarkTCore
     #expect(!panel.canBecomeKey && !panel.canBecomeMain)
     #expect(panel.styleMask.contains(.nonactivatingPanel))
     #expect(panel.frame.width <= Tokens.Size.resultWidth)
+    let labeledWidth = panel.frame.width
+    var compactSettings = AppSettings()
+    compactSettings.selection.toolbarIconsOnly = true
+    window.show(snapshot: snapshot, settings: compactSettings, perform: { _ in })
+    #expect(panel.frame.width < labeledWidth)
+    #expect(!panel.canBecomeKey && !panel.canBecomeMain)
     window.hide()
     #expect(!window.isVisible)
 }

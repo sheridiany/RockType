@@ -19,19 +19,25 @@ struct SelectionToolbarAction: Identifiable {
     }
 }
 
-/// Live toolbar uses the same tokens and button treatment as the D0 surface.
+/// Nonactivating controls with one shared geometry for icons and labeled actions.
 struct LiveSelectionToolbar: View {
     let actions: [SelectionToolbarAction]
     let maximumWidth: CGFloat
     let perform: (String) -> Void
     /// ImageRenderer cannot draw AppKit-backed menus; export their label only.
     var renderingSnapshot = false
+    var iconsOnly = false
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            buttons(compact: false, items: actions)
-            buttons(compact: true, items: Array(actions.prefix(compactCount)), overflow: Array(actions.dropFirst(compactCount)))
+        Group {
+            if iconsOnly { compactButtons }
+            else {
+                ViewThatFits(in: .horizontal) {
+                    buttons(compact: false, items: actions)
+                    compactButtons
+                }
+            }
         }
         .frame(maxWidth: maximumWidth)
         .fixedSize(horizontal: false, vertical: true)
@@ -42,41 +48,62 @@ struct LiveSelectionToolbar: View {
     }
 
     private var compactCount: Int {
-        max(1, Int((maximumWidth - Tokens.Space.xxl * 3) / (Tokens.Size.control + Tokens.Space.sm)) - 1)
+        let capacity = max(1, Int((maximumWidth - Tokens.Space.lg * 3 + Tokens.Space.xs) / 36))
+        return actions.count <= capacity ? actions.count : max(0, capacity - 1)
     }
-
+    private var compactButtons: some View {
+        buttons(compact: true, items: Array(actions.prefix(compactCount)), overflow: Array(actions.dropFirst(compactCount)))
+    }
     private func buttons(compact: Bool, items: [SelectionToolbarAction], overflow: [SelectionToolbarAction] = []) -> some View {
         HStack(spacing: Tokens.Space.xs) {
-            ForEach(items) { action in
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, action in
+                if index > 0, ["copy", "search"].contains(action.id), !["copy", "search"].contains(items[index - 1].id) {
+                    Rectangle().fill(Tokens.palette(scheme).line)
+                        .frame(width: Tokens.Size.hairline, height: Tokens.Space.lg)
+                        .padding(.horizontal, Tokens.Space.xs)
+                }
                 Button { perform(action.id) } label: {
-                    HStack(spacing: Tokens.Space.xs) {
-                        Image(systemName: action.symbol)
-                        if !compact { Text(action.title).lineLimit(1) }
+                    HStack(spacing: Tokens.Space.sm) {
+                        Image(systemName: action.symbol).font(.system(size: 14, weight: .medium))
+                            .frame(width: Tokens.Space.lg, height: Tokens.Space.lg)
+                        if !compact { Text(action.title).lineLimit(1).fixedSize() }
                     }
                 }
-                .buttonStyle(DesignButtonStyle(variant: .ghost))
+                .buttonStyle(SelectionActionStyle())
                 .disabled(!action.enabled)
                 .accessibilityLabel(action.title).help(action.enabled ? action.title : "请前往设置配置 AI 连接")
             }
             if !overflow.isEmpty {
                 if renderingSnapshot {
-                    Image(systemName: "ellipsis")
-                        .frame(width: Tokens.Size.control, height: Tokens.Size.control)
+                    Image(systemName: "ellipsis").frame(width: 32, height: 32)
                 } else {
                     Menu {
                         ForEach(overflow) { action in
                             Button(action.enabled ? action.title : action.title + " · 请前往设置配置 AI", systemImage: action.symbol) { perform(action.id) }
                                 .disabled(!action.enabled)
                         }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                    }
-                    .menuStyle(.borderlessButton)
-                    .fixedSize()
-                    .accessibilityLabel("更多操作")
+                    } label: { Image(systemName: "ellipsis").frame(width: 32, height: 32) }
+                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().tint(Tokens.palette(scheme).secondary)
+                    .accessibilityLabel("更多操作").help("更多操作")
                 }
             }
-        }.padding(Tokens.Space.xs).fixedSize()
+        }.padding(Tokens.Space.sm).fixedSize()
+    }
+}
+
+private struct SelectionActionStyle: ButtonStyle {
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.isEnabled) private var enabled
+    @Environment(\.isFocused) private var focused
+    @State private var hovering = false
+    func makeBody(configuration: Configuration) -> some View {
+        let p = Tokens.palette(scheme)
+        configuration.label.padding(Tokens.Space.sm)
+            .foregroundStyle(enabled ? p.foreground : p.tertiary)
+            .background(enabled && (hovering || configuration.isPressed) ? p.hover : .clear,
+                        in: RoundedRectangle(cornerRadius: Tokens.Radius.control))
+            .overlay(RoundedRectangle(cornerRadius: Tokens.Radius.control).stroke(focused ? p.focus : .clear, lineWidth: 2))
+            .contentShape(Rectangle()).onHover { hovering = $0 }
     }
 }
 
@@ -97,6 +124,7 @@ private final class SelectionHostingView: NSHostingView<LiveSelectionToolbar> {
     func contains(_ window: NSWindow?) -> Bool { window === panel }
 
     init() {
+        panel.animationBehavior = .none
         panel.isFloatingPanel = true
         panel.level = .popUpMenu
         panel.backgroundColor = .clear
@@ -116,7 +144,8 @@ private final class SelectionHostingView: NSHostingView<LiveSelectionToolbar> {
         guard let screen = NSScreen.screens.first(where: { $0.frame.contains(cursor) })
                 ?? NSScreen.screens.first(where: { $0.frame.contains(anchor) }) else { hide(); return }
         let maximumWidth = max(Tokens.Size.control, min(Tokens.Size.resultWidth, screen.visibleFrame.width - 16))
-        let view = LiveSelectionToolbar(actions: actions, maximumWidth: maximumWidth, perform: perform)
+        let view = LiveSelectionToolbar(actions: actions, maximumWidth: maximumWidth, perform: perform,
+            iconsOnly: settings.selection.toolbarIconsOnly ?? false)
         let host = SelectionHostingView(rootView: view)
         panel.contentView = host
         let size = host.fittingSize
@@ -132,7 +161,7 @@ private final class SelectionHostingView: NSHostingView<LiveSelectionToolbar> {
         panel.orderFrontRegardless()
         if panel.alphaValue < 1 {
             NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.10
+                context.duration = 0.08
                 panel.animator().alphaValue = 1
             }
         }
