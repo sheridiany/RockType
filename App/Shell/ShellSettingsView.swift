@@ -227,6 +227,12 @@ struct ShellSettingsView: View {
                     Text("划词即出").tag(SelectionSettings.Trigger.selection)
                     Text("仅快捷键").tag(SelectionSettings.Trigger.shortcutOnly)
                 }
+                toggle("工具栏仅显示图标", Binding(get: { settings.selection.toolbarIconsOnly ?? false },
+                    set: { settings.selection.toolbarIconsOnly = $0 }))
+                toggle("减少工具栏误弹", Binding(get: { settings.selection.suppressAccidentalPopups ?? true },
+                    set: { settings.selection.suppressAccidentalPopups = $0 }))
+                Text("忽略不足两个字符的选区、按住修饰键拖选和拖选时滚动；快捷键不受影响。")
+                    .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(p.secondary)
                 toggle("功能窗口跟随工具栏", $settings.selection.followToolbar)
                 toggle("点击外部自动关闭", $settings.selection.automaticallyClose)
                 toggle("自动置顶", $settings.selection.automaticallyPin)

@@ -23,8 +23,7 @@ import RoarkTPlatform
     private var observationGeneration: UInt64 = 0
     private var selection: CapturedSelection?
     private var pendingIsShortcut = false
-    private var mouseDown = false
-    private var dragged = false
+    private var gesture = SelectionGesture()
 
     init(settings: @escaping @MainActor () -> AppSettings,
          perform: @escaping @MainActor (OperationRequest, OperationSource?, CGRect?) -> Void,
@@ -93,12 +92,12 @@ import RoarkTPlatform
         guard running else { return }; beginCapture(action: id)
     }
 
-    func dismiss() {
+    func dismiss(resetGesture: Bool = true) {
         generation &+= 1
         pending?.cancel(); pending = nil
         selection = nil
         pendingIsShortcut = false
-        mouseDown = false; dragged = false
+        if resetGesture { gesture = SelectionGesture() }
         toolbar.hide()
     }
 
@@ -128,14 +127,20 @@ import RoarkTPlatform
         switch event.type {
         case .leftMouseDown:
             dismiss()
-            mouseDown = !local
+            if !local { gesture.begin(modifiers: event.modifierFlags,
+                suppress: settings().selection.suppressAccidentalPopups ?? true) }
         case .leftMouseDragged:
-            if mouseDown { dragged = true }
+            gesture.drag(modifiers: event.modifierFlags)
         case .leftMouseUp:
-            let selected = !local && mouseDown && (dragged || event.clickCount >= 2)
-            mouseDown = false; dragged = false
-            if selected, settings().selection.trigger == .selection { beginCapture(action: nil) }
-        case .rightMouseDown, .otherMouseDown, .keyDown, .flagsChanged, .scrollWheel: dismiss()
+            let selected = gesture.finish(clickCount: event.clickCount, modifiers: event.modifierFlags)
+            if !local, selected, settings().selection.trigger == .selection { beginCapture(action: nil) }
+        case .scrollWheel:
+            gesture.scroll()
+            dismiss(resetGesture: false)
+        case .flagsChanged:
+            gesture.modifiersChanged(event.modifierFlags)
+            dismiss(resetGesture: false)
+        case .rightMouseDown, .otherMouseDown, .keyDown: dismiss()
         default: break
         }
     }
@@ -180,7 +185,9 @@ import RoarkTPlatform
                 self.selection = captured
                 if let action { self.invoke(action, fromToolbar: false) }
                 else {
-                    guard self.settings().selection.trigger == .selection else { self.dismiss(); return }
+                    guard self.settings().selection.trigger == .selection,
+                          SelectionGesture.permitsText(captured.snapshot.text,
+                            suppress: self.settings().selection.suppressAccidentalPopups ?? true) else { self.dismiss(); return }
                     self.toolbar.show(snapshot: captured.snapshot, settings: self.settings(), aiConfigured: self.aiConfigured()) { [weak self] in
                         self?.invoke($0, fromToolbar: true)
                     }
