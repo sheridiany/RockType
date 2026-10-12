@@ -4,7 +4,7 @@ import SwiftUI
 import Testing
 @testable import RoarkTApp
 
-@MainActor @Test func voiceCapsuleHasNoNormalTextAndOnlyErrorsExpand() {
+@MainActor @Test func voiceCapsuleHasNoNormalTextAndOnlyUncommittedResultsExpand() {
     let hud = RoarkTVoiceHUD(present: { _ in }, reduceMotion: { true })
     for state in [RoarkTVoiceHUD.State.preparing, .recording, .processing, .polishing, .success("已填入"), .noSpeech] {
         hud.render(state)
@@ -15,9 +15,9 @@ import Testing
         #expect(!hud.content.waveform.isHidden)
         #expect(hud.content.close.alphaValue == 0)
     }
-    for state in [RoarkTVoiceHUD.State.notice(title: "识别未完成", detail: "请重试"), .result(String(repeating: "合成结果。", count: 300))] {
+    for state in [RoarkTVoiceHUD.State.result(String(repeating: "合成结果。", count: 300))] {
         hud.render(state)
-        #expect(hud.presentationSize == NSSize(width: 320, height: 196))
+        #expect(hud.presentationSize == NSSize(width: 280, height: 164))
         #expect(!hud.content.heading.isHidden && !hud.content.copyButton.isHidden)
         #expect(hud.content.detailText.stringValue == state.detail)
     }
@@ -44,7 +44,7 @@ import Testing
     allowed = false; hud.content.copyButton.performClick(nil)
     #expect(copied.count == 1)
     allowed = true; state.result = ""; adapter.show(); hud.content.copyButton.performClick(nil)
-    #expect(copied.last == "输入位置变化")
+    #expect(copied.count == 1, "A notice must not copy error text")
     adapter.hide()
 }
 
@@ -102,10 +102,10 @@ import Testing
     }
 }
 
-@MainActor @Test func voiceV1RendersEveryStateAndMotionFrames() throws {
+@MainActor @Test func voiceB3RendersEveryStateAndMotionFrames() throws {
     _ = NSApplication.shared
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-    let output = root.appendingPathComponent(".build/v1")
+    let output = root.appendingPathComponent(".build/b3")
     try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
     let states: [(String, RoarkTVoiceHUD.State)] = [
         ("preparing", .preparing), ("recording", .recording), ("silent", .recording),
@@ -181,7 +181,7 @@ import Testing
 @MainActor @Test func voiceGalleryExportsTheProductionSurfaceThroughImageRenderer() throws {
     _ = NSApplication.shared
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-    let output = root.appendingPathComponent(".build/v1")
+    let output = root.appendingPathComponent(".build/b3")
     try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
     let entries = InputVoiceGallery.entries.filter { $0.surface == "voice-hud" }
     #expect(entries.count == 10)
@@ -191,7 +191,7 @@ import Testing
             renderer.scale = 2
             let image = try #require(renderer.cgImage)
             let bitmap = NSBitmapImageRep(cgImage: image)
-            #expect(bitmap.pixelsWide <= 640 && bitmap.pixelsHigh <= 392)
+            #expect(bitmap.pixelsWide <= 560 && bitmap.pixelsHigh <= 328)
             let center = try #require(bitmap.colorAt(x: bitmap.pixelsWide / 2, y: bitmap.pixelsHigh / 2)?.usingColorSpace(.deviceRGB))
             #expect(center.alphaComponent > 0.9, "Gallery must render the surface, not an unsupported-view placeholder")
             try #require(bitmap.representation(using: .png, properties: [:]))
@@ -200,3 +200,29 @@ import Testing
     }
 }
 #endif
+
+@MainActor @Test func voiceB3NoticesAreCompactAndNeverOfferCopy() {
+    let hud = RoarkTVoiceHUD(present: { _ in }, reduceMotion: { true })
+    for message in ["请重试。", "请在设置 → 权限中允许麦克风，再按住 Fn。", String(repeating: "合成的长提示", count: 30)] {
+        hud.render(.notice(title: "语音未完成", detail: message))
+        #expect(hud.presentationSize.width <= 280 && hud.presentationSize.height <= 56)
+        #expect(hud.content.copyButton.isHidden)
+        #expect(hud.content.heading.maximumNumberOfLines == 2)
+    }
+    hud.render(.result(" \n ", reason: "输入位置无法确认"))
+    #expect(hud.content.copyButton.isHidden && hud.presentationSize.height <= 56)
+    hud.hide()
+}
+
+@MainActor @Test func voiceB3NoticeHidesAutomaticallyWithoutDismissingAResult() async throws {
+    let hud = RoarkTVoiceHUD(present: { _ in }, reduceMotion: { true })
+    hud.show(.notice(title: "语音未完成", detail: "请先下载模型。"))
+    try await Task.sleep(for: .milliseconds(3800))
+    #expect(!hud.isPresented && hud.content.heading.stringValue.isEmpty)
+    hud.show(.notice(title: "语音未完成", detail: "请重试。"), dismissAfter: 0.02)
+    hud.show(.result("需要保留的合成结果。"))
+    try await Task.sleep(for: .milliseconds(100))
+    #expect(hud.isPresented && !hud.content.copyButton.isHidden)
+    #expect(hud.content.detailText.stringValue.contains("需要保留的合成结果。"))
+    hud.hide()
+}

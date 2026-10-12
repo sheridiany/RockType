@@ -247,10 +247,8 @@ private func handleRimeNotification(delegate: SquirrelApplicationDelegate, sessi
     return
   }
 
-  if messageType == "schema", let messageValue = messageValue, let schemaName = try? /^[^\/]*\/(.*)$/.firstMatch(in: messageValue)?.output.1 {
-    delegate.showStatusMessage(msgTextLong: String(schemaName), msgTextShort: String(schemaName))
-    return
-  } else if messageType == "option" {
+  // Schema activation is silent; explicit mode/option feedback remains below.
+  if messageType == "option" {
     let state = messageValue?.first != "!"
     let optionName = if state {
       messageValue

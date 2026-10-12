@@ -38,8 +38,13 @@ import RoarkTCore
         try await Task.sleep(for: .milliseconds(560))
         #expect(runner.requests.count == 1 && state.result.answer.isEmpty)
         state.edit("最终原文")
-        try await Task.sleep(for: .milliseconds(560))
-        #expect(runner.requests.count == 2)
+        // Parallel AppKit rendering can delay when the debounce task begins its sleep.
+        // Await its observable request, not a 60ms scheduling margin over the debounce.
+        let deadline = ContinuousClock.now + .seconds(3)
+        while runner.requests.count < 2, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        try #require(runner.requests.count == 2)
         #expect(runner.requests.last?.session.snapshot.text == "最终原文")
         #expect(runner.requests[0].session.id != runner.requests[1].session.id)
         state.edit("Return immediately"); state.submit()

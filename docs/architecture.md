@@ -66,13 +66,13 @@ R4-UI 为 Mock/Gallery、依赖样本的原型视图和全部 Gallery 启动入�
 
 `VoiceInputController` 管理 Fn 会话、取消、保护检查与 HUD，依赖 `VoiceInterfaces` 中的本地接口。`VoiceEnvironment` 提供系统状态；`VoiceWorkerClient` 管理识别连接/准备；`VoiceCommitBridge` 管理端点发现和 ticket；`VoiceReply` 使成功、错误、超时、取消只完成一次。`VoiceModelStore` 管理下载状态，`VoiceModelVerification` 记录并复检已校验的文件身份。
 
-主 App 只在按住 Fn 的录音阶段获取麦克风数据。模型预加载不录音。识别后可选 AI 润色，失败保留原文；填入前仍须核对来源、ticket、期限、Secure Input 和密码框。没有模拟粘贴或自动发送。
+主 App 只在按住 Fn 的录音阶段获取麦克风数据。模型预加载不录音。识别后可选 AI 润色，失败保留原文；填入前仍须核对来源、ticket、期限、Secure Input 和密码框。SPEC-017 B2 增加绑定失败时的受控粘贴兜底，不自动发送。`VoicePasteBridge` 在 Fn 按下时捕获 AX 应用/窗口/元素/选区身份（不读字段文字），复用 `ReplacementPasteTransaction.shared` 与替换原文互斥保存/恢复剪贴板；仅持有本次写入的 changeCount/标记时恢复，后来的用户复制优先。捕获不到可靠 AX 位置仍可录音，但只保留结果供复制。有 ticket 的提交拒绝或超时不再粘贴，避免重复填入。
 
 录音内存上限 180 秒（16 kHz 单声道 Float32，11.52 MB）；到限自动停止并识别。`VoiceAudioSegmentation` 是 Core 中的 MIT Foundation 策略，worker 通过源链接编译同一源文件：最多 28 秒一段，在上限前搜索静音，段间不重叠、不丢样；各段独立 token 预算，拼接不去重、不改已有标点。模型准备时用一秒合成静音预热首个解码步骤，不启用麦克风。
 
 App 每 3 秒取新音频做一次预览，同一连接只允许一个预览在途，避免与最终识别并发。SPEC-015 V1 已移除 HUD 预览字段，中间文字直接丢弃；松键后同步停录，等待当前有界预览，然后完整重识别所有音频。RTF 超过 0.8 或预览失败会在本次运行内按模型停用预览；失败导致 worker 退出时，松键后恢复已校验模型。取消/安全输入/新会话丢弃迟到回复。自动准备在受保护输入下不开始。
 
-`RoarkTVoiceHUD` 负责非激活窗口的位置、尺寸过渡与收起代次；`RoarkTVoiceHUDContent` 负责胶囊/错误卡片、可访问性与可见期动效；`RoarkTVoiceHUDWaveform` 绘制真实电平、准备脉冲、三点和对勾。正常流程无文字/计时/预览。错误卡片关闭时立即清空并隐藏，避免敏感结果留在退场动画中。DEBUG Gallery 复用同一原生表面，静态导出使用其离屏位图。
+`RoarkTVoiceHUD` 负责非激活窗口的位置、尺寸过渡与收起代次；`RoarkTVoiceHUDContent` 负责胶囊/紧凑提示/未填入结果卡片、可访问性与可见期动效；`RoarkTVoiceHUDWaveform` 绘制真实电平、准备脉冲、三点和对勾。正常流程无文字/计时/预览。SPEC-017 B3 普通提示最多 280×52、3.5 秒自动隐藏；仅有未填入文字时展示 280×164 的复制卡片。结果卡片关闭时立即清空并隐藏，避免敏感结果留在退场动画中。DEBUG Gallery 复用同一原生表面，静态导出使用其离屏位图。
 
 长录音使用固定 600 秒 ticket 租约（App 截止时间提前 10 秒），没有续租或重新绑定；原 120 秒默认票据语义保留。按键、激活/失焦、连接身份、选区、Secure Input 与单次消费检查不变。最慢路径超出租约时仍拒绝填入并提供结果复制。`VoiceLatency` 区分松键后的阶段耗时与录音期间的重采样总耗时，后者不能再次计入首字延迟；日志不包含文字、音频或上下文。
 

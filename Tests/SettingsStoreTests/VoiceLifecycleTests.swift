@@ -8,6 +8,7 @@ import RoarkTCore
     var active = false
     var isRecording: Bool { active }
     var starts = 0
+    var failStart = false
     var audio = Data(repeating: 0, count: 64)
     var sampleCount = 0
     var enablePreviews = false
@@ -16,7 +17,7 @@ import RoarkTCore
         guard enablePreviews, offset * 4 + bytes <= audio.count else { return nil }
         return audio.subdata(in: (offset * 4)..<(offset * 4 + bytes))
     }
-    func start() throws { starts += 1; active = true }
+    func start() throws { if failStart { throw VoiceFailure.permission }; starts += 1; active = true }
     func finish() -> Data { active = false; return audio }
     func cancel() { active = false }
 }
@@ -49,8 +50,10 @@ import RoarkTCore
     var texts: [String] = []
     var accept = true
     var delayed = false
+    var captureFailure: VoiceFailure?
     var pending: CheckedContinuation<VoiceTarget, any Error>?
     func capture(pid: Int32) async throws -> VoiceTarget {
+        if let captureFailure { throw captureFailure }
         if delayed { return try await withCheckedThrowingContinuation { pending = $0 } }
         return target
     }
@@ -58,10 +61,24 @@ import RoarkTCore
     func commit(_ text: String, target: VoiceTarget) async throws -> Bool { texts.append(text); return accept }
     func cancel(_ target: VoiceTarget?) {}
 }
+@MainActor private final class PasteDouble: VoicePasting {
+    var texts: [String] = []
+    var available = true
+    var current = true
+    func capture(pid: Int32) -> VoicePasteTarget? {
+        available ? VoicePasteTarget(applicationID: "test.editor", deadline: .greatestFiniteMagnitude,
+            validate: { self.current }, post: {}) : nil
+    }
+    func paste(_ text: String, target: VoicePasteTarget, allowed: @escaping @MainActor () -> Bool) async throws -> Bool {
+        guard allowed(), target.validate() else { return false }
+        texts.append(text); return true
+    }
+}
 @MainActor private final class VoiceHarness {
     let recorder = RecordingDouble()
     let worker = WorkerDouble()
     let bridge = BridgeDouble()
+    let paste = PasteDouble()
     var allowed = true
     var held = true
     var pid: Int32? = 10
@@ -72,7 +89,7 @@ import RoarkTCore
     var now = 1000.0
     var selected = false
     var polish: @MainActor (String) async -> String = { $0 }
-    lazy var controller = VoiceInputController(recorder: recorder, worker: worker, bridge: bridge,
+    lazy var controller = VoiceInputController(recorder: recorder, worker: worker, bridge: bridge, paste: paste,
         environment: VoiceEnvironment(settings: { self.settings }, allowed: { self.allowed },
             pid: { self.pid }, held: { self.held }, microphoneGranted: { self.granted },
             validate: { _ in
@@ -103,6 +120,7 @@ import RoarkTCore
     #expect(h.bridge.texts == ["合成测试结果。"])
     #expect(h.controller.state.result == "合成测试结果。")
     #expect(h.controller.state.phase == .failed)
+    #expect(h.paste.texts.isEmpty, "A rejected IMK commit must never trigger a second insertion")
     h.controller.stop()
 }
 
@@ -458,5 +476,62 @@ import RoarkTCore
     h.allowed = true; h.controller.refreshPreparation()
     for _ in 0..<30 { await Task.yield() }
     #expect(h.worker.prepared == 1 && h.recorder.starts == 0)
+    h.controller.stop()
+}
+
+@MainActor @Test func voiceBindingFailureStillStartsRecording() async {
+    for failure in [VoiceFailure.unavailable, .timeout] {
+        let h = VoiceHarness(); h.bridge.captureFailure = failure
+        await h.begin()
+        #expect(h.recorder.active, "Binding failure must not prevent recording: \(h.controller.state.message)")
+        #expect(h.controller.state.phase == .recording)
+        h.controller.stop()
+    }
+}
+
+@MainActor @Test func voiceFallbackInsertsOnlyAfterFinalRecognitionAndKeepsIMKPreferred() async {
+    for bindingFails in [false, true] {
+        let h = VoiceHarness()
+        if bindingFails { h.bridge.captureFailure = .unavailable }
+        await h.begin()
+        #expect(h.paste.texts.isEmpty && h.recorder.active)
+        await h.recognize(); h.worker.resolve("最终合成文字")
+        for _ in 0..<40 { await Task.yield() }
+        #expect(h.controller.state.phase == .done)
+        #expect(h.paste.texts == (bindingFails ? ["最终合成文字。"] : []))
+        #expect(h.bridge.texts == (bindingFails ? [] : ["最终合成文字。"]))
+        h.controller.stop()
+    }
+}
+
+@MainActor @Test func voiceFallbackRefusesChangedUnknownOrProtectedDestinations() async {
+    for change in ["missing", "focus", "input", "pid", "secure", "cancel"] {
+        let h = VoiceHarness(); h.bridge.captureFailure = .unavailable
+        if change == "missing" { h.paste.available = false }
+        await h.begin(); #expect(h.recorder.active)
+        await h.recognize()
+        switch change {
+        case "focus": h.paste.current = false
+        case "input": h.controller.sourceInputChanged()
+        case "pid": h.pid = 11
+        case "secure": h.allowed = false; h.controller.tick()
+        case "cancel": h.controller.cancel()
+        default: break
+        }
+        h.worker.resolve("完整的待复制结果")
+        for _ in 0..<40 { await Task.yield() }
+        #expect(h.paste.texts.isEmpty && h.bridge.texts.isEmpty)
+        if change == "secure" || change == "cancel" { #expect(h.controller.state.result.isEmpty) }
+        else { #expect(h.controller.state.result == "完整的待复制结果。" && h.controller.state.phase == .failed) }
+        h.controller.stop()
+    }
+}
+
+@MainActor @Test func voiceMicrophoneFailureIsNotMisreportedAsBindingOrModelFailure() async {
+    let h = VoiceHarness(); h.recorder.failStart = true
+    await h.begin()
+    #expect(h.controller.state.phase == .failed)
+    #expect(h.controller.state.message.contains("麦克风未能启动"))
+    #expect(!h.recorder.active && h.paste.texts.isEmpty && h.bridge.texts.isEmpty)
     h.controller.stop()
 }
