@@ -21,7 +21,7 @@ python3 -m http.server 8018 --bind 127.0.0.1 --directory website
 
 访问 `http://127.0.0.1:8018/`。纯文件打开不支持以 `/` 开头的站内资源路径；需要通过 HTTP 预览。Python 预览服务器不会套用 nginx 的自定义 404；可直接访问 `/404.html` 检查页面。
 
-下载统一指向 `https://github.com/Roarkai/RockType/releases/latest`，**待发布确认**。更新日志将开发进展与正式发行分开，不虚构版本号、安装包或发布日期。页脚“版本与下载”以 Releases 为准。
+下载统一指向 `https://github.com/sheridiany/RockType/releases/latest`，**待发布确认**。更新日志将开发进展与正式发行分开，不虚构版本号、安装包或发布日期。页脚“版本与下载”以 Releases 为准。
 
 ## 图片来源与边界
 

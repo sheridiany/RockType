@@ -42,7 +42,7 @@
 - 产品画面使用仓库里真实的离屏渲染图（`specs/evidence/`、各 worktree `.build/` 中的 PNG，复制到 `website/assets/` 并压缩为 webp/png，每张 < 300KB），必要时新渲染更干净的展示图；不使用示例占位文字“合成”“Preview model”等。
 - 移动端适配（≥ 360px）、可访问性（alt、对比度、键盘焦点）、Lighthouse 性能/可访问性尽量 ≥ 95。
 - SEO：title、description、OG 图（1200×630，新做）、canonical、OG、robots、sitemap 使用用户确定的 `https://type.roarkist.com/`。
-- 下载链接：暂指向 `https://github.com/Roarkai/RockType/releases/latest` 并在 README 标“待发布确认”。
+- 下载链接：暂指向 `https://github.com/sheridiany/RockType/releases/latest` 并在 README 标“待发布确认”。
 
 ## 交付
 
