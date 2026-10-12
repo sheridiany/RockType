@@ -1,4 +1,4 @@
-// MIT. This tool only registers, lists or disables RoarkT input sources.
+// MIT. This tool registers, lists, disables or diagnoses RoarkT input sources.
 // Registration never enables or selects an input source.
 import Carbon
 import Foundation
@@ -22,10 +22,16 @@ struct RegisterInputSource {
         exit(EXIT_FAILURE)
     }
 
-    static func main() {
+    @MainActor static func main() {
         let args = CommandLine.arguments
-        guard args.count >= 2 else { fail("Usage: RoarkTRegisterInputSource register <bundle> | list | disable") }
+        guard args.count >= 2 else { fail("Usage: RoarkTRegisterInputSource register <bundle> | list | disable | diagnose-icons | check-icons <bundle>") }
         switch args[1] {
+        case "diagnose-icons":
+            guard args.count == 2 else { fail("diagnose-icons takes no arguments and is read-only") }
+            exit(InputSourceIconDiagnostics.run(bundleURL: nil))
+        case "check-icons":
+            guard args.count == 3 else { fail("check-icons requires a bundle path and is read-only") }
+            exit(InputSourceIconDiagnostics.run(bundleURL: URL(fileURLWithPath: args[2], isDirectory: true)))
         case "register":
             guard args.count == 3 else { fail("register requires an input method bundle path") }
             let url = URL(fileURLWithPath: args[2], isDirectory: true)
