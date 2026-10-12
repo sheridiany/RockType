@@ -66,7 +66,7 @@ R4-UI 为 Mock/Gallery、依赖样本的原型视图和全部 Gallery 启动入�
 
 `VoiceInputController` 管理 Fn 会话、取消、保护检查与 HUD，依赖 `VoiceInterfaces` 中的本地接口。`VoiceEnvironment` 提供系统状态；`VoiceWorkerClient` 管理识别连接/准备；`VoiceCommitBridge` 管理端点发现和 ticket；`VoiceReply` 使成功、错误、超时、取消只完成一次。`VoiceModelStore` 管理下载状态，`VoiceModelVerification` 记录并复检已校验的文件身份。
 
-主 App 只在按住 Fn 的录音阶段获取麦克风数据。模型预加载不录音。识别后可选 AI 润色，失败保留原文；填入前仍须核对来源、ticket、期限、Secure Input 和密码框。没有模拟粘贴或自动发送。
+主 App 只在按住 Fn 的录音阶段获取麦克风数据。模型预加载不录音。识别后可选 AI 润色，失败保留原文；填入前仍须核对来源、ticket、期限、Secure Input 和密码框。SPEC-017 B2 增加绑定失败时的受控粘贴兜底，不自动发送。`VoicePasteBridge` 在 Fn 按下时捕获 AX 应用/窗口/元素/选区身份（不读字段文字），复用 `ReplacementPasteTransaction.shared` 与替换原文互斥保存/恢复剪贴板；仅持有本次写入的 changeCount/标记时恢复，后来的用户复制优先。捕获不到可靠 AX 位置仍可录音，但只保留结果供复制。有 ticket 的提交拒绝或超时不再粘贴，避免重复填入。
 
 录音内存上限 180 秒（16 kHz 单声道 Float32，11.52 MB）；到限自动停止并识别。`VoiceAudioSegmentation` 是 Core 中的 MIT Foundation 策略，worker 通过源链接编译同一源文件：最多 28 秒一段，在上限前搜索静音，段间不重叠、不丢样；各段独立 token 预算，拼接不去重、不改已有标点。模型准备时用一秒合成静音预热首个解码步骤，不启用麦克风。
 

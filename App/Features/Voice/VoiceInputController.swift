@@ -18,6 +18,9 @@ import RoarkTPlatform
     private var task: Task<Void, Never>?
     private var watchdog: Task<Void, Never>?
     private var session = UUID()
+    private let paste: any VoicePasting
+    private var pasteTarget: VoicePasteTarget?
+    private var insertionInvalidated = false
     private var target: VoiceTarget?
     private var sourcePID: Int32?
     private var recordingStarted: TimeInterval?
@@ -43,12 +46,13 @@ import RoarkTPlatform
 
     init(store: SettingsStore = .shared, models: VoiceModelStore = .shared,
          recorder: (any VoiceRecording)? = nil, worker: (any VoiceRecognizing)? = nil,
-         bridge: (any VoiceCommitting)? = nil, environment: VoiceEnvironment? = nil,
+         bridge: (any VoiceCommitting)? = nil, paste: (any VoicePasting)? = nil, environment: VoiceEnvironment? = nil,
          presentsHUD: Bool = true) {
         self.environment = environment ?? .system(store: store, models: models)
         self.recorder = recorder ?? VoiceAudioCapture()
         self.worker = worker ?? VoiceWorkerClient()
         self.bridge = bridge ?? VoiceCommitBridge()
+        self.paste = paste ?? VoicePasteBridge()
         if presentsHUD {
             hud = VoiceHUDController(state: state)
             hud?.onCancel = { [weak self] in self?.cancel() }
@@ -70,11 +74,11 @@ import RoarkTPlatform
                 monitoringAvailable = false
                 show(.failed, "需要辅助功能权限；授权后重新启动语音监听。")
             }
-            globalKeys = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-                if event.keyCode == 53 { MainActor.assumeIsolated { self?.cancel() } }
+            globalKeys = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] event in
+                MainActor.assumeIsolated { self?.handleSourceEvent(event) }
             }
-            localKeys = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-                if event.keyCode == 53 { MainActor.assumeIsolated { self?.cancel() } }
+            localKeys = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] event in
+                MainActor.assumeIsolated { self?.handleSourceEvent(event) }
                 return event
             }
             for name in [NSWorkspace.willSleepNotification, NSWorkspace.sessionDidResignActiveNotification] {
@@ -136,15 +140,24 @@ import RoarkTPlatform
         }
         guard let pid = environment.pid() else { return }
         sourcePID = pid
+        pasteTarget = paste.capture(pid: pid)
         let id = session
         let model = VoiceModel(environment.settings().model)
         show(.preparing, "正在绑定输入位置…")
         task = Task { [weak self] in
             guard let self else { return }
+            var startingMicrophone = false
             do {
-                let captured = try await bridge.capture(pid: pid)
-                guard session == id, !Task.isCancelled else { return }
-                target = captured
+                do {
+                    let captured = try await bridge.capture(pid: pid)
+                    guard session == id, !Task.isCancelled else { return }
+                    target = captured
+                } catch {
+                    guard session == id, !Task.isCancelled else { return }
+                    let reason = (error as? VoiceCaptureFailure)?.rawValue ?? ((error as? VoiceFailure) == .timeout ? "timeout" : "unavailable")
+                    Self.log.notice("voice binding unavailable reason=\(reason, privacy: .public); recording continues")
+                    bridge.cancel(nil)
+                }
                 guard environment.held(), environment.allowed(), environment.pid() == pid else { cancel(); return }
                 if preparedModel != model {
                     show(.loading, "模型加载中…")
@@ -155,26 +168,29 @@ import RoarkTPlatform
                     preparedModel = model
                 }
                 guard environment.held(), environment.allowed(), environment.pid() == pid else { cancel(); return }
+                startingMicrophone = true
                 try recorder.start()
                 recordingStarted = environment.now()
                 show(.recording, "录音中 · 最长 3 分钟")
             } catch {
                 guard session == id else { return }
                 Self.log.error("voice preparation failed")
-                worker.stop(); preparedModel = nil
-                bridge.cancel(target); target = nil
-                show(.failed, state.phase == .loading
-                     ? "模型未就绪，请检查设置 → 语音中的下载与校验状态。"
-                     : "无法绑定输入位置，请选中 RockType 输入法后重试。")
+                recorder.cancel(); worker.stop(); preparedModel = nil
+                bridge.cancel(target); target = nil; pasteTarget = nil
+                show(.failed, startingMicrophone
+                     ? "麦克风未能启动，请检查权限或录音设备。"
+                     : "模型未就绪，请检查设置 → 语音中的下载与校验状态。")
             }
         }
     }
     func release() {
         guard running else { return }
-        guard state.phase == .recording, let target else {
+        guard state.phase == .recording else {
             if [.preparing, .loading].contains(state.phase) { cancel() }
             return
         }
+        let target = self.target
+        let pasteTarget = self.pasteTarget
         // Close the microphone synchronously, before scheduling model work.
         let releasedAt = environment.now()
         let audio = recorder.finish()
@@ -185,7 +201,7 @@ import RoarkTPlatform
         recordingStarted = nil
         guard environment.allowed() else { cancel(); return }
         guard !audio.isEmpty else {
-            bridge.cancel(target); self.target = nil
+            bridge.cancel(target); self.target = nil; self.pasteTarget = nil
             showNoSpeech()
             return
         }
@@ -220,7 +236,7 @@ import RoarkTPlatform
                     : text.trimmingCharacters(in: .whitespacesAndNewlines)
                 latency.cleanup = environment.now() - stage
                 guard !normalized.isEmpty else {
-                    bridge.cancel(target); self.target = nil
+                    bridge.cancel(target); self.target = nil; self.pasteTarget = nil
                     if !environment.settings().automaticallyPrepareModel || !environment.inputSourceSelected() {
                         worker.stop(); preparedModel = nil
                     }
@@ -234,25 +250,34 @@ import RoarkTPlatform
                 latency.polish = environment.now() - stage
                 guard session == id, !Task.isCancelled, environment.allowed() else { return }
                 state.result = polished
-                let eligible = environment.pid() == sourcePID &&
-                    VoiceInsertionPolicy.allowsAutomaticInsertion(text: polished, applicationID: target.applicationID)
+                let eligible = !insertionInvalidated && environment.pid() == sourcePID &&
+                    VoiceInsertionPolicy.allowsAutomaticInsertion(text: polished, applicationID: target?.applicationID ?? pasteTarget?.applicationID)
                 stage = environment.now()
-                let accepted = eligible ? ((try? await bridge.commit(polished, target: target)) ?? false) : false
+                let accepted: Bool
+                if eligible, let target {
+                    // Never paste after an uncertain/rejected IMK commit: it may already have inserted.
+                    accepted = (try? await bridge.commit(polished, target: target)) ?? false
+                } else if eligible, let pasteTarget {
+                    accepted = (try? await paste.paste(polished, target: pasteTarget, allowed: { [weak self] in
+                        guard let self else { return false }
+                        return self.session == id && !self.insertionInvalidated && self.environment.allowed() && self.environment.pid() == self.sourcePID
+                    })) ?? false
+                } else { accepted = false }
                 guard session == id, !Task.isCancelled, environment.allowed() else { return }
                 latency.commit = environment.now() - stage
                 latency.total = environment.now() - releasedAt
                 lastLatency = latency
                 Self.log.info("voice timing stop=\(latency.stop) resample_during_capture=\(latency.resamplingDuringCapture) preview_wait=\(latency.previewWait) model_recovery=\(latency.modelRecovery) recognition=\(latency.recognition) cleanup=\(latency.cleanup) polish=\(latency.polish) commit=\(latency.commit) total=\(latency.total)")
-                bridge.cancel(target); self.target = nil
+                bridge.cancel(target); self.target = nil; self.pasteTarget = nil
                 if !environment.settings().automaticallyPrepareModel || !environment.inputSourceSelected() {
                     worker.stop(); preparedModel = nil
                 }
                 if !accepted { Self.log.error("insertion not accepted (eligible \(eligible))") }
-                show(accepted ? .done : .failed, accepted ? "已填入 · 未发送" : "输入位置已变化或提交超时，请复制结果。")
+                show(accepted ? .done : .failed, accepted ? (target == nil ? "已请求粘贴 · 未发送消息" : "已填入 · 未发送") : "未能确认填入，请核对输入位置后复制结果。")
             } catch {
                 guard session == id, !Task.isCancelled else { return }
                 Self.log.error("voice recognition failed")
-                worker.stop(); preparedModel = nil; bridge.cancel(target); self.target = nil
+                worker.stop(); preparedModel = nil; bridge.cancel(target); self.target = nil; self.pasteTarget = nil
                 if let failure = error as? VoiceFailure, failure == .empty {
                     showNoSpeech()
                 } else {
@@ -265,6 +290,17 @@ import RoarkTPlatform
     }
     func cancel() { reset(preservingPrepared: false) }
 
+    /// Keystrokes/clicks invalidate the original destination even if the caret later returns.
+    func sourceInputChanged() {
+        guard [.preparing, .loading, .recording, .recognizing, .polishing].contains(state.phase) else { return }
+        insertionInvalidated = true; pasteTarget = nil
+    }
+    private func handleSourceEvent(_ event: NSEvent) {
+        guard !VoicePasteBridge.isOwnPaste(event) else { return }
+        if event.type == .keyDown && event.keyCode == 53 { cancel() }
+        else { sourceInputChanged() }
+    }
+
     private func reset(preservingPrepared: Bool) {
         dismissal?.cancel(); dismissal = nil
         session = UUID()
@@ -275,7 +311,8 @@ import RoarkTPlatform
         lastLatency = nil
         recorder.cancel(); bridge.cancel(target)
         if !preservingPrepared { worker.stop(); preparedModel = nil }
-        target = nil; sourcePID = nil; recordingStarted = nil
+        target = nil; pasteTarget = nil; insertionInvalidated = false
+        sourcePID = nil; recordingStarted = nil
         state.result = ""; state.phase = .hidden; state.message = ""
         state.levels = Array(repeating: 0.05, count: 9)
         hud?.hide()
