@@ -23,7 +23,7 @@ struct RegisterInputSource {
     }
 
     @MainActor static func verifyFresh() -> Bool {
-        // Each read has a new CFPreferences cache; no synchronize or preference writes.
+        // Each verifier enumerates public TIS state in a new process; no preference-file gate.
         for _ in 0..<20 {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
@@ -56,10 +56,10 @@ struct RegisterInputSource {
             } catch { fail("Atomic input method replacement failed: \(error)") }
         case "verify-enabled":
             guard args.count == 2 else { fail("verify-enabled takes no arguments and is read-only") }
-            let state = InputSourceIconDiagnostics.persistentEnablement()
+            let state = InputSourceIconDiagnostics.enablement()
             if let data = try? JSONEncoder().encode(state) { FileHandle.standardOutput.write(data + Data("\n".utf8)) }
-            guard state.requiredSourcesEnabled else {
-                fail("AppleEnabledInputSources is missing the RockType parent and/or Pinyin mode (or is unreadable). Add RockType Pinyin in System Settings > Keyboard > Text Input, then rerun verify-enabled. HIToolbox preferences were not edited directly.")
+            guard state.verificationPassed else {
+                fail("TIS verification failed: RockType parent must be registered/enabled and Pinyin registered/enabled/selectable. Add RockType Pinyin in System Settings > Keyboard > Text Input, then rerun verify-enabled. HIToolbox preferences were not edited directly.")
             }
         case "ensure-enabled":
             guard args.count == 3 else { fail("ensure-enabled requires an installed bundle path") }
@@ -67,9 +67,7 @@ struct RegisterInputSource {
             guard Bundle(url: url)?.bundleIdentifier == Identifiers.inputMethodBundleID else { fail("Unexpected input method bundle identifier") }
             do {
                 try InputSourceEnablement.ensure(
-                    persistent: InputSourceIconDiagnostics.persistentEnablement(),
-                    registered: { Set(sources().compactMap(identifier)) },
-                    enabled: { Set(sources().filter { InputSourceIconDiagnostics.property($0, kTISPropertyInputSourceIsEnabled) as? Bool == true }.compactMap(identifier)) },
+                    state: { InputSourceIconDiagnostics.enablement() },
                     register: {
                         let status = TISRegisterInputSource(url as CFURL)
                         guard status == noErr else { throw NSError(domain: NSOSStatusErrorDomain, code: Int(status)) }
@@ -83,9 +81,9 @@ struct RegisterInputSource {
                         let status = TISEnableInputSource(source)
                         guard status == noErr else { throw NSError(domain: NSOSStatusErrorDomain, code: Int(status)) }
                     }, verifyFresh: { verifyFresh() })
-                print("RockType parent and Pinyin are persistently enabled; selection unchanged.")
+                print("RockType parent and Pinyin passed fresh TIS enablement verification; selection unchanged.")
             } catch {
-                fail("RockType enablement failed or persistence was not confirmed: \(error). API success is insufficient. Add RockType Pinyin in System Settings > Keyboard > Text Input, then run verify-enabled. HIToolbox preferences were not edited directly.")
+                fail("RockType enablement failed or TIS state was not confirmed: \(error). API success is insufficient. Add RockType Pinyin in System Settings > Keyboard > Text Input, then run verify-enabled. HIToolbox preferences were not edited directly.")
             }
         case "register":
             guard args.count == 3 else { fail("register requires an input method bundle path") }

@@ -2,7 +2,7 @@
 
 先运行 `scripts/build.sh`，再运行 `scripts/build-installer.sh`。后者使用 `dist/` 的已有产物，在临时目录内加许可证、同步版本、为嵌套代码补时间戳签名，产出 `dist/RockType-<版本>-macOS-arm64.pkg`。不会安装到本机。可用 `ROARKT_CODESIGN_IDENTITY` / `ROARKT_INSTALLER_IDENTITY` 指定证书，默认使用架构规定的团队。
 
-安装只支持当前启动卷。preinstall 在所有已登录 GUI 会话内退出固定安装路径的两个应用，等待最多 8 秒；拒绝退出则中止，不强杀、不删除用户数据。postinstall 以登录用户身份注册输入源，加载 `/Library/LaunchAgents/com.roarkist.roarkt.translation.plist`，为控制台用户打开主 App。没有登录用户时提示登录后打开主 App 添加输入源。普通启动打开设置；在“权限”页检查输入源与授权，在语音/翻译/AI 设置中按需准备，不再有独立首次引导。SPEC-020 M1 按用户授权，用公开 TIS API 依次启用父输入法与全拼；已有注册与启用状态不重复操作，不选择输入源。安装结束由新进程读取 AppleEnabledInputSources 验证，缺项则明确失败并提示在系统键盘设置中添加后重跑 verify-enabled；不直接写 HIToolbox 偏好。开发安装使用相同校验。
+安装只支持当前启动卷。preinstall 在所有已登录 GUI 会话内退出固定安装路径的两个应用，等待最多 8 秒；拒绝退出则中止，不强杀、不删除用户数据。postinstall 以登录用户身份注册输入源，加载 `/Library/LaunchAgents/com.roarkist.roarkt.translation.plist`，为控制台用户打开主 App。没有登录用户时提示登录后打开主 App 添加输入源。普通启动打开设置；在“权限”页检查输入源与授权，在语音/翻译/AI 设置中按需准备，不再有独立首次引导。SPEC-020 M2 按用户授权，用公开 TIS API 依次启用父输入法与全拼；已有注册与启用状态不重复操作，不选择输入源。安装结束由新进程读取公开 TIS 属性验证父源已注册/启用、全拼已注册/启用且可选择；状态不符则明确失败并提示在系统键盘设置中添加后重跑 verify-enabled。不以某个偏好文件作为成功判据，也不直接写系统偏好。开发安装使用相同校验。
 
 签名包构建成功不代表已公证或完成安装验收。请在干净测试账户中验证安装、同产品升级、输入法重新启动和卸载，勿对日常账户自动执行破坏性测试。
 

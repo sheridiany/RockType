@@ -66,11 +66,27 @@ enum InputSourceIconDiagnostics {
         return Unmanaged<AnyObject>.fromOpaque(value).takeUnretainedValue()
     }
 
-    static func persistentEnablement() -> PersistentInputSourceState {
-        // Read only. A fresh verifier process avoids this process's preference cache after TIS calls.
-        PersistentInputSourceState(preference: CFPreferencesCopyValue(
-            "AppleEnabledInputSources" as CFString, "com.apple.HIToolbox" as CFString,
-            kCFPreferencesCurrentUser, kCFPreferencesAnyHost))
+    static func preferenceEvidence(domain: String, key: String) -> InputSourcePreferenceEvidence {
+        InputSourcePreferenceEvidence(preference: CFPreferencesCopyValue(
+            key as CFString, domain as CFString, kCFPreferencesCurrentUser, kCFPreferencesAnyHost))
+    }
+
+    static func enablement() -> InputSourceEnablementState {
+        let filter = [kTISPropertyBundleID as String: Identifiers.inputMethodBundleID] as CFDictionary
+        let sources = TISCreateInputSourceList(filter, true).takeRetainedValue() as! [TISInputSource]
+        var registered = Set<String>(), enabled = Set<String>(), selectable = Set<String>()
+        for source in sources {
+            guard let id = property(source, kTISPropertyInputSourceID) as? String,
+                  InputSourceEnablement.registeredIDs.contains(id) else { continue }
+            registered.insert(id)
+            if property(source, kTISPropertyInputSourceIsEnabled) as? Bool == true { enabled.insert(id) }
+            if property(source, kTISPropertyInputSourceIsSelectCapable) as? Bool == true { selectable.insert(id) }
+        }
+        return InputSourceEnablementState(registered: registered, enabled: enabled, selectable: selectable)
+    }
+
+    static func json<T: Encodable>(_ value: T) -> Any {
+        (try? JSONSerialization.jsonObject(with: JSONEncoder().encode(value))) ?? [:]
     }
 
     static func live() -> (report: [String: Any], valid: Bool) {
@@ -102,8 +118,12 @@ enum InputSourceIconDiagnostics {
             .takeRetainedValue() as? [URL] ?? []
         return (["modes": reports, "missingModes": modeIDs.filter { !found.contains($0) },
                  "launchServicesURLs": urls.map(\.path), "menuAgent": menuAgent(),
-                 "persistentEnablement": (try? JSONSerialization.jsonObject(with: JSONEncoder().encode(persistentEnablement()))) ?? [:],
-                 "persistentEnablementPassed": persistentEnablement().requiredSourcesEnabled], valid && found.count == modeIDs.count)
+                 "enablement": json(enablement()),
+                 "preferenceEvidence": [
+                    "authoritativeForVerification": false,
+                    "com.apple.HIToolbox/AppleEnabledInputSources": json(preferenceEvidence(domain: "com.apple.HIToolbox", key: "AppleEnabledInputSources")),
+                    "com.apple.inputsources/AppleEnabledThirdPartyInputSources": json(preferenceEvidence(domain: "com.apple.inputsources", key: "AppleEnabledThirdPartyInputSources"))
+                 ]], valid && found.count == modeIDs.count)
     }
 
     static func menuAgent() -> [String: Any] {

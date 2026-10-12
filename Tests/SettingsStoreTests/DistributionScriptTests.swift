@@ -17,7 +17,7 @@ private func runDistributionCommand(_ executable: String, _ arguments: [String],
     return (process.terminationStatus, String(decoding: data, as: UTF8.self))
 }
 
-@Test func installerVerifiesPersistentEnablementInUserSessions() throws {
+@Test func installerVerifiesTISEnablementInUserSessions() throws {
     let fm = FileManager.default
     let fixture = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try fm.createDirectory(at: fixture, withIntermediateDirectories: true)
@@ -55,7 +55,7 @@ private func runDistributionCommand(_ executable: String, _ arguments: [String],
     #expect(!calls.contains(" select "))
     #expect(!calls.contains("HIToolbox"))
     #expect(calls.contains("asuser 501 /usr/bin/sudo -H -u fixture-user -- /Applications/RockType.app/Contents/Helpers/RoarkTRegisterInputSource verify-enabled"))
-    // A successful enable API path with failed persistence must abort installation.
+    // A successful enable API path with failed TIS verification must abort installation.
     try "".write(to: log, atomically: true, encoding: .utf8)
     var environment = ProcessInfo.processInfo.environment
     environment["FIXTURE_VERIFY_FAIL"] = "1"
