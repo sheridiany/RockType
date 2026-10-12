@@ -97,7 +97,12 @@ import Testing
     let hud = RoarkTVoiceHUD(present: { _ in }, reduceMotion: { true })
     for state in [RoarkTVoiceHUD.State.success("已填入"), .noSpeech] {
         hud.show(state)
-        try await Task.sleep(for: .milliseconds(800))
+        // Other AppKit tests can occupy MainActor when the dismissal task becomes ready.
+        // Wait for its observable result instead of assuming an 800ms scheduling window.
+        let deadline = ContinuousClock.now + .seconds(4)
+        while hud.isPresented && ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
         #expect(!hud.isPresented && !hud.content.isAnimating)
     }
 }

@@ -45,15 +45,6 @@ import RoarkTPlatform
     func start() {
         guard !running else { return }
         running = true
-        let events: NSEvent.EventTypeMask = [.leftMouseDown, .leftMouseDragged, .leftMouseUp,
-                                             .rightMouseDown, .otherMouseDown, .keyDown, .flagsChanged, .scrollWheel]
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: events) { [weak self] event in
-            MainActor.assumeIsolated { self?.handle(event, local: false) }
-        }
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: events) { [weak self] event in
-            MainActor.assumeIsolated { self?.handle(event, local: true) }
-            return event
-        }
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(sourceChanged),
             name: NSWorkspace.didActivateApplicationNotification, object: nil)
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(sourceChanged),
@@ -69,7 +60,28 @@ import RoarkTPlatform
                 if self.toolbar.isVisible, !self.allowed() || self.selection?.isCurrent() != true { self.dismiss() }
             }
         }
-        if globalMonitor == nil { notice("划词监听不可用，请检查辅助功能权限；仍可使用选区快捷键。") }
+        if settings().enabledFeatures.selectionToolbar && globalMonitor == nil { notice("划词监听不可用，请检查辅助功能权限；仍可使用选区快捷键。") }
+    }
+
+    var listeningForSelection: Bool { localMonitor != nil }
+    func settingsChanged() { dismiss(); updateMonitors() }
+    private func updateMonitors() {
+        guard running, settings().enabledFeatures.selectionToolbar || pendingIsShortcut else {
+            if let localMonitor { NSEvent.removeMonitor(localMonitor) }
+            if let globalMonitor { NSEvent.removeMonitor(globalMonitor) }
+            localMonitor = nil; globalMonitor = nil
+            return
+        }
+        guard localMonitor == nil else { return }
+        let events: NSEvent.EventTypeMask = [.leftMouseDown, .leftMouseDragged, .leftMouseUp,
+                                             .rightMouseDown, .otherMouseDown, .keyDown, .flagsChanged, .scrollWheel]
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: events) { [weak self] event in
+            MainActor.assumeIsolated { self?.handle(event, local: false) }
+        }
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: events) { [weak self] event in
+            MainActor.assumeIsolated { self?.handle(event, local: true) }
+            return event
+        }
     }
 
     func stop() {
@@ -85,7 +97,7 @@ import RoarkTPlatform
 
     /// Registration / conflict reporting stays in HotkeyCenter; no second Carbon registration.
     func trigger(_ action: ShortcutAction) {
-        guard running else { return }
+        guard running, settings().enabledFeatures.selectionShortcuts else { return }
         switch action {
         case .translateSelection: beginCapture(action: "translate")
         case .summarizeSelection: beginCapture(action: "summarize")
@@ -94,7 +106,7 @@ import RoarkTPlatform
     }
 
     func triggerTemplate(_ id: String) {
-        guard running else { return }; beginCapture(action: id)
+        guard running, settings().enabledFeatures.selectionShortcuts else { return }; beginCapture(action: id)
     }
 
     func dismiss(resetGesture: Bool = true) {
@@ -104,6 +116,7 @@ import RoarkTPlatform
         pendingIsShortcut = false
         if resetGesture { gesture = SelectionGesture() }
         toolbar.hide()
+        updateMonitors()
     }
 
     @objc private func sourceChanged(_ notification: Notification) { dismiss() }
@@ -119,10 +132,11 @@ import RoarkTPlatform
                 self.observeSettings()
             }
         }
+        updateMonitors()
     }
 
     private func handle(_ event: NSEvent, local: Bool) {
-        guard running else { return }
+        guard running, settings().enabledFeatures.selectionToolbar || pendingIsShortcut else { return }
         if local, toolbar.contains(event.window), event.type != .keyDown, event.type != .flagsChanged { return }
         if Clipboard.isSelectionCopyEvent(event.cgEvent) { return }
         // Carbon and the global monitor can deliver the same shortcut in either order.
@@ -166,6 +180,7 @@ import RoarkTPlatform
     private func beginCapture(action: String?) {
         dismiss()
         let currentSettings = settings()
+        guard action == nil ? currentSettings.enabledFeatures.selectionToolbar : currentSettings.enabledFeatures.selectionShortcuts else { return }
         guard allowed() else {
             if action != nil { notice("无法读取选区，请检查辅助功能权限和安全输入状态。") }
             return
@@ -181,6 +196,7 @@ import RoarkTPlatform
         }
         let requestGeneration = generation
         pendingIsShortcut = action != nil
+        updateMonitors()
         pending = Task { @MainActor [weak self] in
             guard let self else { return }
             do {
@@ -189,10 +205,12 @@ import RoarkTPlatform
                 let captured = try await self.capture.capture()
                 try Task.checkCancellation()
                 guard self.running, self.generation == requestGeneration, self.allowed(), captured.isCurrent(),
+                      (action == nil ? self.settings().enabledFeatures.selectionToolbar : self.settings().enabledFeatures.selectionShortcuts),
                       captured.snapshot.source.pid == app.pid,
                       SelectionPolicy.permits(captured.snapshot.source.bundleID, settings: self.settings().selection) else { return }
                 self.pending = nil
                 self.pendingIsShortcut = false
+                self.updateMonitors()
                 self.selection = captured
                 if let action { self.invoke(action, fromToolbar: false) }
                 else {
@@ -209,7 +227,8 @@ import RoarkTPlatform
                 guard self.generation == requestGeneration else { return }
                 self.pending = nil
                 self.pendingIsShortcut = false
-                if self.running, self.allowed(), let action,
+                self.updateMonitors()
+                if self.running, self.allowed(), self.settings().enabledFeatures.selectionShortcuts, let action,
                    let template = self.settings().templates.first(where: { $0.id == action }),
                    TranslateWindowState.accepts(template),
                    (error as? PlatformReadError) != .secureInput, (error as? PlatformReadError) != .sourceChanged,
@@ -226,7 +245,7 @@ import RoarkTPlatform
     }
 
     func performAction(_ action: String, captured: CapturedSelection, fromToolbar: Bool) {
-        guard captured.isCurrent(), allowed() else { dismiss(); return }
+        guard (fromToolbar ? settings().enabledFeatures.selectionToolbar : settings().enabledFeatures.selectionShortcuts), captured.isCurrent(), allowed() else { dismiss(); return }
         var currentSettings = settings()
         guard SelectionPolicy.permits(captured.snapshot.source.bundleID, settings: currentSettings.selection),
               !fromToolbar || SelectionPolicy.actions(settings: currentSettings).contains(action) else { dismiss(); return }

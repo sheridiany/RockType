@@ -28,6 +28,7 @@ import RoarkTPlatform
     }
 
     func perform(_ request: OperationRequest, source: OperationSource?, toolbarRect: CGRect?) {
+        guard FeatureAvailability.allows(request.session.snapshot, settings().enabledFeatures) else { return }
         guard readable() else { notice("当前输入受保护或无法检查，未发送请求。"); return }
         var current = settings()
         guard aiConfigured() || request.template.id == "translate" && request.question == nil else {
@@ -42,6 +43,7 @@ import RoarkTPlatform
     }
 
     func presentCompleted(_ result: OperationResult, template: OperationTemplate) {
+        guard FeatureAvailability.allows(result.session.snapshot, settings().enabledFeatures) else { return }
         guard readable() else { return }
         if settings().privacy.keepRecentResultsInMemory { environment.recent.add(result) }
         if TranslateWindowState.accepts(template) {
@@ -55,6 +57,7 @@ import RoarkTPlatform
     }
 
     func reopen(_ result: OperationResult) {
+        guard FeatureAvailability.allows(result.session.snapshot, settings().enabledFeatures) else { return }
         guard readable() else { notice("当前输入受保护或无法检查，未打开结果。"); return }
         guard environment.recent.results.contains(where: { $0.id == result.id }) else { return }
         // A deleted custom template does not prevent reading/copying an existing result.
@@ -72,6 +75,7 @@ import RoarkTPlatform
     }
 
     func openInputTranslation(templateID: String = "translate") {
+        guard settings().enabledFeatures.selectionShortcuts else { return }
         guard readable() else { notice("当前输入受保护或无法检查，未打开翻译。 "); return }
         var current = settings()
         guard let template = current.templates.first(where: { $0.id == templateID }), TranslateWindowState.accepts(template) else { return }
@@ -87,7 +91,7 @@ import RoarkTPlatform
         let controller = TranslateWindowController(request: request, runner: makeRunner(), settings: settings,
             rememberTarget: { [weak self] in self?.rememberTranslationTarget($0) }, allowed: readable,
             completed: { [weak self] result in
-                guard let self, self.readable(), self.settings().privacy.keepRecentResultsInMemory else { return }
+                guard let self, self.readable(), FeatureAvailability.allows(result.session.snapshot, self.settings().enabledFeatures), self.settings().privacy.keepRecentResultsInMemory else { return }
                 self.environment.recent.add(result)
             }, feedback: notice)
         translationWindow = controller
@@ -103,6 +107,17 @@ import RoarkTPlatform
     }
 
     func settingsChanged() {
+        let features = settings().enabledFeatures
+        if let translationWindow, !FeatureAvailability.allows(translationWindow.state.originSnapshot, features) {
+            translationWindow.close(); self.translationWindow = nil
+        }
+        windows.removeAll { controller in
+            guard let snapshot = controller.state.session?.snapshot,
+                  !FeatureAvailability.allows(snapshot, features) else { return false }
+            controller.stop(); return true
+        }
+        if let window, !windows.contains(where: { $0 === window }) { self.window = windows.last }
+
         if !settings().privacy.keepRecentResultsInMemory { environment.recent.clear() }
         windows.forEach { $0.applySettings() }
     }
@@ -128,7 +143,7 @@ import RoarkTPlatform
         }
         let controller = ResultWindowController(runner: makeRunner(), settings: settings, feedback: notice,
             completed: { [weak self] result in
-                guard let self, self.readable(), self.settings().privacy.keepRecentResultsInMemory else { return }
+                guard let self, self.readable(), FeatureAvailability.allows(result.session.snapshot, self.settings().enabledFeatures), self.settings().privacy.keepRecentResultsInMemory else { return }
                 self.environment.recent.add(result)
             }, readable: readable, aiConfigured: aiConfigured)
         windows.append(controller)

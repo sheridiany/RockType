@@ -45,6 +45,7 @@ import os
         do { try onCopyColor(sample.hex); showNotice("颜色已复制") }
         catch { showNotice("无法复制颜色，请重试。") }
     }
+    var pinningEnabled = true { didSet { updateToolbar() } }
     var onPin: (CGImage) -> Void = { _ in }
     var onRestore: () -> Void = {}
     var onScrollCapture: () -> Void = {}
@@ -158,6 +159,7 @@ import os
     private var editingTextIndex: Int?
     var isEditingText: Bool { textEditor != nil }
     private func complete(_ output: Output = .copy) {
+        guard output != .pin || pinningEnabled else { return }
         guard allowed() else { onCancel(); return }
         finishTextEditing()
         guard let composed = ScreenshotCompositor.render(image: image, size: bounds.size, selection: selection, annotations: history.items) else { return }
@@ -172,7 +174,7 @@ import os
         case .saveAs: onSaveAs(result)
         case .preview: onPreview(result)
         case .ocrCopy: onOCRCopy(result)
-        case .pin: onPin(result)
+        case .pin: if pinningEnabled { onPin(result) }
         }
     }
     private func updateToolbar() {
@@ -182,7 +184,7 @@ import os
             select: { [weak self] in self?.selectTool($0) },
             undo: { [weak self] in self?.undoAnnotation() },
             redo: { [weak self] in self?.undoAnnotation(redo: true) },
-            cancel: { [weak self] in self?.onCancel() }, complete: { [weak self] in self?.complete() }, preview: { [weak self] in self?.complete(.preview) })
+            cancel: { [weak self] in self?.onCancel() }, complete: { [weak self] in self?.complete() }, preview: { [weak self] in self?.complete(.preview) }, pinningEnabled: pinningEnabled)
         let view: NSHostingView<CaptureToolbar>
         if let toolbar { view = toolbar; view.rootView = root }
         else { view = NSHostingView(rootView: root); addSubview(view); toolbar = view }

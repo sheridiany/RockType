@@ -18,6 +18,7 @@ import RoarkTPlatform
     @ObservationIgnored private var ocrProtection: Task<Void, Never>?
     @ObservationIgnored private var ocrGeneration = 0
     @ObservationIgnored private var edited = Set<UUID>()
+    private(set) var enabled = true
     private var settings = ScreenshotSettings()
     @ObservationIgnored private var revision = 0
     @ObservationIgnored private var loadGeneration = 0
@@ -46,7 +47,18 @@ import RoarkTPlatform
     var onDisk: Bool { settings.historyOnDisk == true }
     var countLimit: Int { onDisk ? min(200, max(1, settings.historyDiskCount ?? 20)) : 20 }
     var days: Int { min(365, max(1, settings.historyDiskDays ?? 7)) }
+    func setEnabled(_ value: Bool) {
+        guard enabled != value else { return }
+        enabled = value
+        if value { start(settings) }
+        else {
+            stop(); revision += 1; task?.cancel(); task = nil
+            syncing = false; loading = false; dirty = false; needsRestore = false
+            edited.removeAll(); ignored.removeAll()
+        }
+    }
     func start(_ settings: ScreenshotSettings) {
+        guard enabled else { self.settings = settings; return }
         guard !running else { configure(settings); return }
         running = true; ending = false; self.settings = settings
         if onDisk { restore() }
@@ -94,7 +106,7 @@ import RoarkTPlatform
         return text.isEmpty ? entries : entries.filter { $0.text.localizedStandardContains(text) }
     }
     func refresh() {
-        guard allowed() else { return }
+        guard enabled, running, allowed() else { return }
         if needsRestore && !loading { restore() }
         else {
             prune()
@@ -134,7 +146,7 @@ import RoarkTPlatform
         }
     }
     private func persist(forceClear: Bool = false) {
-        guard running, !loading, onDisk || forceClear else { return }
+        guard enabled, running, !loading, onDisk || forceClear else { return }
         if onDisk && needsRestore { if allowed() { restore() }; return }
         dirty = true
         revision += 1; let current = revision, values = entries, enabled = onDisk

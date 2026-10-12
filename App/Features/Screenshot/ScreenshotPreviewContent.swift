@@ -285,7 +285,9 @@ struct ScreenshotPreviewContent: View {
             Menu("图片操作") {
                 Button { session.copyImage() } label: { ScreenshotLabel("复制图片", systemImage: ScreenshotSymbols.copy) }
                 Button { session.save() } label: { ScreenshotLabel("另存为…", systemImage: ScreenshotSymbols.save) }
+                if session.pinningEnabled {
                 Button { session.pinDisplayedImage() } label: { ScreenshotLabel("贴当前图片", systemImage: ScreenshotSymbols.pin) }
+                }
                 Divider()
                 Button("解释图片…") { session.previewMode = .visual; session.prepareImage() }.disabled(session.visionModel == nil || session.busy)
                 Button { session.configureVision() } label: { ScreenshotLabel("配置视觉模型…", systemImage: ScreenshotSymbols.settings) }

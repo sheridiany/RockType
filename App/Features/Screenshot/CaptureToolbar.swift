@@ -13,6 +13,7 @@ struct CaptureToolbar: View {
     let cancel: () -> Void
     let complete: () -> Void
     let preview: () -> Void
+    var pinningEnabled = true
     @Environment(\.colorScheme) private var scheme
     private let colors = ["D84A2F", "F2B824", "40A578", "388BEB", "9B6DDF", "FFFFFF", "202124"]
 
@@ -34,7 +35,7 @@ struct CaptureToolbar: View {
                 Divider().frame(height: 20)
                 action(ScreenshotSymbols.ocr, "预览、OCR、翻译与保存", preview)
                 action(ScreenshotSymbols.cancel, "取消 Esc", cancel)
-                toolButton(symbol: ScreenshotSymbols.complete, title: "复制 ↩ / ⌘C · 另存为 ⌘S · 保存路径 ⇧↩ · OCR ⇧C · P 贴图", selected: false, primary: true, action: complete)
+                toolButton(symbol: ScreenshotSymbols.complete, title: "复制 ↩ / ⌘C · 另存为 ⌘S · 保存路径 ⇧↩ · OCR ⇧C" + (pinningEnabled ? " · P 贴图" : ""), selected: false, primary: true, action: complete)
             }
 
             Divider()

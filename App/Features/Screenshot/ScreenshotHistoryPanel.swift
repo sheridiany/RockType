@@ -6,6 +6,7 @@ struct ScreenshotHistoryView: View {
     let open: (ScreenshotHistoryEntry) -> Void
     let action: (ScreenshotHistoryEntry, Action) -> Void
     let close: () -> Void
+    var pinningAllowed: () -> Bool = { true }
     enum Action { case pin, copy, save }
     @State private var query = ""
     @State private var confirmClear = false
@@ -50,7 +51,7 @@ struct ScreenshotHistoryView: View {
                             HStack(spacing: 8) {
                                 Button("打开") { open(entry) }
                                 Menu("操作") {
-                                    Button { action(entry, .pin) } label: { ScreenshotLabel("贴图", systemImage: ScreenshotSymbols.pin) }
+                                    if pinningAllowed() { Button { action(entry, .pin) } label: { ScreenshotLabel("贴图", systemImage: ScreenshotSymbols.pin) } }
                                     Button { action(entry, .copy) } label: { ScreenshotLabel("复制图片", systemImage: ScreenshotSymbols.copy) }
                                     Button { action(entry, .save) } label: { ScreenshotLabel("另存为…", systemImage: ScreenshotSymbols.save) }
                                     Divider()
@@ -100,10 +101,13 @@ struct ScreenshotHistorySettings: View {
     let open: (ScreenshotHistoryEntry) -> Void
     let action: (ScreenshotHistoryEntry, ScreenshotHistoryView.Action) -> Void
     let present: (NSPanel) -> Void
+    let pinningAllowed: () -> Bool
     init(history: ScreenshotHistory, allowed: @escaping () -> Bool,
          open: @escaping (ScreenshotHistoryEntry) -> Void,
          action: @escaping (ScreenshotHistoryEntry, ScreenshotHistoryView.Action) -> Void,
+         pinningAllowed: @escaping () -> Bool = { true },
          present: @escaping (NSPanel) -> Void = { $0.center(); $0.orderFrontRegardless(); $0.makeKey() }) {
+        self.pinningAllowed = pinningAllowed
         self.history = history; self.allowed = allowed; self.open = open; self.action = action; self.present = present
     }
     func show() {
@@ -118,7 +122,7 @@ struct ScreenshotHistorySettings: View {
             guard let self, self.allowed() else { return }; self.close(); self.open(entry)
         }, action: { [weak self] entry, action in
             guard let self, self.allowed() else { return }; self.action(entry, action)
-        }, close: { [weak self] in self?.close() }))
+        }, close: { [weak self] in self?.close() }, pinningAllowed: pinningAllowed))
         self.panel = panel; present(panel)
         protection = Task { [weak self] in
             while !Task.isCancelled {

@@ -192,3 +192,21 @@ import RoarkTCore
     await awaitInputAI { sink.payloads.last == [:] }
     controller.stop(); store.flush()
 }
+
+@Test @MainActor func g1InputAIMasterSwitchRevokesConfigurationWithoutReadingSecret() async {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = configuredStore(directory.appendingPathComponent("settings.json")), sink = ConfigurationSink()
+    store.settings.enabledFeatures.inputMethodAI = false
+    var reads = 0
+    let controller = InputAIController(store: store, transport: sink, secret: { _ in reads += 1; return "synthetic" }, beginKeyMonitoring: { true }, endKeyMonitoring: {})
+    controller.start(); defer { controller.stop() }
+    await awaitInputAI { sink.payloads.count == 1 }
+    #expect(sink.payloads.last == [:] && reads == 0)
+    store.settings.enabledFeatures.inputMethodAI = true
+    await awaitInputAI { sink.payloads.last?["apiKey"] == "synthetic" }
+    let before = reads
+    store.settings.enabledFeatures.inputMethodAI = false
+    await awaitInputAI { sink.payloads.last == [:] }
+    #expect(reads == before)
+}

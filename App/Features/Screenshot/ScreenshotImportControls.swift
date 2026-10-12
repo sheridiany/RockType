@@ -9,12 +9,12 @@ struct ScreenshotImportControls: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.sm) {
             HStack {
-                Button("截图历史") { prepare(); coordinator.showHistory() }
-                Menu("贴图群组") {
+                if coordinator.enabledFeatures.screenshotHistory { Button("截图历史") { prepare(); coordinator.showHistory() } }
+                if coordinator.enabledFeatures.pinning { Menu("贴图群组") {
                     Button("隐藏／显示全部") { prepare(); coordinator.cancel(); PinnedImageController.shared.toggleAll() }
                     Button("下一张贴图") { prepare(); coordinator.cancel(); PinnedImageController.shared.focusNext() }
                     Button("关闭全部") { prepare(); coordinator.cancel(); PinnedImageController.shared.closeGroup() }
-                }
+                } }
             }.buttonStyle(DesignButtonStyle(variant: .ghost))
             Button { prepare(); coordinator.openClipboardImage(recognize: true) } label: {
                 ScreenshotLabel("识别剪贴板图片", systemImage: ScreenshotSymbols.clipboard)

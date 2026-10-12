@@ -10,16 +10,17 @@ import os
     private var pendingTemplateID: String?
     private var running = false
     private let suppliedHistory: ScreenshotHistory?
-    private(set) lazy var history = suppliedHistory ?? ScreenshotHistory(allowed: { [weak self] in self?.allowed() ?? false })
+    private(set) lazy var history = suppliedHistory ?? ScreenshotHistory(allowed: { [weak self] in self?.historyAllowed ?? false })
     private lazy var historyPanel = ScreenshotHistoryPanelController(history: history,
-        allowed: { [weak self] in self?.allowed() ?? false },
+        allowed: { [weak self] in self?.historyAllowed ?? false },
         open: { [weak self] entry in self?.openHistory(entry) },
-        action: { [weak self] entry, action in self?.historyAction(entry, action: action) })
+        action: { [weak self] entry, action in self?.historyAction(entry, action: action) },
+        pinningAllowed: { [weak self] in self?.enabledFeatures.pinning ?? false })
     private var generation = 0
     private lazy var importer: ScreenshotImportController = {
-        let importer = ScreenshotImportController(allowed: allowed)
+        let importer = ScreenshotImportController(allowed: { [weak self] in self?.featureAllowed ?? false })
         importer.onImage = { [weak self] image, origin, recognize in
-            guard let self, self.running, self.allowed() else { return }
+            guard let self, self.running, self.featureAllowed else { return }
             self.openImage(image, origin: origin)
             if recognize { self.session?.runOCR() }
         }
@@ -27,7 +28,8 @@ import os
         importer.onNotice = { [weak self] in self?.onNotice($0) }
         return importer
     }()
-    private let saveAs: ScreenshotSaveAsController
+    private let suppliedSaveAs: ScreenshotSaveAsController?
+    private lazy var saveAs = suppliedSaveAs ?? ScreenshotSaveAsController(allowed: { [weak self] in self?.featureCaptureAllowed ?? false })
     private var saving = false
     private var scrollCapture: ScrollCaptureController?
     private let scrollHUD = ScrollCaptureHUD()
@@ -82,8 +84,26 @@ import os
         self.allowed = allowed ?? { SecureInput.status() == .allowed }
         self.captureAllowed = allowed ?? { ScreenCapture.isReadable }
         self.elementQuery = elementQuery
-        self.saveAs = saveAs ?? ScreenshotSaveAsController(allowed: self.captureAllowed)
+        self.suppliedSaveAs = saveAs
         self.readClipboard = readClipboard; self.presentPreview = presentPreview
+    }
+    var enabledFeatures: FeatureSettings { readSettings().enabledFeatures }
+    private var featureAllowed: Bool { enabledFeatures.screenshot && allowed() }
+    private var featureCaptureAllowed: Bool { enabledFeatures.screenshot && captureAllowed() }
+    private var historyAllowed: Bool { enabledFeatures.screenshot && enabledFeatures.screenshotHistory && allowed() }
+    private var warming = false
+    func settingsChanged() {
+        guard running else { return }
+        history.configure(readSettings().screenshot)
+        history.setEnabled(enabledFeatures.screenshot && enabledFeatures.screenshotHistory)
+        if !enabledFeatures.screenshotHistory { historyPanel.close() }
+        if enabledFeatures.screenshot && !warming {
+            warming = true; ScreenCapture.startWarming(); warmupTask = Task { await OCR.prewarm() }
+        } else if !enabledFeatures.screenshot {
+            warming = false; warmupTask?.cancel(); warmupTask = nil; ScreenCapture.stopWarming()
+            cancel(); closePreview(); historyPanel.close()
+        }
+        for canvas in overlays.canvases.values { canvas.pinningEnabled = enabledFeatures.pinning }
     }
     private var warmupTask: Task<Void, Never>?
     private static let timing = Logger(subsystem: Identifiers.appBundleID, category: "ScreenshotTiming")
@@ -91,9 +111,10 @@ import os
         guard !running else { return }
         running = true
         history.onNotice = { [weak self] in self?.onNotice($0) }
+        history.setEnabled(enabledFeatures.screenshot && enabledFeatures.screenshotHistory)
         history.start(readSettings().screenshot)
         PinnedImageController.shared.onAction = { [weak self] image, action in
-            guard let self, self.running, self.allowed() else { return }
+            guard let self, self.running, self.featureAllowed else { return }
             self.openImage(image, origin: action == .translate ? "贴图 · 核对文字后点击翻译" : "贴图")
             if action == .save { self.session?.save() }
             else if action == .translateImage { self.session?.translateImage() }
@@ -101,10 +122,9 @@ import os
             else if action == .translate { self.session?.prepareImage(action: .translate) }
             else { self.session?.runOCR(copyAfter: action == .copyText) }
         }
-        ScreenCapture.startWarming()
-        warmupTask = Task { await OCR.prewarm() }
+        settingsChanged()
     }
-    func stop() { running = false; historyPanel.close(); history.stop(); warmupTask?.cancel(); warmupTask = nil; ScreenCapture.stopWarming(); cancel(); closePreview(); PinnedImageController.shared.closeAll() }
+    func stop() { running = false; warming = false; historyPanel.close(); history.stop(); warmupTask?.cancel(); warmupTask = nil; ScreenCapture.stopWarming(); cancel(); closePreview(); PinnedImageController.shared.closeAll() }
     func cancel() {
         pendingTemplateID = nil
         generation += 1
@@ -126,7 +146,7 @@ import os
         previousApp = nil
     }
     func capture(templateID: String? = nil) {
-        guard running, captureAllowed() else { return }
+        guard running, featureCaptureAllowed else { return }
         let started = CACurrentMediaTime()
         cancel(); pendingTemplateID = templateID
         let current = generation
@@ -158,14 +178,14 @@ import os
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
                 guard let self else { return }
-                if !self.captureAllowed() { self.cancel(); return }
+                if !self.featureCaptureAllowed { self.cancel(); return }
             }
         }
         captureTask = Task { [weak self] in
             guard let self else { return }
             do {
                 let frames = try await self.captureFrames()
-                guard !Task.isCancelled, current == self.generation, self.captureAllowed() else { return }
+                guard !Task.isCancelled, current == self.generation, self.featureCaptureAllowed else { return }
                 guard !frames.isEmpty else { throw ScreenCapture.Failure.unavailable }
                 self.show(frames)
                 CATransaction.flush()
@@ -202,7 +222,8 @@ import os
             let view = CaptureCanvas(frame: CGRect(origin: .zero, size: frame.rect.size), image: frame.image, windows: frame.windows)
             let displayID = frame.displayID
             overlays.add(panel: panel, canvas: view, displayID: displayID)
-            view.allowed = captureAllowed
+            view.allowed = { [weak self] in self?.featureCaptureAllowed ?? false }
+            view.pinningEnabled = enabledFeatures.pinning
             view.roundedCorners = readSettings().screenshot.roundedCorners ?? true
             view.toolStyles = readSettings().screenshot.annotationStyles ?? [:]
             if let elementSnapshot {
@@ -219,7 +240,7 @@ import os
                 self.beginScrollCapture(view, frame: frame)
             }
             view.onComplete = { [weak self, weak view] image in
-                guard let self, let view, self.captureAllowed() else { return }
+                guard let self, let view, self.featureCaptureAllowed else { return }
                 if let id = self.pendingTemplateID {
                     self.lastSelection = (displayID, view.selection)
                     self.cancel(); self.openImage(image, origin: "截图", historyID: self.history.record(image))
@@ -234,7 +255,7 @@ import os
                 } catch { view.showNotice("无法复制图片，请重试。") }
             }
             view.onSave = { [weak self, weak view] image in
-                guard let self, let view, self.captureAllowed() else { return }
+                guard let self, let view, self.featureCaptureAllowed else { return }
                 let url: URL
                 do { url = try ScreenshotOutput.shared.save(image) }
                 catch { view.showNotice("保存失败，请检查截图保存目录及写入权限。") ; return }
@@ -249,8 +270,8 @@ import os
             }
             let screenRect = frame.rect
             view.onPin = { [weak self, weak view] image in
-                guard let self, let view, self.captureAllowed() else { return }
-                guard self.allowed() else { view.showNotice("贴图暂不可用，请检查辅助功能权限与安全输入状态。"); return }
+                guard let self, let view, self.enabledFeatures.pinning, self.featureCaptureAllowed else { return }
+                guard self.featureAllowed else { view.showNotice("贴图暂不可用，请检查辅助功能权限与安全输入状态。"); return }
                 let selection = view.selection
                 let rect = CaptureGeometry.globalScreenRect(selection, screen: screenRect)
                 // Restore hidden windows before giving the new pin keyboard focus.
@@ -261,7 +282,7 @@ import os
                 } else { self.onNotice("无法贴图，请检查安全输入状态和显示器。") }
             }
             view.onRestore = { [weak self, weak view] in
-                guard let self, self.captureAllowed(), let previous = self.lastSelection,
+                guard let self, self.featureCaptureAllowed, let previous = self.lastSelection,
                       self.overlays.restore(displayID: previous.displayID, rect: previous.rect) else {
                     view?.showNotice("没有可恢复的选区，或原显示器已断开。")
                     return
@@ -270,13 +291,13 @@ import os
 
             view.onOCRCopy = { [weak self, weak view] image in
                 guard let self else { return }
-                guard self.allowed() else { view?.showNotice("OCR 暂不可用，请检查辅助功能权限与安全输入状态。"); return }
+                guard self.featureAllowed else { view?.showNotice("OCR 暂不可用，请检查辅助功能权限与安全输入状态。"); return }
                 self.cancel(); self.openImage(image, origin: "截图", historyID: self.history.record(image))
                 self.session?.runOCR(copyAfter: true)
             }
             view.onPreview = { [weak self, weak view] image in
-                guard let self, let view, self.captureAllowed() else { return }
-                guard self.allowed() else { view.showNotice("预览暂不可用，请检查辅助功能权限与安全输入状态。"); return }
+                guard let self, let view, self.featureCaptureAllowed else { return }
+                guard self.featureAllowed else { view.showNotice("预览暂不可用，请检查辅助功能权限与安全输入状态。"); return }
                 self.lastSelection = (displayID, view.selection)
                 self.cancel(); self.openImage(image, origin: "截图", historyID: self.history.record(image))
             }
@@ -294,7 +315,7 @@ import os
         }
     }
     private func beginScrollCapture(_ canvas: CaptureCanvas, frame: ScreenCapture.Frame) {
-        guard allowed(), canvas.selection.width >= 32, canvas.selection.height >= 32 else {
+        guard featureAllowed, canvas.selection.width >= 32, canvas.selection.height >= 32 else {
             canvas.showNotice("请选取至少 32 × 32 点的区域，并确认辅助功能与安全输入状态。"); return
         }
         let selection = canvas.selection
@@ -308,7 +329,7 @@ import os
         lastSelection = (frame.displayID, selection)
         cancel() // Releases frozen full-screen images, restores the source app, and removes overlay monitors.
         let current = generation
-        let controller = ScrollCaptureController(allowed: allowed, prepare: {
+        let controller = ScrollCaptureController(allowed: { [weak self] in self?.featureAllowed ?? false }, prepare: {
             try await ScrollRegionCapture.prepare(selection: region, expectedWindow: expectedWindow, expectedPID: pid)
         })
         scrollCapture = controller
@@ -319,14 +340,14 @@ import os
             guard let self, self.generation == current else { return }; self.cancel(); self.onNotice(message)
         }
         controller.onComplete = { [weak self] image in
-            guard let self, self.generation == current, self.allowed() else { return }
+            guard let self, self.generation == current, self.featureAllowed else { return }
             self.completeScrollCapture(image, region: region, rounded: rounded)
         }
         scrollHUD.show(controller, near: region); controller.start()
     }
     /// One finalized scroll result shares the normal screenshot history and editable OCR cache.
     func completeScrollCapture(_ image: CGImage, region: CGRect, rounded: Bool) {
-        guard running, allowed(), region.width > 0 else { return }
+        guard running, featureAllowed, region.width > 0 else { return }
         let scale = CGFloat(image.width) / region.width
         guard let result = ScreenshotExport.render(image: image,
             pointSize: CGSize(width: region.width, height: CGFloat(image.height) / scale), roundedCorners: rounded) else {
@@ -335,14 +356,14 @@ import os
         cancel(); openImage(result, origin: "滚动长截图", historyID: history.record(result))
     }
     func saveSelection(_ image: CGImage, canvas: CaptureCanvas, displayID: CGDirectDisplayID) {
-        guard captureAllowed(), !saving else { return }
+        guard featureCaptureAllowed, !saving else { return }
         let current = generation
         saving = true
         overlays.suspend()
         saveAs.present(image: image, format: readSettings().screenshot.format) { [weak self, weak canvas] outcome in
             guard let self, current == self.generation, let canvas else { return }
             self.saving = false
-            guard self.captureAllowed() else { self.cancel(); return }
+            guard self.featureCaptureAllowed else { self.cancel(); return }
             if outcome == .saved {
                 self.history.record(image)
                 self.lastSelection = (displayID, canvas.selection); self.cancel(); return
@@ -352,7 +373,7 @@ import os
         }
     }
     func openClipboardImage(recognize: Bool = false) {
-        guard running, allowed() else { return }
+        guard running, featureAllowed else { return }
         cancel(); closePreview()
         do {
             guard let data = try readClipboard() else { onNotice("剪贴板中没有图片。"); return }
@@ -360,7 +381,7 @@ import os
         } catch { onNotice("无法读取剪贴板图片，请重新复制后重试。") }
     }
     func openImageFiles() {
-        guard running, allowed(), imageOpenPanel == nil else { return }
+        guard running, featureAllowed, imageOpenPanel == nil else { return }
         let panel = NSOpenPanel(); imageOpenPanel = panel
         panel.allowedContentTypes = [.png, .jpeg, .tiff]
         panel.allowsMultipleSelection = true; panel.canChooseDirectories = false
@@ -368,20 +389,20 @@ import os
         panel.begin { [weak self] response in
             guard let self, self.imageOpenPanel === panel else { return }
             self.imageOpenPanel = nil
-            guard response == .OK, self.running, self.allowed() else { return }
+            guard response == .OK, self.running, self.featureAllowed else { return }
             self.openImageBatch(panel.urls)
         }
     }
     func openImageBatch(_ urls: [URL]) {
-        guard running, allowed() else { return }
+        guard running, featureAllowed else { return }
         cancel(); closePreview()
         importer.load(urls)
     }
     private func presentBatch(_ images: [CGImage]) {
-        guard running, allowed(), !images.isEmpty else { return }
+        guard running, featureAllowed, !images.isEmpty else { return }
         let sessions = images.enumerated().map { index, image in
             let value = ScreenshotSession(image: image, origin: "批量图片 \(index + 1)", settings: self.readSettings,
-                verified: self.imageCapabilityVerified, allowed: self.allowed, rememberImageConfirmation: self.rememberImageConfirmation)
+                verified: self.imageCapabilityVerified, allowed: { [weak self] in self?.featureAllowed ?? false }, rememberImageConfirmation: self.rememberImageConfirmation)
             value.performText = self.performText; value.configureVision = self.configureVision
             value.imageCompleted = self.imageCompleted
             value.onClose = { [weak self] in self?.closePreview() }
@@ -396,7 +417,7 @@ import os
         batch.current.runOCR()
     }
     @discardableResult func acceptDrop(_ providers: [NSItemProvider]) -> Bool {
-        guard running, allowed(), let provider = providers.first(where: { ScreenshotImageImport.type(for: $0) != nil }),
+        guard running, featureAllowed, let provider = providers.first(where: { ScreenshotImageImport.type(for: $0) != nil }),
               let type = ScreenshotImageImport.type(for: provider) else { return false }
         cancel(); closePreview()
         importer.load(provider, type: type)
@@ -408,10 +429,10 @@ import os
         previewPanel?.orderOut(nil); previewPanel?.contentView = nil; previewPanel = nil
     }
     func openImage(_ image: CGImage, origin: String, complete: Bool = false, historyID: UUID? = nil, cachedText: String? = nil) {
-        guard running, allowed() else { return }
+        guard running, featureAllowed else { return }
         closePreview()
         let value = ScreenshotSession(image: image, origin: origin, settings: readSettings,
-            verified: imageCapabilityVerified, allowed: allowed, rememberImageConfirmation: rememberImageConfirmation)
+            verified: imageCapabilityVerified, allowed: { [weak self] in self?.featureAllowed ?? false }, rememberImageConfirmation: rememberImageConfirmation)
         session = value
         if let historyID {
             value.onTextChanged = { [weak self] text in self?.history.updateText(text, id: historyID) }
@@ -431,17 +452,17 @@ import os
     }
 
     func showHistory() {
-        guard running else { return }
-        guard allowed() else { onNotice("截图历史暂不可用，请检查辅助功能权限与安全输入状态。"); return }
+        guard running, enabledFeatures.screenshot, enabledFeatures.screenshotHistory else { return }
+        guard featureAllowed else { onNotice("截图历史暂不可用，请检查辅助功能权限与安全输入状态。"); return }
         cancel(); history.configure(readSettings().screenshot); historyPanel.show()
     }
     func clearTransientHistory() { historyPanel.close(); if !history.onDisk { history.clear() } }
     func openHistory(_ entry: ScreenshotHistoryEntry) {
-        guard running, allowed() else { return }
+        guard enabledFeatures.screenshotHistory, running, featureAllowed else { return }
         openImage(entry.image, origin: "截图历史", historyID: entry.id, cachedText: entry.text)
     }
     func historyAction(_ entry: ScreenshotHistoryEntry, action: ScreenshotHistoryView.Action) {
-        guard running, allowed() else { return }
+        guard enabledFeatures.screenshotHistory, running, featureAllowed else { return }
         switch action {
         case .copy:
             do { try ScreenshotOutput.shared.copyImage(entry.image); onNotice("图片已复制") }
@@ -451,7 +472,7 @@ import os
                 if outcome == .failed { self?.onNotice("无法保存图片，请重试或选择其他位置。") }
             }
         case .pin:
-            guard let screen = NSScreen.main else { return }
+            guard enabledFeatures.pinning, let screen = NSScreen.main else { return }
             let width = min(480, CGFloat(entry.image.width))
             let size = CGSize(width: width, height: width * CGFloat(entry.image.height) / CGFloat(entry.image.width))
             let frame = CGRect(x: screen.visibleFrame.midX - size.width / 2, y: screen.visibleFrame.midY - size.height / 2, width: size.width, height: size.height)

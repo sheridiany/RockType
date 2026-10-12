@@ -4,6 +4,7 @@ import RoarkTCore
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var lastFeatures: FeatureSettings?
     private var statusItem: NSStatusItem?
     #if DEBUG
     private let gallery = GalleryWindowController()
@@ -58,6 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         write: { [unowned self] in self.store.settings.shortcuts = $0 },
         showSettings: { [weak self] in self?.showSettings() },
         readTemplates: { [unowned self] in self.store.settings.templates },
+        readFeatures: { [unowned self] in self.store.settings.enabledFeatures },
         unavailableAction: { [weak self] in self?.noticeController.show($0) },
         selection: { [weak self] in self?.selectionController.trigger($0) },
         voiceListening: { [weak self] enabled in
@@ -121,6 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         hotkeys.start()
+        applyFeatureSettings()
         if SettingsLaunchPolicy.action(arguments: CommandLine.arguments) == .settings { showSettings() }
     }
 
@@ -160,10 +163,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func settingsChanged(_ notification: Notification) {
         PinnedImageController.shared.setHistoryLimit(store.settings.screenshot.pinHistoryLimit ?? 10)
-        screenshot.history.configure(store.settings.screenshot)
+        screenshot.settingsChanged()
+        applyFeatureSettings()
         connection.refresh(store.settings.ai)
         operations.settingsChanged()
         refreshStatus()
+    }
+
+    private func applyFeatureSettings() {
+        let features = store.settings.enabledFeatures
+        guard lastFeatures != features else { return }
+        lastFeatures = features
+        hotkeys.retry()
+        selectionController.settingsChanged()
+        PinnedImageController.shared.imageActionsEnabled = features.screenshot
+        PinnedImageController.shared.featureEnabled = features.pinning
+        screenshot.settingsChanged()
+        panel.close(); installMainMenu()
     }
 
     @objc private func becameActive(_ notification: Notification) {
@@ -241,6 +257,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func closePinnedImages() { panel.close(); screenshot.cancel(); PinnedImageController.shared.closeGroup() }
     @objc private func focusNextPinnedImage() { panel.close(); screenshot.cancel(); PinnedImageController.shared.focusNext() }
     @objc private func restorePinnedImage() {
+        guard store.settings.enabledFeatures.pinning else { return }
         panel.close()
         if !PinnedImageController.shared.restoreLast() { noticeController.show(message: "暂无可恢复的贴图，或安全输入保护已开启。") }
     }
@@ -258,8 +275,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func makeMenu() -> NSMenu {
         let menu = NSMenu()
-        menu.addItem(withTitle: "输入翻译", action: #selector(inputTranslation), keyEquivalent: "").target = self
-        menu.addItem(withTitle: "截图", action: #selector(captureScreenshot), keyEquivalent: "").target = self
+        if store.settings.enabledFeatures.selectionShortcuts { menu.addItem(withTitle: "输入翻译", action: #selector(inputTranslation), keyEquivalent: "").target = self }
+        if store.settings.enabledFeatures.screenshot { menu.addItem(withTitle: "截图", action: #selector(captureScreenshot), keyEquivalent: "").target = self }
         for (title, action) in [
             ("截图历史", #selector(showScreenshotHistory)),
             ("隐藏／显示全部贴图", #selector(togglePinnedImages)),
@@ -270,7 +287,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ("识别剪贴板图片", #selector(recognizeClipboardImage)),
             ("预览剪贴板图片", #selector(previewClipboardImage)),
             ("批量识别图片…", #selector(recognizeImageFiles))
-        ] { menu.addItem(withTitle: title, action: action, keyEquivalent: "").target = self }
+        ] {
+            let features = store.settings.enabledFeatures
+            let visible: Bool
+            switch action {
+            case #selector(showScreenshotHistory): visible = features.screenshot && features.screenshotHistory
+            case #selector(togglePinnedImages), #selector(focusNextPinnedImage), #selector(restorePinnedImage): visible = features.pinning
+            case #selector(closePinnedImages), #selector(exitPinnedPassthrough): visible = features.pinning || !PinnedImageController.shared.panels.isEmpty
+            default: visible = features.screenshot
+            }
+            if visible { menu.addItem(withTitle: title, action: action, keyEquivalent: "").target = self }
+        }
         menu.addItem(.separator())
         menu.addItem(withTitle: "设置…", action: #selector(showSettings), keyEquivalent: ",").target = self
         #if DEBUG
@@ -331,7 +358,8 @@ private struct LiveMenuRoot: View {
                           aiStatus: connection.testing ? "AI 测试中" :
                             connection.results.prefix(2).allSatisfy({ $0 == "可用" }) ? "AI 文字/流式可用" :
                             connection.configured ? "AI 已配置 · 待验证" : "AI 未配置",
-                          recent: recent.results, reopen: reopen, clear: clear, screenshot: screenshot, capture: capture,
+                          features: store.settings.enabledFeatures, hasPins: !PinnedImageController.shared.panels.isEmpty,
+                          recent: recent.results.filter { FeatureAvailability.allows($0.session.snapshot, store.settings.enabledFeatures) }, reopen: reopen, clear: clear, screenshot: screenshot, capture: capture,
                           pinHistoryCount: PinnedImageController.shared.history.entries.count, restorePin: restorePin,
                           hasPassthroughPins: PinnedImageController.shared.panels.contains { $0.ignoresMouseEvents },
                           exitPinPassthrough: exitPinPassthrough, prepareImageAction: prepareImageAction,

@@ -80,6 +80,7 @@ import RoarkTCore
     let bridge = BridgeDouble()
     let paste = PasteDouble()
     var allowed = true
+    var featureEnabled = true
     var held = true
     var pid: Int32? = 10
     var granted = true
@@ -95,7 +96,7 @@ import RoarkTCore
             validate: { _ in
                 guard self.validModel else { throw VoiceFailure.model }
                 return URL(fileURLWithPath: "/synthetic-model")
-            }, shortcutEnabled: { true }, modelPresent: { _ in self.present }, inputSourceSelected: { self.selected },
+            }, shortcutEnabled: { true }, featureEnabled: { self.featureEnabled }, modelPresent: { _ in self.present }, inputSourceSelected: { self.selected },
             now: { self.now }, polish: { await self.polish($0) }), presentsHUD: false)
     func begin() async {
         controller.start(monitorEvents: false); controller.press()
@@ -533,5 +534,29 @@ import RoarkTCore
     #expect(h.controller.state.phase == .failed)
     #expect(h.controller.state.message.contains("麦克风未能启动"))
     #expect(!h.recorder.active && h.paste.texts.isEmpty && h.bridge.texts.isEmpty)
+    h.controller.stop()
+}
+
+@MainActor @Test func g1VoiceDisableReleasesModelCancelsRecordingAndRestoresOnEnable() async {
+    let h = VoiceHarness()
+    h.selected = true; h.held = false; h.settings.automaticallyPrepareModel = true
+    h.controller.start(monitorEvents: false)
+    for _ in 0..<100 where h.worker.prepared == 0 { await Task.yield() }
+    #expect(h.worker.prepared > 0)
+    let stopped = h.worker.stopped
+    h.featureEnabled = false; h.controller.refreshPreparation()
+    #expect(h.worker.stopped > stopped && !h.recorder.active && !h.controller.monitoringAvailable)
+    let prepared = h.worker.prepared
+    h.controller.start(monitorEvents: false); h.controller.press()
+    for _ in 0..<20 { await Task.yield() }
+    #expect(h.worker.prepared == prepared && !h.recorder.active)
+    h.featureEnabled = true; h.held = true
+    await h.begin()
+    #expect(h.recorder.active)
+    await h.recognize()
+    h.featureEnabled = false; h.controller.tick()
+    h.worker.resolve("Synthetic late result")
+    for _ in 0..<20 { await Task.yield() }
+    #expect(h.controller.state.phase == .hidden && h.bridge.texts.isEmpty && h.paste.texts.isEmpty)
     h.controller.stop()
 }
