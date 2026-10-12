@@ -15,7 +15,7 @@ enum ScreenshotSymbols {
     static let mosaic = "checkerboard.rectangle" // macOS 11.0
     static let text = "textformat" // macOS 10.15
     static let number = "1.circle" // macOS 10.15
-    static let eraser = "eraser.fill" // macOS 13.0
+    static let eraser = "eraser" // macOS 13.0
     static let undo = "arrow.uturn.left" // macOS 10.15
     static let redo = "arrow.uturn.right" // macOS 10.15
     static let ocr = "text.viewfinder" // macOS 12.0
@@ -122,17 +122,17 @@ enum ScreenshotSymbols {
         show,
         settings,
     ]
-    static let pointSize: CGFloat = 15
+    static let pointSize: CGFloat = 14
     static func image(_ name: String, description: String? = nil) -> NSImage? {
         NSImage(systemSymbolName: name, accessibilityDescription: description)?
-            .withSymbolConfiguration(.init(pointSize: pointSize, weight: .bold))
+            .withSymbolConfiguration(.init(pointSize: pointSize, weight: name == mosaic ? .regular : .medium))
     }
 }
 
 struct ScreenshotIcon: View {
     let systemName: String
     var body: some View {
-        Image(systemName: systemName).font(.system(size: ScreenshotSymbols.pointSize, weight: .bold))
+        Image(systemName: systemName).font(.system(size: ScreenshotSymbols.pointSize, weight: systemName == ScreenshotSymbols.mosaic ? .regular : .medium))
             .symbolRenderingMode(.monochrome).frame(width: 18, height: 18).accessibilityHidden(true)
     }
 }

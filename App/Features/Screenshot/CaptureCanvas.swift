@@ -137,6 +137,7 @@ import os
     }
     private let frozenLayer = CALayer()
     private let maskLayer = CAShapeLayer()
+    private let borderContrastLayer = CAShapeLayer()
     private let borderLayer = CAShapeLayer()
     private let handlesLayer = CAShapeLayer()
     private let labelLayer = CATextLayer()
@@ -229,7 +230,7 @@ import os
     /// Reattach our persistent layers every time; never rely on the root created during init.
     override func makeBackingLayer() -> CALayer {
         let backing = super.makeBackingLayer()
-        for item in [frozenLayer, maskLayer, borderLayer, handlesLayer, labelLayer] {
+        for item in [frozenLayer, maskLayer, borderContrastLayer, borderLayer, handlesLayer, labelLayer] {
             backing.addSublayer(item)
         }
         return backing
@@ -251,9 +252,14 @@ import os
         magnifier.isHidden = true; magnifier.wantsLayer = true; addSubview(magnifier)
         maskLayer.fillRule = .evenOdd
         maskLayer.fillColor = NSColor.black.withAlphaComponent(0.48).cgColor
-        borderLayer.fillColor = nil; borderLayer.strokeColor = NSColor.controlAccentColor.cgColor
-        borderLayer.lineWidth = Tokens.Screenshot.selectionStroke
+        borderContrastLayer.fillColor = nil
+        borderContrastLayer.strokeColor = NSColor.black.withAlphaComponent(0.75).cgColor
+        borderContrastLayer.lineWidth = 4
+        borderLayer.fillColor = nil; borderLayer.strokeColor = NSColor.white.cgColor
+        borderLayer.lineWidth = 2
         handlesLayer.fillColor = NSColor.white.cgColor
+        handlesLayer.strokeColor = NSColor.black.withAlphaComponent(0.75).cgColor
+        handlesLayer.lineWidth = 1
         labelLayer.fontSize = 13; labelLayer.foregroundColor = NSColor.white.cgColor
         labelLayer.backgroundColor = NSColor.black.withAlphaComponent(0.7).cgColor
         updateSelectionLayers()
@@ -290,19 +296,30 @@ import os
         annotationView.frame = bounds
         // Give the compositor real drawable bounds; render(in:) alone can still paint
         // paths outside a zero-sized layer and therefore misses this geometry error.
-        for shape in [maskLayer, borderLayer, handlesLayer] { shape.frame = bounds }
+        for shape in [maskLayer, borderContrastLayer, borderLayer, handlesLayer] { shape.frame = bounds }
         let visible = selection.isEmpty ? (hoveredWindow ?? .zero) : selection
         let mask = CGMutablePath(); mask.addRect(bounds)
         if !visible.isEmpty { mask.addRect(visible) }
         maskLayer.path = mask
-        borderLayer.path = visible.isEmpty ? nil : CGPath(rect: visible, transform: nil)
+        // Snap only the adornments, never the selection used by hit testing/export.
+        // A 2pt stroke has an even pixel width at both 1x and 2x.
+        let scale = max(1, window?.backingScaleFactor ?? CGFloat(image.width) / max(1, bounds.width))
+        func aligned(_ value: CGFloat) -> CGFloat { (value * scale).rounded() / scale }
+        let outline = CGRect(x: aligned(visible.minX), y: aligned(visible.minY),
+            width: aligned(visible.maxX) - aligned(visible.minX), height: aligned(visible.maxY) - aligned(visible.minY))
+        for border in [borderContrastLayer, borderLayer] {
+            border.contentsScale = scale
+            border.path = visible.isEmpty ? nil : CGPath(rect: outline, transform: nil)
+        }
+        handlesLayer.contentsScale = scale
         annotationClip.frame = bounds
         annotationClip.path = CGPath(rect: selection, transform: nil)
         let handles = CGMutablePath()
         if !selection.isEmpty {
             for h in ScreenshotHandle.allCases {
-                let p = h.point(in: selection)
-                handles.addEllipse(in: CGRect(x: p.x - 4, y: p.y - 4, width: 8, height: 8))
+                let point = h.point(in: outline)
+                let p = CGPoint(x: aligned(point.x), y: aligned(point.y))
+                handles.addEllipse(in: CGRect(x: p.x - 5, y: p.y - 5, width: 10, height: 10))
             }
         }
         handlesLayer.path = handles

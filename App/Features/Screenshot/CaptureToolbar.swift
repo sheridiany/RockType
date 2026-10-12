@@ -29,11 +29,10 @@ struct CaptureToolbar: View {
                         Divider().frame(height: 20)
                         action(ScreenshotSymbols.undo, "撤销 ⌘Z", undo).disabled(!canUndo)
                         action(ScreenshotSymbols.redo, "重做 ⇧⌘Z", redo).disabled(!canRedo)
-                        Divider().frame(height: 20)
-                        action(ScreenshotSymbols.ocr, "预览、OCR、翻译与保存", preview)
                     }.padding(.horizontal, 2)
                 }
                 Divider().frame(height: 20)
+                action(ScreenshotSymbols.ocr, "预览、OCR、翻译与保存", preview)
                 action(ScreenshotSymbols.cancel, "取消 Esc", cancel)
                 toolButton(symbol: ScreenshotSymbols.complete, title: "复制 ↩ / ⌘C · 另存为 ⌘S · 保存路径 ⇧↩ · OCR ⇧C · P 贴图", selected: false, primary: true, action: complete)
             }
