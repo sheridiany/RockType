@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Install for the current GUI user; never enable or select an input source.
+# Install and explicitly enable parent + Pinyin for the GUI user; never select an input source.
 set -euo pipefail
 repo_dir=${0:A:h:h}
 [[ $EUID -ne 0 ]] || { print -u2 'Run as your logged-in user, without sudo.'; exit 1; }
@@ -60,5 +60,6 @@ for attempt in 1 2 3; do
   [[ $attempt == 3 ]] && exit 1
   sleep 1
 done
-"$registrar" register "$app"
-print 'Installed and registered RockType / RockType Shuangpin. Add and select them in System Settings.'
+"$registrar" ensure-enabled "$app"
+"$registrar" verify-enabled
+print 'Installed RockType; parent and Pinyin persistent enablement verified. Selection unchanged.'

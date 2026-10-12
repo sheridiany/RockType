@@ -17,7 +17,7 @@ private func runDistributionCommand(_ executable: String, _ arguments: [String],
     return (process.terminationStatus, String(decoding: data, as: UTF8.self))
 }
 
-@Test func installerOnlyRegistersSourcesInUserSessions() throws {
+@Test func installerVerifiesPersistentEnablementInUserSessions() throws {
     let fm = FileManager.default
     let fixture = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try fm.createDirectory(at: fixture, withIntermediateDirectories: true)
@@ -32,6 +32,7 @@ private func runDistributionCommand(_ executable: String, _ arguments: [String],
       ps) echo '501 /System/Library/CoreServices/loginwindow.app/Contents/MacOS/loginwindow';;
       id) echo fixture-user;;
       stat) echo 501;;
+      launchctl) if [[ "$*" == *"verify-enabled"* && "${FIXTURE_VERIFY_FAIL:-0}" == 1 ]]; then exit 9; fi;;
     esac
     """.write(to: mock, atomically: true, encoding: .utf8)
     try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: mock.path)
@@ -47,13 +48,23 @@ private func runDistributionCommand(_ executable: String, _ arguments: [String],
         #expect(result.0 == 0, "\(result.1)")
     }
     let calls = try String(contentsOf: log, encoding: .utf8)
-    #expect(calls.contains("asuser 501 /usr/bin/sudo -H -u fixture-user -- /Applications/RockType.app/Contents/Helpers/RoarkTRegisterInputSource register /Library/Input Methods/RockType Input.app"))
+    #expect(calls.contains("asuser 501 /usr/bin/sudo -H -u fixture-user -- /Applications/RockType.app/Contents/Helpers/RoarkTRegisterInputSource ensure-enabled /Library/Input Methods/RockType Input.app"))
     #expect(calls.contains("bootout gui/501/com.roarkist.roarkt.translation"))
     #expect(calls.contains("bootstrap gui/501 /Library/LaunchAgents/com.roarkist.roarkt.translation.plist"))
     #expect(calls.contains("open -g /Applications/RockType.app"))
     #expect(!calls.contains(" select "))
     #expect(!calls.contains("HIToolbox"))
-    #expect(!calls.contains("RoarkTRegisterInputSource enable"))
+    #expect(calls.contains("asuser 501 /usr/bin/sudo -H -u fixture-user -- /Applications/RockType.app/Contents/Helpers/RoarkTRegisterInputSource verify-enabled"))
+    // A successful enable API path with failed persistence must abort installation.
+    try "".write(to: log, atomically: true, encoding: .utf8)
+    var environment = ProcessInfo.processInfo.environment
+    environment["FIXTURE_VERIFY_FAIL"] = "1"
+    let failed = try runDistributionCommand("/bin/bash", [fixture.appendingPathComponent("postinstall").path, "package", "/", "/"], environment: environment)
+    #expect(failed.0 == 9)
+    let failedCalls = try String(contentsOf: log, encoding: .utf8)
+    #expect(failedCalls.contains("verify-enabled"))
+    #expect(!failedCalls.contains("bootstrap"))
+    #expect(!failedCalls.contains("open -g"))
     // Offline volume rejection happens before all session operations.
     try "".write(to: log, atomically: true, encoding: .utf8)
     let rejected = try runDistributionCommand("/bin/bash", [fixture.appendingPathComponent("postinstall").path, "package", "/", "/Volumes/Other"])

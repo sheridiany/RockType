@@ -12,7 +12,7 @@ import RoarkTCore
         let compiler = Process()
         compiler.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
         compiler.arguments = ["swiftc", "-swift-version", "6", "-parse-as-library"] +
-            ["Core/Identifiers.swift", "Installer/tools/InputSourceIconDiagnostics.swift", "Installer/tools/AtomicInputMethodReplacement.swift", "Installer/tools/RegisterInputSource.swift"]
+            ["Core/Identifiers.swift", "Core/InputSourceEnablement.swift", "Installer/tools/InputSourceIconDiagnostics.swift", "Installer/tools/AtomicInputMethodReplacement.swift", "Installer/tools/RegisterInputSource.swift"]
                 .map { root.appendingPathComponent($0).path } + ["-o", executable.path]
         try compiler.run(); compiler.waitUntilExit()
         XCTAssertEqual(compiler.terminationStatus, 0)

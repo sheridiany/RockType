@@ -89,6 +89,7 @@ done
 codesign --force --options runtime --timestamp=none --sign "$identity" "$input_app"
 codesign --verify --strict --deep "$input_app"
 xcrun swiftc -swift-version 6 -parse-as-library -O "$repo_dir/Core/Identifiers.swift" \
+    "$repo_dir/Core/InputSourceEnablement.swift" \
   "$repo_dir/Installer/tools/InputSourceIconDiagnostics.swift" \
   "$repo_dir/Installer/tools/AtomicInputMethodReplacement.swift" \
   "$repo_dir/Installer/tools/RegisterInputSource.swift" -o "$repo_dir/dist/RoarkTRegisterInputSource"

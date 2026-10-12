@@ -66,6 +66,13 @@ enum InputSourceIconDiagnostics {
         return Unmanaged<AnyObject>.fromOpaque(value).takeUnretainedValue()
     }
 
+    static func persistentEnablement() -> PersistentInputSourceState {
+        // Read only. A fresh verifier process avoids this process's preference cache after TIS calls.
+        PersistentInputSourceState(preference: CFPreferencesCopyValue(
+            "AppleEnabledInputSources" as CFString, "com.apple.HIToolbox" as CFString,
+            kCFPreferencesCurrentUser, kCFPreferencesAnyHost))
+    }
+
     static func live() -> (report: [String: Any], valid: Bool) {
         let filter = [kTISPropertyBundleID as String: Identifiers.inputMethodBundleID] as CFDictionary
         let sources = TISCreateInputSourceList(filter, true).takeRetainedValue() as! [TISInputSource]
@@ -94,7 +101,9 @@ enum InputSourceIconDiagnostics {
         let urls = LSCopyApplicationURLsForBundleIdentifier(Identifiers.inputMethodBundleID as CFString, nil)?
             .takeRetainedValue() as? [URL] ?? []
         return (["modes": reports, "missingModes": modeIDs.filter { !found.contains($0) },
-                 "launchServicesURLs": urls.map(\.path), "menuAgent": menuAgent()], valid && found.count == modeIDs.count)
+                 "launchServicesURLs": urls.map(\.path), "menuAgent": menuAgent(),
+                 "persistentEnablement": (try? JSONSerialization.jsonObject(with: JSONEncoder().encode(persistentEnablement()))) ?? [:],
+                 "persistentEnablementPassed": persistentEnablement().requiredSourcesEnabled], valid && found.count == modeIDs.count)
     }
 
     static func menuAgent() -> [String: Any] {
