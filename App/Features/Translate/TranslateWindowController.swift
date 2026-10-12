@@ -34,9 +34,10 @@ private final class TranslatePanel: NSPanel {
     init(request: OperationRequest, runner: any OperationRunner, settings: @escaping () -> AppSettings,
          rememberTarget: @escaping (String) -> Void = { _ in },
          allowed: @escaping @MainActor () -> Bool = { SecureInput.status() == .allowed },
-         completed: @escaping @MainActor (OperationResult) -> Void = { _ in }, defaults: UserDefaults? = .standard, feedback: @escaping @MainActor (String) -> Void = { _ in }) {
+         completed: @escaping @MainActor (OperationResult) -> Void = { _ in }, defaults: UserDefaults? = .standard, feedback: @escaping @MainActor (String) -> Void = { _ in },
+         wordLookup: WordLookup? = nil, sourceSpeaker: TextSpeaker? = nil, translationSpeaker: TextSpeaker? = nil) {
         self.settings = settings; self.allowed = allowed; self.defaults = defaults; self.feedback = feedback
-        state = TranslateWindowState(request: request, runner: runner, settings: settings, rememberTarget: rememberTarget, allowed: allowed, completed: completed, feedback: feedback)
+        state = TranslateWindowState(request: request, runner: runner, settings: settings, rememberTarget: rememberTarget, allowed: allowed, completed: completed, feedback: feedback, wordLookup: wordLookup, sourceSpeaker: sourceSpeaker, translationSpeaker: translationSpeaker)
         super.init()
         panel.isFloatingPanel = true; panel.hidesOnDeactivate = false; panel.becomesKeyOnlyIfNeeded = true
         panel.isReleasedWhenClosed = false; panel.backgroundColor = .clear; panel.isOpaque = false; panel.hasShadow = true
@@ -153,7 +154,7 @@ private final class TranslatePanel: NSPanel {
         let saved = defaults?.array(forKey: "translateWindowFrame") as? [Double]
         let validSaved = saved?.count == 4 && saved?.allSatisfy(\.isFinite) == true
         let answerRows = state.result.answer.prefix(480).count / 40
-        let extraHeight = (state.expanded ? 96 : 0) + (state.followupExpanded ? 72 : 0)
+        let extraHeight = (state.expanded ? 96 : 0) + (state.followupExpanded ? 72 : 0) + (state.definition == nil ? 0 : 160)
         let desired = CGFloat(344 + answerRows * 20 + extraHeight)
         if !initial && (userSized || validSaved || abs(desired - lastHeight) < 12) { return }
         lastHeight = desired
