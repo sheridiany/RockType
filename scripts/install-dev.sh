@@ -62,4 +62,4 @@ for attempt in 1 2 3; do
 done
 "$registrar" ensure-enabled "$app"
 "$registrar" verify-enabled
-print 'Installed RockType; parent and Pinyin persistent enablement verified. Selection unchanged.'
+print 'Installed RockType; parent and Pinyin TIS enablement verified. Selection unchanged.'

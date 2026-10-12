@@ -15,7 +15,8 @@
 
 | # | 任务 | 执行 | 状态 |
 | --- | --- | --- | --- |
-| M1 | 找到图标消失根因并根治；不允许依赖 killall/重新登录 | pi-ime | 已复核持久启用列表缺少父源及 pinyin；公开 API 启用与独立进程校验已实现，待 main 持久化/点击验收（[本轮证据](evidence/020-M1-persistence.md)；[前轮](evidence/020-M1.md)） |
+| M1 | 找到图标消失根因并根治；不允许依赖 killall/重新登录 | pi-ime | 历史交付；旧 HIToolbox 持久列表判据错误，已由 M2 撤销；原子替换与 worker 修复保留（[本轮证据](evidence/020-M1-persistence.md)；[前轮](evidence/020-M1.md)） |
+| M2 | 修正 verify/ensure 的错误判据，继续验证重装后图标 | pi-ime | 已找到本机第三方配置域；改用公开 TIS 状态，健康现场红→绿；待 main 一次重装与十次点击（[证据](evidence/020-M2.md)） |
 
 ## M1 要求
 
