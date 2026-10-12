@@ -97,6 +97,9 @@ public struct SelectionSettings: Codable, Equatable, Sendable {
     public var windowOpacity = 1.0
     public var searchEngine = "https://www.google.com/search?q={query}"
     public var assistantModel: String? = nil
+    /// Missing values keep labeled tools and enable accidental-popup protection.
+    public var toolbarIconsOnly: Bool? = nil
+    public var suppressAccidentalPopups: Bool? = nil
     public init() {}
 }
 
