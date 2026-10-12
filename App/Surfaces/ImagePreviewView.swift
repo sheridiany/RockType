@@ -17,19 +17,19 @@ struct ImagePreviewPrototype: View {
         let p = Tokens.palette(scheme)
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
             HStack(spacing: Tokens.Space.sm) {
-                Label("图片", systemImage: "photo")
+                ScreenshotLabel("图片", systemImage: ScreenshotSymbols.photo)
                     .font(Tokens.Typography.font(Tokens.Typography.read, weight: .medium))
                 if model.hasImage {
                     Text("\(model.pixelWidth) × \(model.pixelHeight) · " + model.origin)
                         .font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(p.secondary)
                 }
                 Spacer(minLength: 0)
-                Button { feedback = "图片预览已关闭" } label: { Image(systemName: "xmark") }
+                Button { feedback = "图片预览已关闭" } label: { ScreenshotIcon(systemName: ScreenshotSymbols.cancel) }
                     .buttonStyle(DesignButtonStyle(variant: .ghost)).accessibilityLabel("关闭图片预览")
             }
             if !model.hasImage {
                 VStack(spacing: Tokens.Space.md) {
-                    Image(systemName: "lock.shield").font(Tokens.Typography.font(Tokens.Typography.display)).foregroundStyle(p.warn)
+                    ScreenshotIcon(systemName: ScreenshotSymbols.protected).font(Tokens.Typography.font(Tokens.Typography.display)).foregroundStyle(p.warn)
                     Text("需要“屏幕录制”权限才能截图").font(Tokens.Typography.font(weight: .semibold))
                     Text("授权后可重新截图。也可以使用剪贴板中的图片，继续在本机识别文字。")
                         .foregroundStyle(p.secondary).multilineTextAlignment(.center)
@@ -52,7 +52,7 @@ struct ImagePreviewPrototype: View {
                         .disabled(!model.visionAvailable || model.state == .ocrRunning)
                         .buttonStyle(DesignButtonStyle(variant: .secondary))
                     Spacer(minLength: 0)
-                    Button("复制图片") { feedback = "图片已复制" }.keyboardShortcut("c")
+                    Button("复制图片") { feedback = "图片已复制" }.buttonStyle(DesignButtonStyle(variant: .primary)).keyboardShortcut("c")
                         .buttonStyle(DesignButtonStyle(variant: .ghost))
                     Button("另存为") { feedback = "已选择另存为（演示不写入文件）" }.keyboardShortcut("s")
                         .buttonStyle(DesignButtonStyle(variant: .ghost))
@@ -63,7 +63,7 @@ struct ImagePreviewPrototype: View {
                     Button("配置视觉模型") { feedback = "视觉模型配置入口已选中" }
                         .buttonStyle(DesignButtonStyle(variant: .secondary))
                 case .ocrRunning:
-                    Label("本机识别中…", systemImage: "text.viewfinder").foregroundStyle(p.accent)
+                    ScreenshotLabel("本机识别中…", systemImage: ScreenshotSymbols.ocr).foregroundStyle(p.accent)
                     Button("取消识别") { model.state = .preview; feedback = "已取消识别" }
                         .buttonStyle(DesignButtonStyle(variant: .ghost))
                 case .ocrEmpty:
@@ -87,7 +87,7 @@ struct ImagePreviewPrototype: View {
                             Button("翻译") { feedback = "已选择翻译编辑后的识别结果" }
                             Button("总结") { feedback = "已选择总结编辑后的识别结果" }
                             Spacer(minLength: 0)
-                            Button("复制文字") { feedback = "编辑后的文字已复制" }
+                            Button("复制文字") { feedback = "编辑后的文字已复制" }.buttonStyle(DesignButtonStyle(variant: .primary))
                         }.buttonStyle(DesignButtonStyle(variant: .secondary))
                             .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }.padding(Tokens.Space.md)
@@ -112,7 +112,7 @@ struct SyntheticCapturePreview: View {
         let p = Tokens.palette(scheme)
         VStack(alignment: .leading, spacing: Tokens.Space.sm) {
             HStack {
-                Image(systemName: "terminal")
+                ScreenshotIcon(systemName: ScreenshotSymbols.terminal)
                 Text("Preview").font(Tokens.Typography.font(Tokens.Typography.caption))
                 Spacer()
                 Text("示例图片").font(Tokens.Typography.font(Tokens.Typography.caption))

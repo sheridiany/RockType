@@ -55,7 +55,7 @@ import RoarkTPlatform
         }
         let text = Self.batchText(lines)
         guard text.utf8.count <= 12_000 else { fail("整图文字过多，请缩小选区后重试。"); return }
-        let template = OperationTemplate(id: "translate", name: "覆盖式翻译", icon: "character.bubble",
+        let template = OperationTemplate(id: "translate", name: "覆盖式翻译", icon: ScreenshotSymbols.translate,
             prompt: "将每个编号后的文字翻译成 {{target}}。严格保留全部 [[RT:数字]] 标记与编号，每个区域单独翻译，不合并、不遗漏。末尾保留 [[RT:END]]。只输出编号及译文，不加说明、代码围栏或其他内容。")
         let snapshot = ContentSnapshot(text: text, source: .init(pid: ProcessInfo.processInfo.processIdentifier, applicationName: "覆盖式翻译"), method: .screenshotOCR)
         let session = OperationSession(snapshot: snapshot)

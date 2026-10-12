@@ -19,21 +19,25 @@ struct CaptureToolbar: View {
     var body: some View {
         let p = Tokens.palette(scheme)
         VStack(spacing: 4) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 2) {
-                    toolButton(symbol: "cursorarrow", title: "选择标注 / 调整选区 · V", selected: tool == nil) { select(nil) }
-                    ForEach(ScreenshotTool.allCases, id: \.self) { item in
-                        toolButton(symbol: item.symbol, title: "\(item.title) · \(item.shortcut)" + (item == .text ? " · 双击编辑 · ↩ 换行 · Esc 提交" : ""), selected: tool == item) { select(item) }
-                    }
-                    Divider().frame(height: 20)
-                    action("arrow.uturn.backward", "撤销 ⌘Z", undo).disabled(!canUndo)
-                    action("arrow.uturn.forward", "重做 ⇧⌘Z", redo).disabled(!canRedo)
-                    action("text.viewfinder", "预览、OCR、翻译与保存", preview)
-                    action("xmark", "取消 Esc", cancel)
-                    action("checkmark", "复制 ↩ / ⌘C · 另存为 ⌘S · 保存路径 ⇧↩ · OCR ⇧C · P 贴图", complete)
-                        .foregroundStyle(p.accent)
-                }.padding(.horizontal, 2)
+            HStack(spacing: 4) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 2) {
+                        toolButton(symbol: ScreenshotSymbols.select, title: "选择标注 / 调整选区 · V", selected: tool == nil) { select(nil) }
+                        ForEach(ScreenshotTool.allCases, id: \.self) { item in
+                            toolButton(symbol: item.symbol, title: "\(item.title) · \(item.shortcut)" + (item == .text ? " · 双击编辑 · ↩ 换行 · Esc 提交" : ""), selected: tool == item) { select(item) }
+                        }
+                        Divider().frame(height: 20)
+                        action(ScreenshotSymbols.undo, "撤销 ⌘Z", undo).disabled(!canUndo)
+                        action(ScreenshotSymbols.redo, "重做 ⇧⌘Z", redo).disabled(!canRedo)
+                        Divider().frame(height: 20)
+                        action(ScreenshotSymbols.ocr, "预览、OCR、翻译与保存", preview)
+                    }.padding(.horizontal, 2)
+                }
+                Divider().frame(height: 20)
+                action(ScreenshotSymbols.cancel, "取消 Esc", cancel)
+                toolButton(symbol: ScreenshotSymbols.complete, title: "复制 ↩ / ⌘C · 另存为 ⌘S · 保存路径 ⇧↩ · OCR ⇧C · P 贴图", selected: false, primary: true, action: complete)
             }
+
             Divider()
             HStack(spacing: 8) {
                 if let tool, tool != .eraser {
@@ -65,15 +69,14 @@ struct CaptureToolbar: View {
                 }
             }.font(.system(size: 11)).frame(height: 26).padding(.horizontal, 6)
         }
-        .padding(8).background(p.card, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(p.line, lineWidth: 1))
+        .padding(8).background(p.card, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(p.line, lineWidth: 1))
         .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
         .foregroundStyle(p.foreground)
     }
-    private func toolButton(symbol: String, title: String, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) { Image(systemName: symbol).frame(width: 30, height: 28).contentShape(Rectangle()) }
-            .buttonStyle(.plain)
-            .background(selected ? Tokens.palette(scheme).selected : .clear, in: RoundedRectangle(cornerRadius: 6))
+    private func toolButton(symbol: String, title: String, selected: Bool, primary: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) { ScreenshotIcon(systemName: symbol) }
+            .buttonStyle(ScreenshotIconButtonStyle(selected: selected, primary: primary))
             .help(title).accessibilityLabel(title).accessibilityAddTraits(selected ? .isSelected : [])
     }
     private func action(_ symbol: String, _ title: String, _ action: @escaping () -> Void) -> some View {

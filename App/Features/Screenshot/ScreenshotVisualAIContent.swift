@@ -9,7 +9,7 @@ struct ScreenshotVisualAIConfirmation: View {
         let p = Tokens.palette(scheme)
         if let request = session.visual.request {
             VStack(alignment: .leading, spacing: 12) {
-                Label("确认发送 · " + session.visual.title, systemImage: "paperplane")
+                ScreenshotLabel("确认发送 · " + session.visual.title, systemImage: ScreenshotSymbols.send)
                     .font(.system(size: 15, weight: .semibold))
                 Text("将发送上方图片和下方文字至 \(request.connection.name.isEmpty ? "当前 AI 连接" : request.connection.name)（\(URL(string: request.connection.baseURL)?.host ?? "已配置端点")），模型：\(request.model)。")
                     .font(.system(size: 12)).foregroundStyle(p.secondary).fixedSize(horizontal: false, vertical: true)
@@ -54,7 +54,7 @@ struct ScreenshotVisualAIResult: View {
         let p = Tokens.palette(scheme)
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Label(session.visual.phase == .idle ? "图片 AI" : session.visual.title, systemImage: "photo.badge.sparkles")
+                ScreenshotLabel(session.visual.phase == .idle ? "图片 AI" : session.visual.title, systemImage: ScreenshotSymbols.imageAI)
                     .font(.system(size: 13, weight: .semibold))
                 Spacer()
                 if session.visual.isBusy { ProgressView().controlSize(.small) }
@@ -63,7 +63,7 @@ struct ScreenshotVisualAIResult: View {
             ScrollView {
                 if session.visual.output.isEmpty {
                     VStack(spacing: 10) {
-                        Image(systemName: session.visual.phase == .failed ? "exclamationmark.bubble" : "photo.on.rectangle.angled")
+                        ScreenshotIcon(systemName: session.visual.phase == .failed ? ScreenshotSymbols.warning : ScreenshotSymbols.images)
                             .font(.system(size: 23)).foregroundStyle(p.tertiary)
                         Text(title).font(.system(size: 13, weight: .medium))
                         Text(session.visual.notice ?? "选择截图翻译、总结或理解。发送前可核对图片和识别文字。")
@@ -80,7 +80,7 @@ struct ScreenshotVisualAIResult: View {
                 else if session.visual.phase == .failed || session.visual.phase == .cancelled || session.visual.phase == .done {
                     Button("重新确认并重试") { session.retryImage() }.disabled(session.busy)
                 }
-                Button("复制结果") { session.copyText(session.visual.output) }.disabled(session.visual.phase != .done)
+                Button("复制结果") { session.copyText(session.visual.output) }.buttonStyle(DesignButtonStyle(variant: .primary)).disabled(session.visual.phase != .done)
                 Button("追问…") { session.openImageFollowup() }.disabled(session.visual.phase != .done)
                 Spacer(minLength: 0)
             }.buttonStyle(DesignButtonStyle(variant: .secondary))

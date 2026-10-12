@@ -82,7 +82,7 @@ struct ScreenshotEditorView: View {
                         .buttonStyle(DesignButtonStyle(variant: .secondary))
                 }
                 .padding(Tokens.Space.sm)
-                .background(p.card, in: Capsule())
+                .background(p.card, in: RoundedRectangle(cornerRadius: 10))
                 .position(ScreenshotPlacement.toolbarCenter(for: selection))
             } else {
                 toolbar.position(ScreenshotPlacement.toolbarCenter(for: selection))
@@ -112,11 +112,11 @@ struct ScreenshotEditorView: View {
             LinearGradient(colors: [p.screenshotDesktopTop, p.screenshotDesktopBottom],
                            startPoint: .topLeading, endPoint: .bottomTrailing)
             HStack(spacing: Tokens.Space.xl) {
-                Image(systemName: "apple.logo")
+                ScreenshotIcon(systemName: ScreenshotSymbols.desktopApple)
                 Text("Finder").font(Tokens.Typography.font(weight: .semibold))
                 Text("文件"); Text("编辑"); Text("显示"); Text("窗口"); Text("帮助")
                 Spacer()
-                Image(systemName: "wifi"); Image(systemName: "battery.100percent")
+                ScreenshotIcon(systemName: ScreenshotSymbols.desktopNetwork); ScreenshotIcon(systemName: ScreenshotSymbols.desktopBattery)
                 Text("10 月 11 日 周日 16:24")
             }
             .padding(.horizontal, Tokens.Space.lg).frame(height: Tokens.Screenshot.menuHeight)
@@ -126,25 +126,25 @@ struct ScreenshotEditorView: View {
                 HStack(spacing: Tokens.Space.sm) {
                     windowControls
                     Spacer()
-                    Label("预览笔记", systemImage: "doc.text")
+                    ScreenshotLabel("预览笔记", systemImage: ScreenshotSymbols.document)
                     Spacer()
-                    Image(systemName: "sidebar.left")
+                    ScreenshotIcon(systemName: ScreenshotSymbols.sidebar)
                 }
                 Rectangle().fill(p.line).frame(height: Tokens.Size.hairline)
                 HStack(alignment: .top, spacing: Tokens.Space.xxl) {
                     VStack(alignment: .leading, spacing: Tokens.Space.lg) {
-                        Label("所有笔记", systemImage: "folder")
-                        Label("设计记录", systemImage: "square.and.pencil")
-                        Label("已归档", systemImage: "archivebox")
+                        ScreenshotLabel("所有笔记", systemImage: ScreenshotSymbols.folder)
+                        ScreenshotLabel("设计记录", systemImage: ScreenshotSymbols.edit)
+                        ScreenshotLabel("已归档", systemImage: ScreenshotSymbols.archive)
                     }.foregroundStyle(p.secondary).frame(width: Tokens.Size.gallerySidebar, alignment: .leading)
                     VStack(alignment: .leading, spacing: Tokens.Space.xl) {
                         Text("让工作留在本机").font(Tokens.Typography.font(Tokens.Typography.display, weight: .semibold))
                         Text("设计记录 / 10 月 11 日").foregroundStyle(p.secondary)
                         Text(SurfaceSampleText.translation).lineSpacing(Tokens.Typography.readingSpacing)
                         Text("本次验证").font(Tokens.Typography.font(Tokens.Typography.input, weight: .medium))
-                        Label("离线时继续编辑", systemImage: "checkmark.circle")
-                        Label("保留每一次修改", systemImage: "checkmark.circle")
-                        Label("让状态清楚可见", systemImage: "circle")
+                        ScreenshotLabel("离线时继续编辑", systemImage: ScreenshotSymbols.checked)
+                        ScreenshotLabel("保留每一次修改", systemImage: ScreenshotSymbols.checked)
+                        ScreenshotLabel("让状态清楚可见", systemImage: ScreenshotSymbols.ellipse)
                         Spacer()
                     }.frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -161,16 +161,16 @@ struct ScreenshotEditorView: View {
                 .offset(x: Tokens.Screenshot.terminalWindow.minX, y: Tokens.Screenshot.terminalWindow.minY)
 
             VStack(spacing: Tokens.Space.sm) {
-                Image(systemName: "folder.fill").font(Tokens.Typography.font(Tokens.Typography.display)).foregroundStyle(p.accent)
+                ScreenshotIcon(systemName: ScreenshotSymbols.folder).font(Tokens.Typography.font(Tokens.Typography.display)).foregroundStyle(p.accent)
                 Text("设计文稿")
-                Image(systemName: "doc.richtext").font(Tokens.Typography.font(Tokens.Typography.display)).padding(.top, Tokens.Space.xxl)
+                ScreenshotIcon(systemName: ScreenshotSymbols.richText).font(Tokens.Typography.font(Tokens.Typography.display)).padding(.top, Tokens.Space.xxl)
                 Text("预览说明")
             }.frame(width: Tokens.Screenshot.folderWidth)
                 .offset(x: Tokens.Screenshot.folderX, y: Tokens.Screenshot.folderY)
 
             HStack(spacing: Tokens.Space.xxl) {
-                ForEach(["face.smiling", "safari", "note.text", "terminal", "folder", "trash"], id: \.self) { symbol in
-                    Image(systemName: symbol).font(Tokens.Typography.font(Tokens.Typography.display))
+                ForEach([ScreenshotSymbols.desktopGrid, ScreenshotSymbols.desktopBrowser, ScreenshotSymbols.notes, ScreenshotSymbols.terminal, ScreenshotSymbols.folder, ScreenshotSymbols.delete], id: \.self) { symbol in
+                    ScreenshotIcon(systemName: symbol).font(Tokens.Typography.font(Tokens.Typography.display))
                         .foregroundStyle(p.secondary)
                 }
             }.frame(width: Tokens.Screenshot.dockWidth, height: Tokens.Screenshot.dockHeight)
@@ -192,7 +192,7 @@ struct ScreenshotEditorView: View {
         let p = Tokens.palette(scheme)
         return VStack(alignment: .leading, spacing: Tokens.Space.md) {
             if busy {
-                Label("本机识别中…", systemImage: "text.viewfinder").foregroundStyle(p.accent)
+                ScreenshotLabel("本机识别中…", systemImage: ScreenshotSymbols.ocr).foregroundStyle(p.accent)
                 Text("文字在本机处理，图片未上传。")
                     .font(Tokens.Typography.font(Tokens.Typography.meta)).foregroundStyle(p.secondary)
             } else {
@@ -211,7 +211,7 @@ struct ScreenshotEditorView: View {
                     Text("可直接修改").font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(p.secondary)
                     Spacer()
                     Button("复制文字") { feedback = "识别结果已复制" }
-                        .buttonStyle(DesignButtonStyle(variant: .secondary))
+                        .buttonStyle(DesignButtonStyle(variant: .primary))
                 }
             }
         }
@@ -228,38 +228,36 @@ struct ScreenshotEditorView: View {
                 Button {
                     model.selectedTool = tool; model.state = .annotating
                     model.annotations.append(tool); feedback = nil
-                } label: { Image(systemName: tool.symbol).frame(width: Tokens.Size.icon) }
-                .buttonStyle(DesignButtonStyle(variant: .ghost))
-                .background(model.selectedTool == tool ? p.selected : .clear,
-                            in: RoundedRectangle(cornerRadius: Tokens.Radius.control))
+                } label: { ScreenshotIcon(systemName: tool.symbol).frame(width: Tokens.Size.icon) }
+                .buttonStyle(ScreenshotIconButtonStyle(selected: model.selectedTool == tool))
                 .accessibilityLabel(tool.title).help(tool.title).disabled(busy)
             }
             Rectangle().fill(p.line).frame(width: Tokens.Size.stroke, height: Tokens.Size.compact)
-            toolButton("识别文字", "text.viewfinder", disabled: busy) {
+            toolButton("识别文字", ScreenshotSymbols.ocr, disabled: busy) {
                 model.state = .ocrDone; text = SurfaceSampleText.ocr; feedback = nil
             }
-            toolButton("翻译", "character.bubble", disabled: busy) { feedback = SurfaceSampleText.translation }
-            toolButton("撤销", "arrow.uturn.backward", disabled: busy || model.annotations.isEmpty) {
+            toolButton("翻译", ScreenshotSymbols.translate, disabled: busy) { feedback = SurfaceSampleText.translation }
+            toolButton("撤销", ScreenshotSymbols.undo, disabled: busy || model.annotations.isEmpty) {
                 _ = model.annotations.popLast(); feedback = nil
             }.keyboardShortcut("z")
             Spacer(minLength: 0)
-            toolButton("保存", "square.and.arrow.down", disabled: busy) { feedback = "已选择保存（演示不写入文件）" }.keyboardShortcut("s")
-            toolButton("取消", "xmark") { feedback = "截图已取消，未保存文件" }.keyboardShortcut(.cancelAction)
-            Button { feedback = "截图已完成并复制" } label: { Image(systemName: "checkmark") }
-                .buttonStyle(DesignButtonStyle(variant: .primary)).disabled(busy)
+            toolButton("保存", ScreenshotSymbols.save, disabled: busy) { feedback = "已选择保存（演示不写入文件）" }.keyboardShortcut("s")
+            toolButton("取消", ScreenshotSymbols.cancel) { feedback = "截图已取消，未保存文件" }.keyboardShortcut(.cancelAction)
+            Button { feedback = "截图已完成并复制" } label: { ScreenshotIcon(systemName: ScreenshotSymbols.complete) }
+                .buttonStyle(ScreenshotIconButtonStyle(primary: true)).disabled(busy)
                 .accessibilityLabel("完成并复制").help("完成并复制 ↩").keyboardShortcut(.defaultAction)
         }
         .padding(Tokens.Space.sm)
         .frame(width: Tokens.Screenshot.toolbarWidth, height: Tokens.Screenshot.toolbarHeight)
-        .background(p.card, in: Capsule())
-        .overlay(Capsule().stroke(p.line, lineWidth: Tokens.Size.hairline))
+        .background(p.card, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(p.line, lineWidth: Tokens.Size.hairline))
         .shadow(color: p.windowShadow, radius: Tokens.Shadow.secondaryRadius, y: Tokens.Shadow.secondaryY)
         .accessibilityElement(children: .contain).accessibilityLabel("标注工具栏")
     }
     private func toolButton(_ title: String, _ symbol: String, disabled: Bool = false,
                             action: @escaping () -> Void) -> some View {
-        Button(action: action) { Image(systemName: symbol).frame(width: Tokens.Size.icon) }
-            .buttonStyle(DesignButtonStyle(variant: .ghost)).disabled(disabled)
+        Button(action: action) { ScreenshotIcon(systemName: symbol).frame(width: Tokens.Size.icon) }
+            .buttonStyle(ScreenshotIconButtonStyle()).disabled(disabled)
             .accessibilityLabel(title).help(title)
     }
     private var annotationOverlay: some View {
@@ -276,11 +274,11 @@ struct ScreenshotEditorView: View {
             HStack(spacing: Tokens.Space.xl) {
                 ForEach(Array(model.annotations.enumerated()), id: \.offset) { _, tool in
                     switch tool {
-                    case .arrow: Image(systemName: "arrow.up.right").font(Tokens.Typography.font(Tokens.Typography.display))
+                    case .arrow: ScreenshotIcon(systemName: ScreenshotSymbols.arrow).font(Tokens.Typography.font(Tokens.Typography.display))
                     case .number: Text("1").padding(Tokens.Space.xs).background(p.dangerSoft, in: Circle())
                     case .text: Text("检查这里").font(Tokens.Typography.font(weight: .semibold))
-                    case .mosaic: Image(systemName: "square.grid.3x3.fill").font(Tokens.Typography.font(Tokens.Typography.display))
-                    case .pen: Image(systemName: "scribble").font(Tokens.Typography.font(Tokens.Typography.display))
+                    case .mosaic: ScreenshotIcon(systemName: ScreenshotSymbols.mosaic).font(Tokens.Typography.font(Tokens.Typography.display))
+                    case .pen: ScreenshotIcon(systemName: ScreenshotSymbols.pen).font(Tokens.Typography.font(Tokens.Typography.display))
                     default: EmptyView()
                     }
                 }

@@ -7,7 +7,7 @@ struct ScreenshotLocalImageTools: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Label("覆盖式图片翻译", systemImage: "character.bubble.fill").font(.system(size: 13, weight: .semibold))
+                ScreenshotLabel("覆盖式图片翻译", systemImage: ScreenshotSymbols.translate).font(.system(size: 13, weight: .semibold))
                 Spacer()
                 Text(session.overlay.engine).font(.system(size: 11)).foregroundStyle(p.secondary)
             }
@@ -34,7 +34,7 @@ struct ScreenshotLocalImageTools: View {
                     Spacer(minLength: 0)
                 }
                 HStack {
-                    Button("复制译图") { session.showTranslatedImage = true; session.copyImage() }
+                    Button("复制译图") { session.showTranslatedImage = true; session.copyImage() }.buttonStyle(DesignButtonStyle(variant: .primary))
                     Button("保存译图…") { session.showTranslatedImage = true; session.save() }
                     Button("将译图贴到屏幕") { session.showTranslatedImage = true; session.pinDisplayedImage() }
                 }.buttonStyle(DesignButtonStyle(variant: .secondary))
@@ -52,7 +52,7 @@ struct ScreenshotBarcodeResults: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Label("二维码与条码", systemImage: "qrcode.viewfinder").font(.system(size: 13, weight: .semibold))
+                ScreenshotLabel("二维码与条码", systemImage: ScreenshotSymbols.codes).font(.system(size: 13, weight: .semibold))
                 Spacer()
                 if session.barcodes.phase == .running {
                     ProgressView().controlSize(.small)
@@ -71,7 +71,7 @@ struct ScreenshotBarcodeResults: View {
                     Text(verbatim: code.payload).font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading)
                     HStack {
-                        Button("复制内容") { session.copyText(code.payload) }
+                        Button("复制内容") { session.copyText(code.payload) }.buttonStyle(DesignButtonStyle(variant: .primary))
                         if code.webURL != nil { Button("查看完整链接…") { session.barcodes.previewURL(at: index) } }
                     }.buttonStyle(DesignButtonStyle(variant: .secondary))
                 }.padding(10).background(p.canvas, in: RoundedRectangle(cornerRadius: 7))

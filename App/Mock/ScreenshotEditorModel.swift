@@ -27,13 +27,13 @@ struct ScreenshotEditorModel: Sendable {
         }
         var symbol: String {
             switch self {
-            case .rectangle: "rectangle"
-            case .ellipse: "oval"
-            case .arrow: "arrow.up.right"
-            case .pen: "pencil.tip"
-            case .mosaic: "square.grid.3x3.fill"
-            case .text: "textformat"
-            case .number: "number.circle"
+            case .rectangle: ScreenshotSymbols.rectangle
+            case .ellipse: ScreenshotSymbols.ellipse
+            case .arrow: ScreenshotSymbols.arrow
+            case .pen: ScreenshotSymbols.pen
+            case .mosaic: ScreenshotSymbols.mosaic
+            case .text: ScreenshotSymbols.text
+            case .number: ScreenshotSymbols.number
             }
         }
     }
