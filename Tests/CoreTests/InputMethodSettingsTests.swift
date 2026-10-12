@@ -96,3 +96,48 @@ import Testing
     #expect(try writer.write(.init()).conflicts == ["roarkt.custom.yaml"])
     #expect(try Data(contentsOf: link) == unowned)
 }
+
+@Test func inputAIFeatureProjectionDefaultsPerKeyAndIgnoresOtherFeatures() throws {
+    var settings = AppSettings()
+    var ai = InputAISettings()
+    ai.enabled = true
+    ai.timeout = 17
+    settings.input.inputAI = ai
+    settings.input.scheme = .flypy
+    settings.input.candidateTranslation = false
+    let base = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(settings)) as? [String: Any])
+    let cases: [(String?, Bool)] = [
+        (nil, true), ("null", true), ("{}", true),
+        (#"{"voice":false}"#, true),
+        (#"{"inputMethodAI":null}"#, true),
+        (#"{"inputMethodAI":true}"#, true),
+        (#"{"inputMethodAI":false}"#, false),
+        (#"{"inputMethodAI":false,"voice":"unrelated","futureFlag":{}}"#, false)
+    ]
+    for (features, enabled) in cases {
+        var object = base
+        object.removeValue(forKey: "features")
+        if let features {
+            object["features"] = try JSONSerialization.jsonObject(with: Data(features.utf8), options: .fragmentsAllowed)
+        }
+        let preferences = InputMethodPreferences.decode(try JSONSerialization.data(withJSONObject: object))
+        #expect(preferences.inputMethodAIEnabled == enabled)
+        #expect(preferences.allowsInputAI == enabled)
+        #expect(preferences.input == settings.input, "Feature flags must not reset candidate or AI configuration")
+        #expect(preferences.translation == settings.translation)
+        #expect(preferences != InputMethodPreferences(input: settings.input, translation: settings.translation,
+                                                     inputMethodAIEnabled: !enabled), "Flag changes must invalidate the read-only settings snapshot")
+    }
+}
+
+@Test func inputAIFeatureDoesNotEnablePreviouslyDisabledInputAI() throws {
+    var settings = AppSettings()
+    settings.enabledFeatures.inputMethodAI = true
+    #expect(!InputMethodPreferences.decode(try JSONEncoder().encode(settings)).allowsInputAI)
+    settings.input.inputAI = InputAISettings()
+    #expect(!InputMethodPreferences.decode(try JSONEncoder().encode(settings)).allowsInputAI)
+    settings.input.inputAI?.enabled = true
+    #expect(InputMethodPreferences.decode(try JSONEncoder().encode(settings)).allowsInputAI)
+    settings.enabledFeatures.inputMethodAI = false
+    #expect(!InputMethodPreferences.decode(try JSONEncoder().encode(settings)).allowsInputAI)
+}
