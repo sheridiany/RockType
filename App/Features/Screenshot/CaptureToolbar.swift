@@ -40,8 +40,8 @@ struct CaptureToolbar: View {
 
             Divider()
             HStack(spacing: 8) {
-                if let tool, tool != .eraser {
-                    if tool != .mosaic {
+                if let tool {
+                    if tool != .mosaic && tool != .eraser {
                         ForEach(colors, id: \.self) { hex in
                             Button {
                                 var next = style; next.colorHex = hex; changeStyle(next)
@@ -69,9 +69,9 @@ struct CaptureToolbar: View {
                         .accessibilityLabel("文字标注背景")
                     }
                     Spacer(minLength: 0)
-                    Text("滚轮调节 · ⇧ 约束 · ⌥ 叠画").foregroundStyle(p.secondary)
+                    Text(tool == .eraser ? "拖动擦除 · 滚轮调大小 · ⌘Z 撤销" : "滚轮调节 · ⇧ 约束 · ⌥ 叠画").foregroundStyle(p.secondary)
                 } else {
-                    Text(tool == .eraser ? "点击删除整条标注 · ⌘Z 撤销" : "双击空白处复制 · 点击标注编辑 · ⌫ 删除 · ⌥/⌘ 方向键调边")
+                    Text("双击空白处复制 · 点击标注编辑 · ⌫ 删除 · ⌥/⌘ 方向键调边")
                         .foregroundStyle(p.secondary)
                     Spacer(minLength: 0)
                 }
