@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import RoarkTCore
 import XCTest
 @testable import RoarkTApp
 
@@ -19,9 +20,9 @@ final class TextAnnotationTests: XCTestCase {
         XCTAssertEqual(editorAttributes[.paragraphStyle] as? NSParagraphStyle, attributes[.paragraphStyle] as? NSParagraphStyle)
         XCTAssertFalse(editor.drawsBackground)
         XCTAssertEqual(editor.focusRingType, .none)
-        XCTAssertEqual(editor.textContainerOrigin, .zero)
+        XCTAssertEqual(editor.textContainerOrigin, CGPoint(x: 2, y: 2))
         XCTAssertEqual(editor.textContainer?.lineFragmentPadding, 0)
-        XCTAssertEqual(editor.textContainer?.containerSize.width, 160)
+        XCTAssertEqual(editor.textContainer?.containerSize.width, 156)
         let manager = try XCTUnwrap(editor.layoutManager)
         let container = try XCTUnwrap(editor.textContainer)
         manager.ensureLayout(for: container)
@@ -33,25 +34,27 @@ final class TextAnnotationTests: XCTestCase {
     }
 
     @MainActor func testNativeMarkedTextNewlineAndAutomaticGrowth() throws {
-        let annotation = ScreenshotAnnotation(tool: .text, points: [.zero], textMaxWidth: 220)
-        let editor = CaptureTextView(annotation: annotation, availableSize: CGSize(width: 220, height: 240))
-        let emptySize = editor.frame.size
-        editor.setMarkedText("中文", selectedRange: NSRange(location: 2, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0))
-        XCTAssertTrue(editor.hasMarkedText())
-        XCTAssertEqual(editor.string, "中文")
-        XCTAssertGreaterThan(editor.frame.width, emptySize.width)
-        editor.insertText("中文输入", replacementRange: NSRange(location: NSNotFound, length: 0))
-        XCTAssertFalse(editor.hasMarkedText())
-        XCTAssertEqual(editor.string, "中文输入")
-        let lineSize = editor.frame.size
-        editor.insertNewline(nil)
-        editor.insertText("second line", replacementRange: NSRange(location: NSNotFound, length: 0))
-        XCTAssertEqual(editor.string, "中文输入\nsecond line")
-        XCTAssertGreaterThan(editor.frame.height, lineSize.height)
-        XCTAssertGreaterThan(editor.frame.width, lineSize.width)
-        editor.insertText(String(repeating: "长句", count: 25), replacementRange: NSRange(location: NSNotFound, length: 0))
-        XCTAssertLessThanOrEqual(editor.frame.width, 220)
-        XCTAssertGreaterThan(editor.frame.height, lineSize.height * 2)
+        for background in [false, true] {
+            let annotation = ScreenshotAnnotation(tool: .text, points: [.zero], textMaxWidth: 220, textBackground: background)
+            let editor = CaptureTextView(annotation: annotation, availableSize: CGSize(width: 220, height: 240))
+            let emptySize = editor.frame.size
+            editor.setMarkedText("中文", selectedRange: NSRange(location: 2, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0))
+            XCTAssertTrue(editor.hasMarkedText())
+            XCTAssertEqual(editor.string, "中文")
+            XCTAssertGreaterThan(editor.frame.width, emptySize.width)
+            editor.insertText("中文输入", replacementRange: NSRange(location: NSNotFound, length: 0))
+            XCTAssertFalse(editor.hasMarkedText())
+            XCTAssertEqual(editor.string, "中文输入")
+            let lineSize = editor.frame.size
+            editor.insertNewline(nil)
+            editor.insertText("second line", replacementRange: NSRange(location: NSNotFound, length: 0))
+            XCTAssertEqual(editor.string, "中文输入\nsecond line")
+            XCTAssertGreaterThan(editor.frame.height, lineSize.height)
+            XCTAssertGreaterThan(editor.frame.width, lineSize.width)
+            editor.insertText(String(repeating: "长句", count: 25), replacementRange: NSRange(location: NSNotFound, length: 0))
+            XCTAssertLessThanOrEqual(editor.frame.width, 220)
+            XCTAssertGreaterThan(editor.frame.height, lineSize.height * 2)
+        }
     }
 
     func testEmptyTextDiscardAndReplacementUndoRedo() {
@@ -73,6 +76,45 @@ final class TextAnnotationTests: XCTestCase {
         history.commitText(edited, replacing: 0)
         XCTAssertTrue(history.items.isEmpty)
         history.undo(); XCTAssertEqual(history.items[0].text, "after\nnewline")
+    }
+
+    @MainActor func testBackgroundToggleAppliesToTypingAndRestoresOnReeditAndUndo() throws {
+        let canvas = try canvas()
+        try click(canvas)
+        try editor(canvas).insertText("清晰的标注", replacementRange: NSRange(location: NSNotFound, length: 0))
+        var style = try toolbar(canvas).style
+        style.textBackground = true; style.colorHex = "202124"
+        try toolbar(canvas).changeStyle(style)
+        XCTAssertEqual(canvas.annotations.count, 1)
+        XCTAssertTrue(canvas.annotations[0].textBackground)
+        XCTAssertEqual(canvas.annotations[0].text, "清晰的标注")
+        try toolbar(canvas).undo()
+        XCTAssertFalse(canvas.annotations[0].textBackground)
+        try toolbar(canvas).redo()
+        XCTAssertTrue(canvas.annotations[0].textBackground)
+        try click(canvas, at: CGPoint(x: 48, y: 50), count: 2)
+        let editing = try editor(canvas)
+        XCTAssertTrue(editing.annotation.textBackground)
+        XCTAssertEqual(editing.textColor, .white)
+        XCTAssertEqual(editing.insertionPointColor, .white)
+        XCTAssertTrue(try toolbar(canvas).style.textBackground == true)
+        editing.insertText("继续", replacementRange: NSRange(location: NSNotFound, length: 0))
+        var expected = editing.annotation; expected.text = editing.string
+        var output: CGImage?
+        canvas.roundedCorners = false
+        canvas.onComplete = { output = $0 }
+        try toolbar(canvas).complete()
+        let exported = try XCTUnwrap(ScreenshotCompositor.render(image: canvas.image, size: canvas.bounds.size,
+            selection: canvas.selection, annotations: [expected]))
+        XCTAssertEqual(NSBitmapImageRep(cgImage: try XCTUnwrap(output)).representation(using: .png, properties: [:]),
+                       NSBitmapImageRep(cgImage: exported).representation(using: .png, properties: [:]))
+    }
+
+    func testBackgroundPreferenceDecodesMissingFieldAndRoundTrips() throws {
+        let old = try JSONDecoder().decode(ScreenshotAnnotationStyle.self, from: Data(#"{"colorHex":"D84A2F","width":17}"#.utf8))
+        XCTAssertNotEqual(old.textBackground, true)
+        let enabled = ScreenshotAnnotationStyle(colorHex: "202124", width: 24, textBackground: true)
+        XCTAssertEqual(try JSONDecoder().decode(ScreenshotAnnotationStyle.self, from: JSONEncoder().encode(enabled)), enabled)
     }
 
     @MainActor private func canvas() throws -> CaptureCanvas {

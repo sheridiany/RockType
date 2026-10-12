@@ -188,8 +188,10 @@ final class AnnotationEditingTests: XCTestCase {
         let text = ScreenshotAnnotation(tool: .text, points: [CGPoint(x: 10, y: 10)], text: "Synthetic")
         let enlarged = text.resized(to: CGRect(origin: text.bounds.origin, size: CGSize(width: text.bounds.width * 2, height: text.bounds.height * 2)))
         XCTAssertEqual(enlarged.fontSize, 34)
-        XCTAssertEqual(ScreenshotText.attributes(for: enlarged)[.strokeColor] as? NSColor, .white)
-        XCTAssertEqual(ScreenshotText.attributes(for: enlarged)[.strokeWidth] as? Int, -3)
+        let attributes = ScreenshotText.attributes(for: enlarged)
+        XCTAssertNil(attributes[.strokeColor])
+        XCTAssertNil(attributes[.strokeWidth])
+        XCTAssertEqual(attributes[.font] as? NSFont, NSFont.systemFont(ofSize: 34, weight: .semibold))
     }
     func testHighlighterExportIsTranslucentAndRectangleHasRoundedCorner() throws {
         let ctx = try XCTUnwrap(CGContext(data: nil, width: 120, height: 100, bitsPerComponent: 8,

@@ -59,6 +59,14 @@ struct CaptureToolbar: View {
                         var next = style; next.width = value.rounded(); changeStyle(next)
                     }), in: tool.widthRange, step: 1).frame(width: 86).accessibilityLabel(tool == .text ? "字号" : tool == .mosaic ? "颗粒" : "粗细")
                     Text("\(Int(style.width))").monospacedDigit().frame(width: 24, alignment: .trailing)
+                    if tool == .text {
+                        Toggle("背景", isOn: Binding(get: { style.textBackground == true }, set: { enabled in
+                            var next = style; next.textBackground = enabled; changeStyle(next)
+                        }))
+                        .toggleStyle(.button)
+                        .help("使用所选颜色作背景，文字自动切换为黑色或白色")
+                        .accessibilityLabel("文字标注背景")
+                    }
                     Spacer(minLength: 0)
                     Text("滚轮调节 · ⇧ 约束 · ⌥ 叠画").foregroundStyle(p.secondary)
                 } else {
