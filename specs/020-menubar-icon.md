@@ -24,3 +24,9 @@
 - 产出：根因写进证据（含复现步骤）；修复后提供自动化检查（例如脚本读取 TIS 属性 `kTISPropertyIconImageURL`/`kTISPropertyIconRef` 校验图标可解析），以及安装脚本不再导致缓存错乱（如安装用原子替换、版本号变化策略、必要时只在注册信息变化时 re-register）。
 - 不允许的方案：定时 killall 系统进程、修改系统文件。
 - 遵守 AGENTS.md：不要在 worktree 安装/注册；需要真机验证的步骤写清楚，由 Claude 从 main 安装验证。test/build 真实退出码 0；更新本表与 `specs/evidence/020-M1.md`；一个 commit。
+
+## 更新（2026-10-12，Claude 真机）
+
+- 用户在系统设置 → 文本输入中删除并重新添加 RockType 后，点击图标恢复正常（用户确认）。
+- 但 `~/Library/Preferences/com.apple.HIToolbox.plist` 的 `AppleInputSourceUpdateTime` 仍为 2026-09-05，添加后 `AppleEnabledInputSources` 仍无 RockType ⇒ 本机 macOS 27 不再用该 plist 持久化启用列表，**`verify-enabled` 依据错误**，导致 `install-dev.sh` 必然失败。
+- M2（pi-ime）：verify/ensure 改用系统真实状态（TIS 属性 + 系统实际存储位置，先查清 macOS 26/27 的存储）；install 不得因该检查误报失败；继续查“重装后系统登记过期、需删除再添加才恢复”的真实根因（原子替换已合入，验证重装一次后点击图标是否仍正常）。
