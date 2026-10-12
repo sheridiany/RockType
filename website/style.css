@@ -162,6 +162,8 @@ button {
 .nav-download {
   padding: 10px 16px;
   min-height: 40px;
+  /* A blurred shadow inside the backdrop-filtered header renders as a solid block. */
+  box-shadow: none;
 }
 .menu-toggle {
   display: none;
