@@ -14,8 +14,10 @@ private final class TranslatePanel: NSPanel {
     private let panel = TranslatePanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel, .resizable], backing: .buffered, defer: false)
     private let settings: () -> AppSettings
     private let allowed: () -> Bool
+    private let feedback: @MainActor (String) -> Void
     private let defaults: UserDefaults?
     private var source: OperationSource?
+    private var replacement: SourceReplacement?
     private var sourceChanged = false
     private var monitor: Any?
     private var watch: Task<Void, Never>?
@@ -27,12 +29,13 @@ private final class TranslatePanel: NSPanel {
     var onClose: () -> Void = {}
     var isVisible: Bool { panel.isVisible }
     var windowFrame: CGRect { panel.frame }
+    var isSourceFocused: Bool { panel.isKeyWindow && panel.firstResponder is TranslateSourceEditor.Editor }
 
     init(request: OperationRequest, runner: any OperationRunner, settings: @escaping () -> AppSettings,
          rememberTarget: @escaping (String) -> Void = { _ in },
          allowed: @escaping @MainActor () -> Bool = { SecureInput.status() == .allowed },
          completed: @escaping @MainActor (OperationResult) -> Void = { _ in }, defaults: UserDefaults? = .standard, feedback: @escaping @MainActor (String) -> Void = { _ in }) {
-        self.settings = settings; self.allowed = allowed; self.defaults = defaults
+        self.settings = settings; self.allowed = allowed; self.defaults = defaults; self.feedback = feedback
         state = TranslateWindowState(request: request, runner: runner, settings: settings, rememberTarget: rememberTarget, allowed: allowed, completed: completed, feedback: feedback)
         super.init()
         panel.isFloatingPanel = true; panel.hidesOnDeactivate = false; panel.becomesKeyOnlyIfNeeded = true
@@ -43,6 +46,14 @@ private final class TranslatePanel: NSPanel {
     func show(source: OperationSource?, anchor: CGRect?, focus: Bool = false, completed: OperationResult? = nil) {
         guard allowed() else { return }
         self.source = source; self.anchor = anchor; sourceChanged = source == nil
+        let replacement = SourceReplacement(source: source, snapshot: state.originSnapshot)
+        self.replacement = replacement
+        slots.replacement = { [weak self] in
+            guard let self else { return AnyView(EmptyView()) }
+            return AnyView(SourceReplacementButton(replacement: replacement, text: self.state.result.answer,
+                enabled: self.state.result.phase == .done && self.state.result.currentQuestion == nil,
+                feedback: { [weak self] in self?.state.result.notice = $0 }))
+        }
         panel.contentView = NSHostingView(rootView: TranslateWindowView(state: state, close: { [weak self] in self?.close() },
             focusEditor: { [weak self] in self?.activateEditing() }, copy: { [weak self] in self?.copy(original: $0, returning: $1) }, slots: slots, copyCode: { [weak self] in self?.copyCode($0) }))
         applyAppearance()
@@ -62,7 +73,8 @@ private final class TranslatePanel: NSPanel {
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
                 guard let self else { return }
-                guard self.allowed() else { self.close(); return }
+                guard self.allowed() else { self.close(); self.feedback("当前输入受保护或无法检查，翻译窗已关闭。"); return }
+                self.replacement?.refresh()
                 self.place(initial: false)
             }
         }
@@ -71,11 +83,13 @@ private final class TranslatePanel: NSPanel {
         watch?.cancel(); watch = nil
         if let monitor { NSEvent.removeMonitor(monitor) }; monitor = nil
         NSWorkspace.shared.notificationCenter.removeObserver(self)
+        replacement?.stop(); replacement = nil; slots.replacement = { AnyView(EmptyView()) }
         state.stop(); slots.close(); panel.orderOut(nil); panel.contentView = nil; panel.acceptsEditing = false
         source = nil; onClose()
     }
     func activateEditing() { guard allowed() else { return }; panel.acceptsEditing = true; panel.makeKey() }
     func focusSource() {
+        panel.contentView?.layoutSubtreeIfNeeded()
         activateEditing()
         func find(_ view: NSView) -> TranslateSourceEditor.Editor? {
             if let editor = view as? TranslateSourceEditor.Editor { return editor }
@@ -119,7 +133,7 @@ private final class TranslatePanel: NSPanel {
     }
     @objc private func applicationChanged(_ notification: Notification) {
         guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
-        if app.processIdentifier != source?.pid && app.processIdentifier != ProcessInfo.processInfo.processIdentifier { sourceChanged = true }
+        if app.processIdentifier != source?.pid && app.processIdentifier != ProcessInfo.processInfo.processIdentifier { sourceChanged = true; replacement?.invalidate() }
     }
     private func applyAppearance() {
         switch settings().general.appearance {
@@ -138,7 +152,9 @@ private final class TranslatePanel: NSPanel {
         let available = screen.visibleFrame
         let saved = defaults?.array(forKey: "translateWindowFrame") as? [Double]
         let validSaved = saved?.count == 4 && saved?.allSatisfy(\.isFinite) == true
-        let desired = CGFloat(344 + min(12, state.result.answer.count / 40) * 20 + (state.expanded ? 96 : 0) + (state.followupExpanded ? 72 : 0))
+        let answerRows = state.result.answer.prefix(480).count / 40
+        let extraHeight = (state.expanded ? 96 : 0) + (state.followupExpanded ? 72 : 0)
+        let desired = CGFloat(344 + answerRows * 20 + extraHeight)
         if !initial && (userSized || validSaved || abs(desired - lastHeight) < 12) { return }
         lastHeight = desired
         let size = Self.fittedSize(CGSize(width: validSaved ? saved![2] : 420, height: validSaved ? saved![3] : desired), screen: available)

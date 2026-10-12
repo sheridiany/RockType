@@ -92,6 +92,11 @@ struct LiveResultWindowView: View {
             }.font(Tokens.Typography.font(Tokens.Typography.caption)).foregroundStyle(p.secondary)
                 .accessibilityElement(children: .combine)
             HStack {
+                if let replacement = controller.sourceReplacement {
+                    SourceReplacementButton(replacement: replacement, text: state.answer,
+                        enabled: state.phase == .done && state.currentQuestion == nil,
+                        feedback: { state.notice = $0 })
+                }
                 Button("复制") { controller.copy() }.disabled(!state.canCopy)
                     .buttonStyle(DesignButtonStyle(variant: .ghost))
                 Spacer()

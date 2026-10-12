@@ -71,6 +71,16 @@ import RoarkTPlatform
                 ? "追问仅基于文字解释。原图未保留在对话中；重新解释图片请从图片预览确认发送。" : nil)
     }
 
+    func openInputTranslation(templateID: String = "translate") {
+        guard readable() else { notice("当前输入受保护或无法检查，未打开翻译。 "); return }
+        var current = settings()
+        guard let template = current.templates.first(where: { $0.id == templateID }), TranslateWindowState.accepts(template) else { return }
+        if !aiConfigured() { current.translation.engine = .offlineFirst }
+        let snapshot = ContentSnapshot(text: "", source: .init(pid: ProcessInfo.processInfo.processIdentifier,
+            bundleID: Identifiers.appBundleID, applicationName: "输入翻译"), method: .paste)
+        showTranslation(.init(session: .init(snapshot: snapshot), template: template, settings: current), source: nil, anchor: nil, focus: true)
+    }
+
     func showTranslation(_ request: OperationRequest, source: OperationSource?, anchor: CGRect?, focus: Bool = false, completed: OperationResult? = nil) {
         guard readable() else { return }
         translationWindow?.close()

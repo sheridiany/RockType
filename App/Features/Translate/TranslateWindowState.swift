@@ -25,7 +25,10 @@ import RoarkTCore
         ("fr", "法语"), ("de", "德语"), ("es", "西班牙语")
     ]
     static func accepts(_ template: OperationTemplate) -> Bool {
-        template.input == .text && (template.id == "translate" || template.prompt.contains("{{target}}"))
+        guard template.input == .text else { return false }
+        let name = template.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return template.id == "translate" || template.prompt.contains("{{target}}")
+            || name.contains("翻译") || name.hasPrefix("translate") || name.hasPrefix("translation")
     }
     static func languageName(_ code: String) -> String { languages.first { $0.id == code }?.title ?? code }
     private(set) var detectedLanguage = "en"
@@ -39,6 +42,7 @@ import RoarkTCore
         if result.engine.hasPrefix("Apple") { return "Apple 离线" }
         return result.engine.isEmpty ? (engine == .ai ? "AI 翻译" : "Apple 优先") : result.engine
     }
+    var originSnapshot: ContentSnapshot { snapshot }
     var dictionaryInput: String { original } // T2/T8 slot; no lookup in phase A.
 
     init(request: OperationRequest, runner: any OperationRunner,
