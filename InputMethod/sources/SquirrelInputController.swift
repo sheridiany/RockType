@@ -40,6 +40,8 @@ final class SquirrelInputController: IMKInputController, @unchecked Sendable {
     let translationChanged = preferences.input.candidateTranslation != inputPreferences.input.candidateTranslation
       || preferences.translation != inputPreferences.translation
       || preferences.input.inputAI != inputPreferences.input.inputAI
+      || (preferences.inputMethodAIEnabled != inputPreferences.inputMethodAIEnabled
+          && candidateTranslation.ticket?.action != nil)
     let modeChanged = preferences.input.showModeIndicator != inputPreferences.input.showModeIndicator
     inputPreferences = preferences
     if translationChanged {

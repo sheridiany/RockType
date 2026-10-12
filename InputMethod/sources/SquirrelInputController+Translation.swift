@@ -6,7 +6,8 @@ import InputMethodKit
 /// Translation/AI request, cancellation and presentation adapters. Shares the controller lifecycle and generation authority.
 extension SquirrelInputController {
   func performTranslationAction() {
-    guard (candidateTranslation.ticket?.action != nil || inputPreferences.input.candidateTranslation),
+    let ai = candidateTranslation.ticket?.action != nil
+    guard (ai ? inputPreferences.allowsInputAI : inputPreferences.input.candidateTranslation),
           !IsSecureEventInputEnabled() else { cancelDynamicTranslation(); return }
     if candidateTranslation.canRetry {
       guard translationSnapshot(forAI: candidateTranslation.ticket?.action != nil) == candidateTranslation.ticket?.snapshot,
@@ -19,7 +20,7 @@ extension SquirrelInputController {
 
   func requestDynamicTranslationIfNeeded() {
     if let ticket = candidateTranslation.ticket, ticket.action != nil {
-      if translationSnapshot(forAI: true) == ticket.snapshot { updateTranslationPanel(); return }
+      if inputPreferences.allowsInputAI, translationSnapshot(forAI: true) == ticket.snapshot { updateTranslationPanel(); return }
       cancelDynamicTranslation()
     }
     guard inputPreferences.input.candidateTranslation, let snapshot = translationSnapshot() else {
@@ -92,7 +93,7 @@ extension SquirrelInputController {
   }
 
   func sendInputAI(_ request: RoarkTCandidateTranslationSession.Ticket) {
-    guard let action = request.action, inputPreferences.input.inputAI?.enabled == true,
+    guard let action = request.action, inputPreferences.allowsInputAI,
           translationSnapshot(forAI: true) == request.snapshot else { cancelDynamicTranslation(); return }
     translationLoadingTimer?.cancel()
     inputAIProtection?.invalidate()
@@ -109,7 +110,7 @@ extension SquirrelInputController {
     translationClient.rewrite(sessionID: translationSessionID, generation: request.generation,
       source: request.snapshot.source, action: action, timeout: inputPreferences.input.inputAI?.timeout ?? 30) { [weak self] result in
       guard let self, self.candidateTranslation.ticket == request else { return }
-      guard self.translationSnapshot(forAI: true) == request.snapshot else { self.cancelDynamicTranslation(); return }
+      guard self.inputPreferences.allowsInputAI, self.translationSnapshot(forAI: true) == request.snapshot else { self.cancelDynamicTranslation(); return }
       switch result {
       case let .success(response):
         self.candidateTranslation.receive(response.translatedText, for: request)
@@ -129,7 +130,7 @@ extension SquirrelInputController {
 
   func commitTranslationSelection() {
     let ai = candidateTranslation.ticket?.action != nil
-    guard (ai ? inputPreferences.input.inputAI?.enabled == true : inputPreferences.input.candidateTranslation),
+    guard (ai ? inputPreferences.allowsInputAI : inputPreferences.input.candidateTranslation),
           let submission = candidateTranslation.commit,
           translationSnapshot(forAI: ai) == submission.snapshot else { return }
     setTranslationProperty("roarkt_panel_commit_ai", ai ? "1" : "")

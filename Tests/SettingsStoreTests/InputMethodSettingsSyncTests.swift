@@ -76,3 +76,38 @@ import RoarkTCore
     _ = SettingsStore(persistence: persistence, inputMethodSync: sync)
     #expect(!signals.contains(InputMethodSettingsNotification.redeploy), "Unchanged patches must not rebuild Rime")
 }
+
+@MainActor @Test func inputAIFeatureTogglePublishesDurablePreferencesWithoutRedeploy() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let persistence = SettingsPersistence(fileURL: directory.appendingPathComponent("settings.json"))
+    var signals: [Notification.Name] = []
+    var snapshots: [InputMethodPreferences] = []
+    let sync = InputMethodSettingsSynchronizer(writer: .init(directory: directory.appendingPathComponent("Rime"))) {
+        signals.append($0)
+        snapshots.append(InputMethodPreferences.load(from: persistence.fileURL))
+    }
+    let store = SettingsStore(persistence: persistence, inputMethodSync: sync)
+    var ai = InputAISettings()
+    ai.enabled = true
+    ai.timeout = 17
+    store.settings.input.inputAI = ai
+    store.settings.input.scheme = .flypy
+    store.flush()
+    let originalInput = store.settings.input
+    let originalTranslation = store.settings.translation
+    var previous = try #require(snapshots.last)
+    for enabled in [false, true, false] {
+        signals.removeAll(); snapshots.removeAll()
+        store.settings.enabledFeatures.inputMethodAI = enabled
+        store.flush()
+        #expect(store.persistenceError == nil && store.inputMethodSyncMessage == nil)
+        #expect(signals == [InputMethodSettingsNotification.changed], "Use the existing runtime notification, without Rime deployment")
+        let preferences = try #require(snapshots.first)
+        #expect(preferences != previous)
+        #expect(preferences.allowsInputAI == enabled)
+        #expect(preferences.input == originalInput && preferences.input.candidateTranslation)
+        #expect(preferences.translation == originalTranslation)
+        previous = preferences
+    }
+}

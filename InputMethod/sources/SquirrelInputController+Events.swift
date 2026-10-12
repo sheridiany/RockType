@@ -66,7 +66,7 @@ extension SquirrelInputController {
       translationClient.noteInputActivity()
       inputModePanel.hide()
       let keyCode = event.keyCode
-      if matchesInputAIShortcut(event), inputPreferences.input.inputAI?.enabled == true,
+      if matchesInputAIShortcut(event), inputPreferences.allowsInputAI,
          let snapshot = translationSnapshot(forAI: true) {
         if !event.isARepeat { sendInputAI(candidateTranslation.beginAI(snapshot)) }
         handled = true
