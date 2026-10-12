@@ -120,15 +120,15 @@ import os
         if let globalKeyMonitor { NSEvent.removeMonitor(globalKeyMonitor); self.globalKeyMonitor = nil }
         let overlayWasShown = overlays.close()
         hidden.forEach { $0.orderFrontRegardless() }; hidden.removeAll()
-        // Without this the overlay's focus stays on RockType, which has no text input, and the
-        // menu bar input source icon goes blank until the user clicks another app.
-        if overlayWasShown, let previousApp, !previousApp.isTerminated { previousApp.activate() }
+        // Nonactivating panels return borrowed key focus when closed. Restore the source only
+        // if a subsequent native dialog actually activated us, never if the user switched apps.
+        if overlayWasShown, NSApp.isActive, let previousApp, !previousApp.isTerminated { previousApp.activate() }
         previousApp = nil
     }
     func capture(templateID: String? = nil) {
         guard running, captureAllowed() else { return }
         let started = CACurrentMediaTime()
-        cancel(); closePreview(); historyPanel.close(); pendingTemplateID = templateID
+        cancel(); pendingTemplateID = templateID
         let current = generation
         captureDesktopTop = NSScreen.screens.first?.frame.maxY ?? 0
         let mouse = NSEvent.mouseLocation
@@ -145,8 +145,6 @@ import os
         }
         let frontmost = NSWorkspace.shared.frontmostApplication
         previousApp = frontmost?.processIdentifier == ProcessInfo.processInfo.processIdentifier ? nil : frontmost
-        hidden = (NSApp?.windows ?? []).filter { $0.isVisible && $0.level != .normal }
-        hidden.forEach { $0.orderOut(nil) }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .rightMouseDown]) { [weak self] event in
             guard let self else { return event }
             return self.routeCanvasEvent(event)
@@ -168,6 +166,7 @@ import os
             do {
                 let frames = try await self.captureFrames()
                 guard !Task.isCancelled, current == self.generation, self.captureAllowed() else { return }
+                guard !frames.isEmpty else { throw ScreenCapture.Failure.unavailable }
                 self.show(frames)
                 CATransaction.flush()
                 let elapsed = (CACurrentMediaTime() - started) * 1000
@@ -195,6 +194,9 @@ import os
         return event
     }
     private func show(_ frames: [ScreenCapture.Frame]) {
+        // SCK already excludes this process. Keep live windows intact until every overlay is ready.
+        let floating = (NSApp?.windows ?? []).filter { $0.isVisible && $0.level != .normal }
+        CATransaction.begin(); CATransaction.setDisableActions(true)
         for frame in frames {
             let panel = CapturePanel(captureRect: frame.rect)
             let view = CaptureCanvas(frame: CGRect(origin: .zero, size: frame.rect.size), image: frame.image, windows: frame.windows)
@@ -281,12 +283,14 @@ import os
             panel.acceptsMouseMovedEvents = true
             let mouse = NSEvent.mouseLocation
             view.updateHover(at: CGPoint(x: mouse.x - frame.rect.minX, y: frame.rect.maxY - mouse.y))
-            panel.orderFrontRegardless()
-            if frame.rect.contains(NSEvent.mouseLocation) {
-                // Keys (Esc, ↩, R, P) only reach the overlay while RockType is active.
-                NSApp.activate()
-                panel.makeKey(); panel.makeFirstResponder(view)
-            }
+        }
+        CATransaction.commit()
+        overlays.present(at: NSEvent.mouseLocation) {
+            self.hidden = floating
+            floating.forEach { $0.orderOut(nil) }
+            self.closePreview(); self.historyPanel.close()
+            // Closed previews must not be restored by cancel().
+            self.hidden.removeAll { $0.contentView == nil }
         }
     }
     private func beginScrollCapture(_ canvas: CaptureCanvas, frame: ScreenCapture.Frame) {
@@ -464,6 +468,7 @@ final class CapturePanel: NSPanel {
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         isReleasedWhenClosed = false
         hidesOnDeactivate = false
+        animationBehavior = .none
         isOpaque = true
         backgroundColor = .black
         alphaValue = 1
