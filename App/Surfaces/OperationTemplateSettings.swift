@@ -100,31 +100,26 @@ struct OperationTemplateSettings: View {
             }.buttonStyle(DesignButtonStyle(variant: .ghost))
             if let notice { Notice(text: notice) }
             if settings.templates.isEmpty { Notice(text: "还没有操作模板，点击“新增模板”开始。") }
-            ForEach(settings.templates) { template in
-                DesignCard {
-                    HStack {
-                        Label(template.name.isEmpty ? "未命名模板" : template.name,
-                              systemImage: NSImage(systemSymbolName: template.icon, accessibilityDescription: nil) == nil ? "sparkles" : template.icon)
-                        Spacer()
-                        Chip(text: isBuiltIn(template) ? "内置" : "自定义")
-                        Button { move(template.id, -1) } label: { Image(systemName: "arrow.up") }
-                            .disabled(settings.templates.first?.id == template.id).accessibilityLabel("上移动作" + template.name)
-                        Button { move(template.id, 1) } label: { Image(systemName: "arrow.down") }
-                            .disabled(settings.templates.last?.id == template.id).accessibilityLabel("下移动作" + template.name)
-                        Button("编辑") { editing = Edit(original: template, draft: template) }
-                            .accessibilityLabel("编辑" + template.name)
-                        if !isBuiltIn(template) {
-                            Button("删除", role: .destructive) { deleting = template }
-                                .accessibilityLabel("删除" + template.name)
-                        }
-                    }.buttonStyle(DesignButtonStyle(variant: .ghost))
-                    Text((template.input == .text ? "文字" : "图片") + " · " + modelLabel(template))
-                        .font(Tokens.Typography.font(Tokens.Typography.caption))
-                    Text(template.prompt.isEmpty ? "尚未填写提示词" : template.prompt)
-                        .lineLimit(2).font(Tokens.Typography.font(Tokens.Typography.meta))
+            DesignSectionTitle(title: "动作列表")
+            DesignCard {
+                ForEach(settings.templates) { template in
+                    SettingsControlRow(template.name.isEmpty ? "未命名模板" : template.name,
+                        detail: (isBuiltIn(template) ? "内置" : "自定义") + " · " + (template.input == .text ? "文字" : "图片") + " · " + modelLabel(template),
+                        symbol: NSImage(systemSymbolName: template.icon, accessibilityDescription: nil) == nil ? "sparkles" : template.icon) {
+                        Button("编辑") { editing = Edit(original: template, draft: template) }.accessibilityLabel("编辑" + template.name)
+                        Menu {
+                            Button("上移") { move(template.id, -1) }.disabled(settings.templates.first?.id == template.id)
+                            Button("下移") { move(template.id, 1) }.disabled(settings.templates.last?.id == template.id)
+                            if !isBuiltIn(template) { Button("删除", role: .destructive) { deleting = template } }
+                        } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).frame(width: 22)
+                            .accessibilityLabel(template.name + "更多操作")
+                    }
+                    if template.id != settings.templates.last?.id { DesignRule() }
                 }
             }
+            SettingsMore(title: "更多 · 模型默认值") {
             OperationModelSettings(settings: $settings, showAIConnection: showAIConnection)
+            }
         }
         .sheet(item: $editing) { edit in
             OperationTemplateEditor(initial: edit.draft, original: edit.original, settings: $settings,

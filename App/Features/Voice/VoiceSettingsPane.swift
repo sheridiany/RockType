@@ -10,10 +10,12 @@ struct VoiceSettingsPane: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.md) {
             DesignCard {
-                Picker("识别模型", selection: $settings.model) {
-                    Text(VoiceModel.small.title).tag(VoiceSettings.Model.small)
-                    Text(VoiceModel.large.title).tag(VoiceSettings.Model.large)
-                }.disabled(models.busy)
+                SettingsControlRow("识别模型", detail: models.isPresent(model) ? "模型已下载" : "需要下载本地模型", symbol: "waveform", status: models.isPresent(model) ? .on : .attention) {
+                    Picker("识别模型", selection: $settings.model) {
+                        Text(VoiceModel.small.title).tag(VoiceSettings.Model.small)
+                        Text(VoiceModel.large.title).tag(VoiceSettings.Model.large)
+                    }.labelsHidden().frame(maxWidth: 216).disabled(models.busy)
+                }
                 Text("下载大小不等于运行内存。1.7B 通常占用更多内存；本机内存峰值、冷启动与识别延迟待实测，不承诺固定速度。")
                     .font(Tokens.Typography.font(Tokens.Typography.caption))
                     .foregroundStyle(.secondary)
@@ -47,23 +49,10 @@ struct VoiceSettingsPane: View {
     }
 
     private func option(_ title: String, detail: String, value: Binding<Bool>, enabled: Bool = true) -> some View {
-        HStack(alignment: .top, spacing: Tokens.Space.md) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                Text(detail)
-                    .font(Tokens.Typography.font(Tokens.Typography.caption))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: Tokens.Space.md)
-            Toggle(title, isOn: value)
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .disabled(!enabled)
-                .accessibilityLabel(title)
-                .accessibilityHint(detail)
+        SettingsControlRow(title, detail: detail, symbol: title.contains("AI") ? "sparkles" : "waveform",
+            status: !enabled ? .attention : value.wrappedValue ? .on : .off) {
+            SettingsToggle(title: title, isOn: value).disabled(!enabled).accessibilityHint(detail)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
 }

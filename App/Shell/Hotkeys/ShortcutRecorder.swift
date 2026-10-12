@@ -85,7 +85,7 @@ struct HotkeySettingsView: View {
                 ForEach(HotkeyCenter.Action.allCases) { action in
                     VStack(alignment: .leading, spacing: Tokens.Space.sm) {
                         HStack {
-                            Text(action.title).fontWeight(.medium)
+                            Label(action.title, systemImage: "command").fontWeight(.medium)
                             Spacer(minLength: Tokens.Space.sm)
                             Button(center.recording == action ? "按下组合键…" : label(center.shortcut(for: action))) {
                                 center.beginRecording(action)
@@ -127,7 +127,9 @@ struct HotkeySettingsView: View {
                     }
                 }
             }
-            DesignCard { InputAISettingsSection(settings: $appSettings) }
+            SettingsFeatureNotice(item: .inputMethodAI, settings: $appSettings)
+            DesignCard { InputAISettingsSection(settings: $appSettings)
+                .disabled(!appSettings.enabledFeatures.inputMethodAI).opacity(appSettings.enabledFeatures.inputMethodAI ? 1 : 0.48) }
             Notice(text: "Fn 也可能触发系统听写或切换输入源。若有冲突，请前往系统键盘设置调整 Fn 行为。")
             if let notice = center.notice { Notice(text: notice, tone: .warn) }
             ShortcutReference()

@@ -7,7 +7,9 @@ struct ScreenshotOutputSettings: View {
 
     var body: some View {
         DesignCard {
-            Toggle("截图圆角", isOn: Binding(get: { settings.roundedCorners ?? true }, set: { settings.roundedCorners = $0 }))
+            SettingsControlRow("截图圆角", detail: "PNG 透明边角 · JPEG 白色边角", symbol: "rectangle.roundedtop", status: settings.roundedCorners ?? true ? .on : .off) {
+                SettingsToggle(title: "截图圆角", isOn: Binding(get: { settings.roundedCorners ?? true }, set: { settings.roundedCorners = $0 }))
+            }
             Text("默认 8 点圆角；PNG 保留透明边角，JPEG 使用白色边角。⌘S 另存为。")
                 .font(Tokens.Typography.font(Tokens.Typography.caption))
             Divider()

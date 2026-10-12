@@ -4,7 +4,7 @@ import Observation
 import RoarkTCore
 
 @MainActor @Observable
-final class SettingsNavigation { var section: SettingsSection = .general }
+final class SettingsNavigation { var section: SettingsSection = .features }
 
 @MainActor
 final class SettingsWindowController {
@@ -33,7 +33,7 @@ final class SettingsWindowController {
         }
         connection.refresh(store.settings.ai)
         if window == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: Tokens.Size.settingsWidth, height: Tokens.Size.settingsHeight),
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 800),
                                   styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
             window.title = "RockType · 设置"
             window.isReleasedWhenClosed = false

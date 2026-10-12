@@ -233,17 +233,20 @@ struct ShellConnectionView: View {
             DesignSectionTitle(title: "服务商连接")
             DesignCard {
                 field("服务名称", $settings.name)
+                DesignRule()
                 field("服务地址（Base URL）", $settings.baseURL)
-                HStack {
-                    Text("密钥（API Key）"); Spacer(); Chip(text: model.hasKey ? "已设置" : "未设置")
+                DesignRule()
+                SettingsControlRow("密钥（API Key）", detail: model.hasKey ? "已存入系统钥匙串" : "尚未设置", symbol: "key", status: model.hasKey ? .on : .attention) {
                     Button(model.hasKey ? "更换" : "设置") { secret = ""; editingKey = true }
                     if model.hasKey { Button("删除") { model.deleteKey() } }
                 }
+                DesignRule()
                 field("默认模型", $settings.defaultModel)
                 DesignRule()
-                SettingsControlRow("默认模型支持图片") {
+                SettingsControlRow("默认模型支持图片", symbol: "photo") {
                     SettingsToggle(title: "默认模型支持图片", isOn: $settings.defaultModelSupportsImages)
                 }
+                DesignRule()
                 field("视觉模型（可选）", Binding(get: { settings.visionModel ?? "" }, set: { settings.visionModel = $0.isEmpty ? nil : $0 }))
             }
             Text("OpenAI Chat Completions 兼容接口 · 测试会发送固定样本文字与图片。")
@@ -290,7 +293,7 @@ struct ShellConnectionView: View {
     }
 
     private func field(_ title: String, _ text: Binding<String>) -> some View {
-        SettingsControlRow(title) {
+        SettingsControlRow(title, symbol: title.contains("地址") ? "network" : title.contains("模型") ? "cpu" : "server.rack") {
             TextField(title, text: text).textFieldStyle(.roundedBorder)
                 .frame(width: Tokens.Size.fieldWidth).accessibilityLabel(title)
         }

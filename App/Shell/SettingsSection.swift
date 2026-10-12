@@ -1,16 +1,16 @@
 enum SettingsSection: String, CaseIterable, Identifiable {
-    case general, input, translation, voice, selection, screenshot, ai, templates, shortcuts, permissions, privacy, about
+    case features, general, input, translation, voice, selection, screenshot, ai, templates, shortcuts, permissions, privacy, about
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .general: "通用"; case .input: "输入法"; case .translation: "翻译"; case .voice: "语音"
+        case .features: "功能"; case .general: "通用"; case .input: "输入法"; case .translation: "翻译"; case .voice: "语音"
         case .selection: "划词"; case .screenshot: "截图"; case .ai: "AI 连接"; case .templates: "操作模板"
         case .shortcuts: "快捷键"; case .permissions: "权限"; case .privacy: "隐私"; case .about: "关于"
         }
     }
     var symbol: String {
         switch self {
-        case .general: "slider.horizontal.3"; case .input: "keyboard"; case .translation: "character.bubble"
+        case .features: "square.grid.2x2"; case .general: "slider.horizontal.3"; case .input: "keyboard"; case .translation: "character.bubble"
         case .voice: "waveform"; case .selection: "cursorarrow.rays"; case .screenshot: "viewfinder"
         case .ai: "sparkles"; case .templates: "square.stack"; case .shortcuts: "command"
         case .permissions: "hand.raised"; case .privacy: "lock.shield"; case .about: "info.circle"
@@ -18,6 +18,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     }
     var detail: String {
         switch self {
+        case .features: "按需开启，让 RockType 更合你的习惯。"
         case .general: "让常用工具按你的习惯工作。"
         case .input: "中文输入与候选翻译，保持熟悉的输入节奏。"
         case .translation: "本地优先，显示每次翻译实际使用的引擎。"

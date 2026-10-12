@@ -25,26 +25,55 @@ struct SettingsPageHeading: View {
     }
 }
 
+enum SettingsRowStatus { case on, off, attention }
+
 struct SettingsControlRow<Content: View>: View {
     let title: String
     let detail: String?
+    let symbol: String
+    let status: SettingsRowStatus?
     let content: () -> Content
     @Environment(\.colorScheme) private var scheme
-    init(_ title: String, detail: String? = nil, @ViewBuilder content: @escaping () -> Content) {
-        self.title = title; self.detail = detail; self.content = content
+    @Environment(\.settingsPresentation) private var styled
+    init(_ title: String, detail: String? = nil, symbol: String = "slider.horizontal.3",
+         status: SettingsRowStatus? = nil, @ViewBuilder content: @escaping () -> Content) {
+        self.title = title; self.detail = detail; self.symbol = symbol; self.status = status; self.content = content
     }
     var body: some View {
-        HStack(spacing: Tokens.Space.md) {
-            VStack(alignment: .leading, spacing: Tokens.Space.xs) {
-                Text(title).fixedSize(horizontal: false, vertical: true)
+        HStack(spacing: 12) {
+            if styled {
+                Image(systemName: symbol).font(.system(size: 17, weight: .regular))
+                    .foregroundStyle(Tokens.palette(scheme).secondary)
+                    .frame(width: 30, height: 32).accessibilityHidden(true)
+            }
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title).fontWeight(styled ? .medium : .regular).fixedSize(horizontal: false, vertical: true)
                 if let detail {
-                    Text(detail).font(Tokens.Typography.font(Tokens.Typography.caption))
-                        .foregroundStyle(Tokens.palette(scheme).secondary).fixedSize(horizontal: false, vertical: true)
+                    HStack(alignment: .firstTextBaseline, spacing: 5) {
+                        if let status {
+                            Circle().fill(status == .on ? Tokens.palette(scheme).ok : status == .attention ? Tokens.palette(scheme).warn : Tokens.palette(scheme).tertiary)
+                                .frame(width: 5, height: 5).accessibilityHidden(true)
+                        }
+                        Text(detail).font(.system(size: 11)).foregroundStyle(Tokens.palette(scheme).secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
-            Spacer(minLength: Tokens.Space.sm)
+            Spacer(minLength: 4)
             content()
-        }.frame(minHeight: Tokens.Size.row)
+        }.frame(minHeight: styled ? 44 : Tokens.Size.row)
+            .padding(.vertical, styled ? 3 : 0)
+    }
+}
+
+struct SettingsMore<Content: View>: View {
+    var title = "更多"
+    @ViewBuilder var content: () -> Content
+    @State private var expanded = false
+    var body: some View {
+        DisclosureGroup(title, isExpanded: $expanded) {
+            VStack(alignment: .leading, spacing: 12, content: content).padding(.top, 12)
+        }.font(.system(size: 12)).padding(.vertical, 4)
     }
 }
 
