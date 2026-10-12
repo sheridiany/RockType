@@ -90,6 +90,7 @@ codesign --force --options runtime --timestamp=none --sign "$identity" "$input_a
 codesign --verify --strict --deep "$input_app"
 xcrun swiftc -swift-version 6 -parse-as-library -O "$repo_dir/Core/Identifiers.swift" \
   "$repo_dir/Installer/tools/InputSourceIconDiagnostics.swift" \
+  "$repo_dir/Installer/tools/AtomicInputMethodReplacement.swift" \
   "$repo_dir/Installer/tools/RegisterInputSource.swift" -o "$repo_dir/dist/RoarkTRegisterInputSource"
 codesign --force --options runtime --timestamp=none --sign "$identity" "$repo_dir/dist/RoarkTRegisterInputSource"
 print "Built $input_app and registration tool (signed with $identity)"
@@ -97,12 +98,9 @@ print "Built $input_app and registration tool (signed with $identity)"
 # Packaged voice worker: launch, signature-bound XPC, wrong-identifier rejection.
 zsh "$repo_dir/Tests/VoiceWorkerSmoke/run.sh"
 
-# Xcode and smoke launches register every built bundle with LaunchServices, which then shows
-# up in Launchpad. Keep only main's dist/RockType.app; worktrees keep none.
+# Smoke launches may register the main app. Keep only main's dist/RockType.app.
+# Do not unregister IME bundles during a build: they share the installed source's identity.
 lsregister=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
-for bundle in "$repo_dir/.build/ime/Build/Products/Release/"*.app(N) "$repo_dir/dist/"*Input.app(N); do
-  "$lsregister" -u "$bundle" 2>/dev/null || true
-done
 if [[ "$(git -C "$repo_dir" rev-parse --git-dir)" != "$(git -C "$repo_dir" rev-parse --git-common-dir)" ]]; then
-  for bundle in "$repo_dir/dist/"*.app(N); do "$lsregister" -u "$bundle" 2>/dev/null || true; done
+  "$lsregister" -u "$repo_dir/dist/RockType.app" 2>/dev/null || true
 fi

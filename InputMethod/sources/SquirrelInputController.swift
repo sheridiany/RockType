@@ -12,7 +12,7 @@ import InputMethodKit
 // Each override asserts that boundary before touching actor-owned state. The local
 // unsafe bindings only bridge ObjC arguments within the same synchronous call.
 @MainActor
-final class SquirrelInputController: IMKInputController, @unchecked Sendable {
+final class SquirrelInputController: IMKInputController, RoarkTInputMenuActions, @unchecked Sendable {
   // Storage is owned here; internal visibility is only for this type's sibling extensions.
   nonisolated static let keyRollOver = 50
 
@@ -220,29 +220,8 @@ final class SquirrelInputController: IMKInputController, @unchecked Sendable {
     // IMK synchronously consumes the menu on this same main-thread call.
     nonisolated(unsafe) var result: NSMenu?
     MainActor.assumeIsolated {
-      let deploy = NSMenuItem(title: NSLocalizedString("Deploy", comment: "Menu item"), action: #selector(deploy), keyEquivalent: "`")
-      deploy.target = self
-      deploy.keyEquivalentModifierMask = [.control, .option]
-      let sync = NSMenuItem(title: NSLocalizedString("Sync user data", comment: "Menu item"), action: #selector(syncUserData), keyEquivalent: "")
-      sync.target = self
-      let logDir = NSMenuItem(title: NSLocalizedString("Logs...", comment: "Menu item"), action: #selector(openLogFolder), keyEquivalent: "")
-      logDir.target = self
-      let setting = NSMenuItem(title: NSLocalizedString("Settings...", comment: "Menu item"), action: #selector(openRimeFolder), keyEquivalent: "")
-      setting.target = self
-      let roarkTSettings = NSMenuItem(title: "RockType 设置…", action: #selector(openRoarkTSettings), keyEquivalent: "")
-      roarkTSettings.target = self
-      roarkTSettings.isEnabled = NSWorkspace.shared.urlForApplication(withBundleIdentifier: ROARKT_APP_BUNDLE_ID) != nil
-
-      let menu = NSMenu()
-      menu.autoenablesItems = false
-      menu.addItem(deploy)
-      menu.addItem(sync)
-      menu.addItem(logDir)
-      menu.addItem(setting)
-      menu.addItem(.separator())
-      menu.addItem(roarkTSettings)
-
-      result = menu
+      result = makeRoarkTInputMenu(target: self, settingsAvailable:
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: ROARKT_APP_BUNDLE_ID) != nil)
     }
     return result
   }

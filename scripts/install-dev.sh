@@ -15,17 +15,25 @@ domain="gui/$(id -u)"
 }
 codesign --verify --strict --deep "$source_app"
 codesign --verify --strict --deep "$repo_dir/dist/RockType.app"
+# Build a complete, signed staging bundle on the destination filesystem before stopping IME.
+mkdir -p "${app:h}" "${agent:h}"
+staging=$(mktemp -d "${app:h}/.roarkt-install.XXXXXXXX")
+temporary=''
+trap 'rm -rf "$staging"; [[ -z "$temporary" ]] || rm -f "$temporary"' EXIT
+staged_app="$staging/RockType Input.app"
+ditto "$source_app" "$staged_app"
+codesign --verify --strict --deep "$staged_app"
 # Validate an existing target before replacing it. No other input methods are touched.
-if [[ -e "$app" ]]; then
+if [[ -e "$app" || -L "$app" ]]; then
+  [[ ! -L "$app" && -d "$app" ]] || { print -u2 'Refusing a non-directory or symlink target.'; exit 1; }
   [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" == com.roarkist.inputmethod.RoarkT ]] || exit 1
   "$app/Contents/MacOS/RockType Input" --quit
 fi
-mkdir -p "${app:h}" "${agent:h}"
-rm -rf "$app"
-ditto "$source_app" "$app"
+"$registrar" replace-bundle "$staged_app" "$app"
+# After a swap the staging directory contains the previous bundle; it is not retained.
+rm -rf "$staging"
 # PlistBuddy writes the path as a plist string, including spaces and XML characters.
 temporary=$(mktemp "${TMPDIR:-/tmp}/roarkt-agent.XXXXXX")
-trap 'rm -f "$temporary"' EXIT
 cat > "$temporary" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

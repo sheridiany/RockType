@@ -77,9 +77,9 @@ private final class Service: NSObject, NSXPCListenerDelegate, VoiceWorkerProtoco
         // Exit (releasing model memory) only when the last client connection is gone; one stale
         // connection closing must not kill a load or transcription running on another.
         connection.invalidationHandler = { [weak self] in
-            guard let self else { exit(0) }
+            guard let self else { WorkerTermination.terminate() }
             self.lock.lock(); self.connections -= 1; let remaining = self.connections; self.lock.unlock()
-            if remaining <= 0 { exit(0) }
+            if remaining <= 0 { WorkerTermination.terminate() }
         }
         connection.resume()
         return true
@@ -93,7 +93,7 @@ private final class Service: NSObject, NSXPCListenerDelegate, VoiceWorkerProtoco
         Task { @MainActor in response.call(Recognition.shared.transcribe(audio, context: context)) }
     }
     // Terminate even when the MLX thread is busy; cancellation must release model memory.
-    func shutdown() { exit(0) }
+    func shutdown() { WorkerTermination.terminate() }
 }
 
 if CommandLine.arguments.contains("--self-test") {
