@@ -12,7 +12,9 @@ if [[ -e "$app" ]]; then
   temporary=$(mktemp -d "${TMPDIR:-/tmp}/roarkt-uninstall.XXXXXX")
   trap 'rm -rf "$temporary"' EXIT
   xcrun swiftc -swift-version 6 -parse-as-library "$repo_dir/Core/Identifiers.swift" \
+    "$repo_dir/Core/InputSourceEnablement.swift" \
     "$repo_dir/Installer/tools/InputSourceIconDiagnostics.swift" \
+    "$repo_dir/Installer/tools/AtomicInputMethodReplacement.swift" \
     "$repo_dir/Installer/tools/RegisterInputSource.swift" -o "$temporary/register"
   "$temporary/register" disable
   "$app/Contents/MacOS/RockType Input" --quit

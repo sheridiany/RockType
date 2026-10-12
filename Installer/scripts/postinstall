@@ -4,7 +4,8 @@ script_dir=$(cd "$(dirname "$0")" && pwd)
 source "$script_dir/session-common.sh"
 while IFS= read -r uid; do
   [[ -n "$uid" ]] || continue
-  run_as_user "$uid" /Applications/RockType.app/Contents/Helpers/RoarkTRegisterInputSource register '/Library/Input Methods/RockType Input.app'
+  run_as_user "$uid" /Applications/RockType.app/Contents/Helpers/RoarkTRegisterInputSource ensure-enabled '/Library/Input Methods/RockType Input.app'
+  run_as_user "$uid" /Applications/RockType.app/Contents/Helpers/RoarkTRegisterInputSource verify-enabled
   /bin/launchctl enable "gui/$uid/$service"
   /bin/launchctl bootstrap "gui/$uid" "$agent"
 done < <(active_uids)
