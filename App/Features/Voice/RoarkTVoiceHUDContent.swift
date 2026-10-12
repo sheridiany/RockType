@@ -53,12 +53,15 @@ import AppKit
         if self.state != state { waveform.reset(); waveform.phase = 0; start = ProcessInfo.processInfo.systemUptime }
         self.state = state
         waveform.mode = state.waveformMode
-        waveform.isHidden = state.isCard
-        heading.isHidden = !state.isCard; scroll.isHidden = !state.isCard; copyButton.isHidden = !state.isCard
-        heading.stringValue = state.isCard ? state.title : ""
-        detailText.stringValue = state.detail ?? ""
-        copyButton.title = state.isResult ? "复制文字" : "复制提示"
-        close.setAccessibilityLabel(state.isCard ? "关闭语音提示" : "取消语音输入")
+        waveform.isHidden = state.isCard || state.isNotice
+        heading.isHidden = !state.isCard && !state.isNotice; scroll.isHidden = !state.isCard; copyButton.isHidden = !state.isCard
+        heading.stringValue = state.isCard ? state.title : state.noticeText
+        heading.font = .systemFont(ofSize: 13, weight: state.isNotice ? .regular : .semibold)
+        heading.lineBreakMode = .byWordWrapping
+        heading.toolTip = state.isNotice ? state.noticeText : nil
+        detailText.stringValue = state.isCard ? (state.detail ?? "") : ""
+        copyButton.title = "复制文字"
+        close.setAccessibilityLabel(state.isCard || state.isNotice ? "关闭语音提示" : "取消语音输入")
         waveform.setAccessibilityRole(state == .recording ? .levelIndicator : .progressIndicator)
         waveform.setAccessibilityLabel(state.title)
         setAccessibilityLabel("RockType 语音输入，" + state.title)
@@ -71,14 +74,20 @@ import AppKit
         super.layout()
         layer?.backgroundColor = NSColor(calibratedWhite: 0.085, alpha: 0.96).cgColor
         layer?.borderColor = NSColor.white.withAlphaComponent(0.16).cgColor
-        layer?.borderWidth = 0.5; layer?.cornerRadius = state.isCard ? 16 : bounds.height / 2
+        layer?.borderWidth = 0.5; layer?.cornerRadius = state.isCard || state.isNotice ? 12 : bounds.height / 2
         waveform.frame = NSRect(x: bounds.midX - 32, y: bounds.midY - 10, width: 64, height: 20)
         close.frame = NSRect(x: bounds.width - 23, y: bounds.height - 24, width: 18, height: 18)
-        close.alphaValue = state.isCard || (hovered && !state.isSuccess && state != .noSpeech) ? 1 : 0
+        close.alphaValue = state.isCard || state.isNotice || (hovered && !state.isSuccess && state != .noSpeech) ? 1 : 0
+        if state.isNotice {
+            heading.preferredMaxLayoutWidth = max(1, bounds.width - 38)
+            heading.frame = NSRect(x: 12, y: 9, width: max(1, bounds.width - 38), height: bounds.height - 18)
+            close.frame = NSRect(x: bounds.width - 20, y: bounds.height - 23, width: 14, height: 14)
+            return
+        }
         let width = max(1, bounds.width - 32)
         heading.preferredMaxLayoutWidth = width - 16
-        heading.frame = NSRect(x: 16, y: bounds.height - 49, width: width - 16, height: 34)
-        scroll.frame = NSRect(x: 16, y: 47, width: width, height: max(0, bounds.height - 103))
+        heading.frame = NSRect(x: 16, y: bounds.height - 34, width: width - 16, height: 18)
+        scroll.frame = NSRect(x: 16, y: 47, width: width, height: max(0, bounds.height - 89))
         detailText.preferredMaxLayoutWidth = max(1, width - 12)
         detailText.frame = NSRect(x: 0, y: 0, width: max(1, width - 12), height: max(scroll.bounds.height, detailText.fittingSize.height))
         scroll.contentView.scroll(to: NSPoint(x: 0, y: detailText.isFlipped ? 0 : max(0, detailText.frame.height - scroll.bounds.height)))
@@ -106,7 +115,7 @@ import AppKit
     func refreshMotion() {
         waveform.reducedMotion = reduceMotion()
         if !motionEnabled { layer?.removeAllAnimations() }
-        let moving = running && motionEnabled && !state.isCard && state != .noSpeech && !state.isSuccess
+        let moving = running && motionEnabled && !state.isCard && !state.isNotice && state != .noSpeech && !state.isSuccess
         if moving, timer == nil {
             let timer = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated {

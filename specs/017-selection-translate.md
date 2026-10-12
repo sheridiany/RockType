@@ -84,7 +84,7 @@
 | --- | --- | --- | --- |
 | B1 | 去掉切换/激活输入法时弹出的方案名气泡“RockType”（`SquirrelApplicationDelegate` schema 消息）；中英等模式提示保留 | pi-ime | 实现、test/build 通过（0）；真实 IMK 待验，见 [证据](evidence/017-B.md) |
 | B2 | 语音经常“无法绑定输入位置”：查清失败原因（前台 pid 与 IMK client 不一致、Electron/终端、当前输入源不是 RockType、控制器未激活等），绑定失败时不再报错，改为粘贴兜底填入（保存/恢复剪贴板、changeCount 规则、Secure Input 时不填），录音照常开始 | pi-ime | 实现、回归及 test/build 通过（0）；真实粘贴待验，见 [证据](evidence/017-B.md) |
-| B3 | 语音错误/提示框太大：改为紧凑小提示（宽 ≤ 280、单行或两行、自动隐藏）；只有确实未能填入且有文字时才显示带复制按钮的小卡片 | pi-ime | 进行中 |
+| B3 | 语音错误/提示框太大：改为紧凑小提示（宽 ≤ 280、单行或两行、自动隐藏）；只有确实未能填入且有文字时才显示带复制按钮的小卡片 | pi-ime | 实现、离屏及合并 main 后 test/build 通过（0）；真实交互待验，见 [证据](evidence/017-B.md) |
 
 - B1/B2/B3：[用户反馈修复记录](evidence/017-B.md)，各项状态及人工验收边界分别记录。
 

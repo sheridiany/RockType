@@ -29,8 +29,8 @@ import RoarkTPlatform
         hud.onCancel = { [weak self] in self?.onCancel() }
         hud.onCopy = { [weak self] in
             guard let self, self.state.phase == .failed, canCopy() else { return }
-            let text = self.state.result.isEmpty ? self.state.message : self.state.result
-            guard !text.isEmpty else { return }
+            let text = self.state.result
+            guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
             copy(text)
         }
         state.onMeterChange = { [weak self] in

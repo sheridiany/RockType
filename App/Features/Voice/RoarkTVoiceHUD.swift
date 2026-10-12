@@ -26,11 +26,32 @@ import QuartzCore
             default: nil
             }
         }
-        var isCard: Bool { detail != nil }
-        var isResult: Bool { if case .result = self { true } else { false } }
+        var isCard: Bool { isResult }
+        var isResult: Bool {
+            if case .result(let text, _) = self { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            else { false }
+        }
+        var isNotice: Bool {
+            if case .notice = self { true }
+            else if case .result = self { !isResult }
+            else { false }
+        }
+        var noticeText: String {
+            switch self {
+            case .notice(let title, let detail): detail.isEmpty ? title : detail
+            case .result(_, let reason): reason
+            default: ""
+            }
+        }
         var isSuccess: Bool { if case .success = self { true } else { false } }
         var size: NSSize {
-            if isCard { return NSSize(width: 320, height: 196) }
+            if isCard { return NSSize(width: 280, height: 164) }
+            if isNotice {
+                let font = NSFont.systemFont(ofSize: 13)
+                let textWidth = (noticeText as NSString).size(withAttributes: [.font: font]).width
+                let width = min(280, max(160, ceil(textWidth) + 52))
+                return NSSize(width: width, height: textWidth > width - 48 || noticeText.contains("\n") ? 52 : 36)
+            }
             switch self {
             case .processing, .polishing: return NSSize(width: 80, height: 32)
             case .success, .noSpeech: return NSSize(width: 64, height: 32)
@@ -121,14 +142,14 @@ import QuartzCore
         if content.motionEnabled {
             panel.setFrame(entering ? target.offsetBy(dx: 0, dy: -7) : previous, display: false)
             NSAnimationContext.runAnimationGroup { context in
-                context.duration = entering ? 0.25 : 0.2
+                context.duration = state.isNotice ? 0.15 : (entering ? 0.25 : 0.2)
                 context.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.8, 0.2, 1)
                 panel.animator().setFrame(target, display: true)
             }
             if entering {
                 let spring = CASpringAnimation(keyPath: "transform.scale")
                 spring.fromValue = 0.9; spring.toValue = 1; spring.mass = 1
-                spring.stiffness = 320; spring.damping = 24; spring.duration = 0.25
+                spring.stiffness = 320; spring.damping = 24; spring.duration = state.isNotice ? 0.15 : 0.25
                 content.layer?.add(spring, forKey: "entrance")
                 let fade = CABasicAnimation(keyPath: "opacity"); fade.fromValue = 0; fade.toValue = 1; fade.duration = 0.15
                 content.layer?.add(fade, forKey: "entranceOpacity")
@@ -140,7 +161,7 @@ import QuartzCore
             }
         } else { panel.setFrame(target, display: false) }
         content.setRunning(true); present(panel)
-        if let delay = dismissAfter ?? (state.isSuccess ? 0.65 : state == .noSpeech ? 0.7 : nil) {
+        if let delay = dismissAfter ?? (state.isNotice ? 3.5 : state.isSuccess ? 0.65 : state == .noSpeech ? 0.7 : nil) {
             let deadline = ContinuousClock.now.advanced(by: .seconds(delay))
             dismissal = Task { [weak self] in
                 do { try await Task.sleep(until: deadline, clock: .continuous) } catch { return }
