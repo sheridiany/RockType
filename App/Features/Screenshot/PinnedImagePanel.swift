@@ -190,7 +190,7 @@ enum PinnedImageAction { case save, ocr, copyText, translate, translateImage, ba
         }
         if statusItem == nil {
             statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-            statusItem?.button?.image = NSImage(systemSymbolName: "pin", accessibilityDescription: "贴图")
+            statusItem?.button?.image = ScreenshotSymbols.image(ScreenshotSymbols.pin, description: "贴图")
             statusItem?.button?.toolTip = "贴图 · 恢复最近关闭 / 退出鼠标穿透"
         }
         let menu = NSMenu()
@@ -199,16 +199,20 @@ enum PinnedImageAction { case save, ocr, copyText, translate, translateImage, ba
         info.isEnabled = false; menu.addItem(info)
         let restore = NSMenuItem(title: "恢复最近关闭的贴图", action: #selector(restoreFromMenu), keyEquivalent: "z")
         restore.keyEquivalentModifierMask = [.command, .shift]; restore.target = self
+        restore.image = ScreenshotSymbols.image(ScreenshotSymbols.history)
         restore.isEnabled = !history.entries.isEmpty; menu.addItem(restore)
         let exit = NSMenuItem(title: "退出全部鼠标穿透", action: #selector(exitMousePassthrough), keyEquivalent: "")
+        exit.image = ScreenshotSymbols.image(ScreenshotSymbols.passthrough)
         exit.target = self; exit.isEnabled = panels.contains(where: \.ignoresMouseEvents); menu.addItem(exit)
-        for (title, selector) in [(allHidden ? "显示全部贴图" : "隐藏全部贴图", #selector(toggleAll)),
-                                   ("下一张贴图", #selector(focusNext)), ("关闭全部贴图", #selector(closeGroup))] {
+        for (title, selector, symbol) in [(allHidden ? "显示全部贴图" : "隐藏全部贴图", #selector(toggleAll), allHidden ? ScreenshotSymbols.show : ScreenshotSymbols.hide),
+                                   ("下一张贴图", #selector(focusNext), ScreenshotSymbols.next), ("关闭全部贴图", #selector(closeGroup), ScreenshotSymbols.cancel)] {
             let item = NSMenuItem(title: title, action: selector, keyEquivalent: "")
+            item.image = ScreenshotSymbols.image(symbol)
             item.target = self; item.isEnabled = !panels.isEmpty; menu.addItem(item)
         }
         menu.addItem(.separator())
         let clear = NSMenuItem(title: "关闭全部并清除贴图记录", action: #selector(clearFromMenu), keyEquivalent: "")
+        clear.image = ScreenshotSymbols.image(ScreenshotSymbols.delete)
         clear.target = self; menu.addItem(clear)
         let hint = NSMenuItem(title: "最近最多 10 张 · 仅本次运行 · 总计 64 MB", action: nil, keyEquivalent: "")
         hint.isEnabled = false; menu.addItem(hint)
@@ -321,21 +325,23 @@ private final class PinnedImagePanel: NSPanel {
     override func menu(for event: NSEvent) -> NSMenu? {
         guard allowed() else { controller?.closeAll(); return nil }
         let menu = NSMenu()
-        func add(_ title: String, _ selector: Selector, checked: Bool = false) {
+        func add(_ title: String, _ selector: Selector, symbol: String, checked: Bool = false) {
             let item = NSMenuItem(title: title, action: selector, keyEquivalent: "")
+            item.image = ScreenshotSymbols.image(symbol)
             item.target = self; item.state = checked ? .on : .off; menu.addItem(item)
         }
-        add("复制图片    ⌘C", #selector(copyPicture))
-        add("另存为…", #selector(savePicture))
-        add("识别文字…", #selector(recognizeText))
-        add("识别并复制文字    ⇧C", #selector(copyRecognizedText))
-        add("翻译…（先核对识别文字）", #selector(translateText))
-        add("覆盖式图片翻译…", #selector(translatePicture))
-        add("识别二维码 / 条码…", #selector(recognizeCodes))
+        add("复制图片    ⌘C", #selector(copyPicture), symbol: ScreenshotSymbols.copy)
+        add("另存为…", #selector(savePicture), symbol: ScreenshotSymbols.save)
+        add("识别文字…", #selector(recognizeText), symbol: ScreenshotSymbols.ocr)
+        add("识别并复制文字    ⇧C", #selector(copyRecognizedText), symbol: ScreenshotSymbols.recognizedText)
+        add("翻译…（先核对识别文字）", #selector(translateText), symbol: ScreenshotSymbols.translate)
+        add("覆盖式图片翻译…", #selector(translatePicture), symbol: ScreenshotSymbols.translate)
+        add("识别二维码 / 条码…", #selector(recognizeCodes), symbol: ScreenshotSymbols.codes)
         menu.addItem(.separator())
-        add("锁定位置与大小", #selector(toggleLock), checked: locked)
-        add("鼠标穿透（从菜单栏“贴图”退出）", #selector(togglePassthrough), checked: window?.ignoresMouseEvents == true)
+        add("锁定位置与大小", #selector(toggleLock), symbol: ScreenshotSymbols.lock, checked: locked)
+        add("鼠标穿透（从菜单栏“贴图”退出）", #selector(togglePassthrough), symbol: ScreenshotSymbols.passthrough, checked: window?.ignoresMouseEvents == true)
         let opacity = NSMenuItem(title: "透明度 · ⌥滚轮", action: nil, keyEquivalent: "")
+        opacity.image = ScreenshotSymbols.image(ScreenshotSymbols.opacity)
         let values = NSMenu()
         for percent in [100, 80, 60, 40, 20] {
             let item = NSMenuItem(title: "\(percent)%", action: #selector(setOpacity(_:)), keyEquivalent: "")
@@ -345,8 +351,8 @@ private final class PinnedImagePanel: NSPanel {
         }
         opacity.submenu = values; menu.addItem(opacity)
         menu.addItem(.separator())
-        add("恢复最近关闭    ⌘⇧Z", #selector(restoreRecent))
-        add("关闭    Esc", #selector(closePicture))
+        add("恢复最近关闭    ⌘⇧Z", #selector(restoreRecent), symbol: ScreenshotSymbols.history)
+        add("关闭    Esc", #selector(closePicture), symbol: ScreenshotSymbols.cancel)
         return menu
     }
     @objc private func copyPicture() {

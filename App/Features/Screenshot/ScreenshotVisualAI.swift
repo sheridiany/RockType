@@ -169,7 +169,7 @@ import RoarkTPlatform
     }
     static func template(_ action: ScreenshotAIService.Action) -> OperationTemplate {
         OperationTemplate(id: action == .explain ? "screenshot-image-explanation" : "screenshot-image-" + action.rawValue,
-            name: title(action), icon: "photo", prompt: "请根据已完成的图片文字结果回答问题。你无法查看原图或原始 OCR；需要细节时请说明并请用户重新打开图片。")
+            name: title(action), icon: ScreenshotSymbols.photo, prompt: "请根据已完成的图片文字结果回答问题。你无法查看原图或原始 OCR；需要细节时请说明并请用户重新打开图片。")
     }
     func completedResult(origin: String) -> (OperationResult, OperationTemplate)? {
         guard phase == .done, allowed() else { return nil }

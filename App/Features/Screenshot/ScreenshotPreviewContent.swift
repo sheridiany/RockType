@@ -44,7 +44,7 @@ struct ScreenshotPreviewContent: View {
                         }
                     }
                     if let notice = session.notice, !session.busy {
-                        Label(notice, systemImage: session.ocrPhase == .failed ? "exclamationmark.circle" : "info.circle")
+                        ScreenshotLabel(notice, systemImage: session.ocrPhase == .failed ? ScreenshotSymbols.warning : ScreenshotSymbols.info)
                             .font(.system(size: 12)).foregroundStyle(session.ocrPhase == .failed ? p.warn : p.secondary)
                             .textSelection(.enabled)
                     }
@@ -67,7 +67,7 @@ struct ScreenshotPreviewContent: View {
     }
     private var header: some View {
         HStack(spacing: 10) {
-            Image(systemName: "text.viewfinder").font(.system(size: 21, weight: .medium)).foregroundStyle(p.accent)
+            ScreenshotIcon(systemName: ScreenshotSymbols.ocr).font(.system(size: 21, weight: .medium)).foregroundStyle(p.accent)
             VStack(alignment: .leading, spacing: 3) {
                 Text("图片与文字").font(.system(size: 15, weight: .semibold))
                 HStack(spacing: 6) {
@@ -77,8 +77,8 @@ struct ScreenshotPreviewContent: View {
             }
             Spacer(minLength: 8)
             Chip(text: "本机文字识别", tone: .ok)
-            Button { session.close() } label: { Image(systemName: "xmark") }
-                .buttonStyle(DesignButtonStyle(variant: .ghost)).accessibilityLabel("关闭图片与文字")
+            Button { session.close() } label: { ScreenshotIcon(systemName: ScreenshotSymbols.cancel) }
+                .buttonStyle(ScreenshotIconButtonStyle()).accessibilityLabel("关闭图片与文字")
         }
     }
     @ViewBuilder private var imagePreview: some View {
@@ -132,7 +132,7 @@ struct ScreenshotPreviewContent: View {
     private var controls: some View {
         HStack(spacing: 8) {
             Button { session.runOCR() } label: {
-                Label(session.ocrFinished ? "重新识别" : "识别文字", systemImage: "text.viewfinder")
+                ScreenshotLabel(session.ocrFinished ? "重新识别" : "识别文字", systemImage: ScreenshotSymbols.ocr)
             }.buttonStyle(DesignButtonStyle(variant: .primary)).disabled(session.busy)
                 .keyboardShortcut("r", modifiers: .command)
             Menu("语言") {
@@ -155,7 +155,7 @@ struct ScreenshotPreviewContent: View {
     private var sourceColumn: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Label("识别原文", systemImage: "text.alignleft").font(.system(size: 13, weight: .semibold))
+                ScreenshotLabel("识别原文", systemImage: ScreenshotSymbols.recognizedText).font(.system(size: 13, weight: .semibold))
                 Spacer()
                 Text("可编辑").font(.system(size: 11)).foregroundStyle(p.secondary)
             }
@@ -169,7 +169,7 @@ struct ScreenshotPreviewContent: View {
                 }
             }.frame(height: 210).background(p.canvas, in: RoundedRectangle(cornerRadius: 7))
             HStack {
-                Button("复制原文") { session.copyText(session.text) }.disabled(!canUseText)
+                Button("复制原文") { session.copyText(session.text) }.buttonStyle(DesignButtonStyle(variant: .primary)).disabled(!canUseText)
                 Button("仅文字翻译") { session.previewMode = .text; session.translate() }.disabled(!canUseText)
                 Spacer()
                 Text("\(session.text.count) 字").font(.system(size: 11)).monospacedDigit().foregroundStyle(p.secondary)
@@ -180,7 +180,7 @@ struct ScreenshotPreviewContent: View {
     private var translationColumn: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Label("译文", systemImage: "character.bubble").font(.system(size: 13, weight: .semibold))
+                ScreenshotLabel("译文", systemImage: ScreenshotSymbols.translate).font(.system(size: 13, weight: .semibold))
                 Spacer()
                 if session.translation.phase == .running { ProgressView().controlSize(.small) }
                 Text(session.translation.engine.isEmpty ? "按需翻译" : session.translation.engine)
@@ -188,7 +188,7 @@ struct ScreenshotPreviewContent: View {
             }
             ScrollView {
                 if session.translation.text.isEmpty {
-                    placeholder(icon: session.translation.phase == .failed ? "exclamationmark.bubble" : "character.book.closed",
+                    placeholder(icon: session.translation.phase == .failed ? ScreenshotSymbols.warning : ScreenshotSymbols.translate,
                         title: translationTitle, detail: session.translation.notice ?? "核对左侧文字后点击翻译，译文会显示在这里。")
                         .padding(.top, 24)
                 } else {
@@ -204,7 +204,7 @@ struct ScreenshotPreviewContent: View {
                     Button(session.translation.phase == .failed ? "重试翻译" : "翻译原文") { session.translate() }
                         .disabled(!canUseText)
                 }
-                Button("复制译文") { session.copyText(session.translation.text) }
+                Button("复制译文") { session.copyText(session.translation.text) }.buttonStyle(DesignButtonStyle(variant: .primary))
                     .disabled(session.translation.phase != .done)
                 Spacer(minLength: 0)
             }.buttonStyle(DesignButtonStyle(variant: .secondary))
@@ -213,12 +213,12 @@ struct ScreenshotPreviewContent: View {
     }
     private func placeholder(icon: String, title: String, detail: String) -> some View {
         VStack(spacing: 10) {
-            Image(systemName: icon).font(.system(size: 23)).foregroundStyle(p.tertiary)
+            ScreenshotIcon(systemName: icon).font(.system(size: 23)).foregroundStyle(p.tertiary)
             Text(title).font(.system(size: 13, weight: .medium)).foregroundStyle(p.foreground)
             Text(detail).font(.system(size: 12)).foregroundStyle(p.secondary).multilineTextAlignment(.center)
         }.padding(.horizontal, 20).frame(maxWidth: .infinity)
     }
-    private var sourceIcon: String { session.ocrPhase == .failed ? "exclamationmark.circle" : "text.viewfinder" }
+    private var sourceIcon: String { session.ocrPhase == .failed ? ScreenshotSymbols.warning : ScreenshotSymbols.ocr }
     private var sourceTitle: String {
         switch session.ocrPhase {
         case .running: "正在本机识别…"
@@ -283,16 +283,18 @@ struct ScreenshotPreviewContent: View {
                 }.disabled(session.busy)
             }
             Menu("图片操作") {
-                Button("复制图片") { session.copyImage() }
-                Button("另存为…") { session.save() }
-                Button("贴当前图片") { session.pinDisplayedImage() }
+                Button { session.copyImage() } label: { ScreenshotLabel("复制图片", systemImage: ScreenshotSymbols.copy) }
+                Button { session.save() } label: { ScreenshotLabel("另存为…", systemImage: ScreenshotSymbols.save) }
+                Button { session.pinDisplayedImage() } label: { ScreenshotLabel("贴当前图片", systemImage: ScreenshotSymbols.pin) }
                 Divider()
                 Button("解释图片…") { session.previewMode = .visual; session.prepareImage() }.disabled(session.visionModel == nil || session.busy)
-                Button("配置视觉模型…") { session.configureVision() }
+                Button { session.configureVision() } label: { ScreenshotLabel("配置视觉模型…", systemImage: ScreenshotSymbols.settings) }
                 Button("恢复图片 AI 每次发送确认") { session.restoreImageConfirmation() }
             }.fixedSize()
             Spacer()
             Text(session.previewMode == .visual ? "图片 AI 会发送图片与识别文字" : "本机识别 · 翻译仅发送文字").font(.system(size: 11)).foregroundStyle(p.secondary)
+            Button { session.copyImage() } label: { ScreenshotLabel("复制图片", systemImage: ScreenshotSymbols.copy) }
+                .buttonStyle(DesignButtonStyle(variant: .primary))
             Button("关闭") { session.close() }.buttonStyle(DesignButtonStyle(variant: .secondary))
         }
     }

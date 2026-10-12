@@ -9,7 +9,7 @@ struct ScrollCaptureView: View {
         let p = Tokens.palette(scheme)
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("滚动长截图", systemImage: "rectangle.expand.vertical").font(.system(size: 14, weight: .semibold))
+                ScreenshotLabel("滚动长截图", systemImage: ScreenshotSymbols.scroll).font(.system(size: 14, weight: .semibold))
                 Spacer()
                 Text("\(controller.height) px").font(.system(size: 11, design: .monospaced)).foregroundStyle(p.secondary)
             }
@@ -19,17 +19,17 @@ struct ScrollCaptureView: View {
                     Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: .fit).padding(6)
                         .accessibilityLabel("当前已拼接长截图缩略图")
                 } else if controller.phase == .preparing { ProgressView().controlSize(.small) }
-                else { Image(systemName: "rectangle.dashed").font(.system(size: 28)).foregroundStyle(p.secondary) }
+                else { ScreenshotIcon(systemName: ScreenshotSymbols.selection).font(.system(size: 28)).foregroundStyle(p.secondary) }
             }.frame(height: 220)
             Text(controller.message).font(.system(size: 12)).foregroundStyle(p.secondary).frame(height: 52, alignment: .topLeading)
             HStack {
-                Button("取消 Esc") { controller.cancel() }.buttonStyle(DesignButtonStyle(variant: .ghost))
+                Button { controller.cancel() } label: { ScreenshotLabel("取消 Esc", systemImage: ScreenshotSymbols.cancel) }.buttonStyle(DesignButtonStyle(variant: .ghost))
                 Spacer()
-                Button("完成并预览") { controller.finish() }.buttonStyle(DesignButtonStyle(variant: .primary)).disabled(!controller.canFinish)
+                Button { controller.finish() } label: { ScreenshotLabel("完成并预览", systemImage: ScreenshotSymbols.complete) }.buttonStyle(DesignButtonStyle(variant: .primary)).disabled(!controller.canFinish)
             }
         }.padding(16).frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading).foregroundStyle(p.foreground)
-            .background(p.card, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(p.line, lineWidth: 1))
+            .background(p.card, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(p.line, lineWidth: 1))
     }
 }
 @MainActor final class ScrollCaptureHUD {

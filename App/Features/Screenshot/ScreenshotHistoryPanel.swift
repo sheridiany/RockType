@@ -14,7 +14,7 @@ struct ScreenshotHistoryView: View {
         let p = Tokens.palette(scheme)
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Label("截图历史", systemImage: "clock.arrow.circlepath").font(.system(size: 18, weight: .semibold))
+                ScreenshotLabel("截图历史", systemImage: ScreenshotSymbols.history).font(.system(size: 18, weight: .semibold))
                 Spacer()
                 Text(history.onDisk ? "已开启磁盘保存" : "仅本次运行").font(.system(size: 12)).foregroundStyle(p.secondary)
                 Button("关闭", action: close).buttonStyle(DesignButtonStyle(variant: .ghost))
@@ -32,7 +32,7 @@ struct ScreenshotHistoryView: View {
             ScrollView {
                 if history.matches(query).isEmpty {
                     VStack(spacing: 10) {
-                        Image(systemName: "photo.stack").font(.system(size: 30))
+                        ScreenshotIcon(systemName: ScreenshotSymbols.stack).font(.system(size: 30))
                         Text(query.isEmpty ? "还没有截图历史" : "没有匹配的截图")
                         Text("完成截图后自动保留，并在本机识别文字供搜索。").font(.system(size: 12))
                     }.foregroundStyle(p.secondary).frame(maxWidth: .infinity).padding(.top, 90)
@@ -50,9 +50,9 @@ struct ScreenshotHistoryView: View {
                             HStack(spacing: 8) {
                                 Button("打开") { open(entry) }
                                 Menu("操作") {
-                                    Button("贴图") { action(entry, .pin) }
-                                    Button("复制图片") { action(entry, .copy) }
-                                    Button("另存为…") { action(entry, .save) }
+                                    Button { action(entry, .pin) } label: { ScreenshotLabel("贴图", systemImage: ScreenshotSymbols.pin) }
+                                    Button { action(entry, .copy) } label: { ScreenshotLabel("复制图片", systemImage: ScreenshotSymbols.copy) }
+                                    Button { action(entry, .save) } label: { ScreenshotLabel("另存为…", systemImage: ScreenshotSymbols.save) }
                                     Divider()
                                     Button("删除", role: .destructive) { history.remove(entry.id) }
                                 }

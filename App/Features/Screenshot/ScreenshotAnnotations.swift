@@ -20,16 +20,16 @@ enum ScreenshotTool: String, CaseIterable, Sendable {
     }
     var symbol: String {
         switch self {
-        case .rectangle: "rectangle.roundedtop"
-        case .ellipse: "oval"
-        case .arrow: "arrow.up.right"
-        case .line: "line.diagonal"
-        case .pen: "pencil.tip"
-        case .highlighter: "highlighter"
-        case .mosaic: "square.grid.3x3.fill"
-        case .text: "textformat"
-        case .number: "number.circle"
-        case .eraser: "eraser"
+        case .rectangle: ScreenshotSymbols.roundedRectangle
+        case .ellipse: ScreenshotSymbols.ellipse
+        case .arrow: ScreenshotSymbols.arrow
+        case .line: ScreenshotSymbols.line
+        case .pen: ScreenshotSymbols.pen
+        case .highlighter: ScreenshotSymbols.highlighter
+        case .mosaic: ScreenshotSymbols.mosaic
+        case .text: ScreenshotSymbols.text
+        case .number: ScreenshotSymbols.number
+        case .eraser: ScreenshotSymbols.eraser
         }
     }
     var shortcut: String { self == .eraser ? "E" : "⇧\(Self.allCases.firstIndex(of: self)! + 1)" }
