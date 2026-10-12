@@ -16,6 +16,12 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var templates = OperationTemplate.defaults
     public var shortcuts = ShortcutSettings()
     public var privacy = PrivacySettings()
+    /// Optional so settings written before feature switches existed still decode; nil means all enabled.
+    public var features: FeatureSettings? = nil
+    public var enabledFeatures: FeatureSettings {
+        get { features ?? FeatureSettings() }
+        set { features = newValue }
+    }
     public init() {}
     public static let defaults = AppSettings()
 }
@@ -199,4 +205,67 @@ public struct AITaskRoute: Codable, Equatable, Sendable {
     public var providerID: String
     public var model: String?
     public init(providerID: String, model: String? = nil) { self.providerID = providerID; self.model = model }
+}
+
+
+/// Per-feature master switches. Typing itself is never switchable.
+/// Every flag decodes independently so settings written before a flag existed keep it enabled.
+public struct FeatureSettings: Codable, Equatable, Sendable {
+    /// Hold Fn to dictate.
+    public var voice = true
+    /// Toolbar that appears after selecting text.
+    public var selectionToolbar = true
+    /// Global shortcuts that act on the current selection (translate, summarize, custom text actions).
+    public var selectionShortcuts = true
+    /// ⌃1 capture, annotation, OCR and image actions.
+    public var screenshot = true
+    /// In-memory screenshot history.
+    public var screenshotHistory = true
+    /// Pinned screenshots floating on screen.
+    public var pinning = true
+    /// ⌥Tab AI inside the input method.
+    public var inputMethodAI = true
+    public init() {}
+
+    public enum Feature: String, CaseIterable, Codable, Sendable {
+        case voice, selectionToolbar, selectionShortcuts, screenshot, screenshotHistory, pinning, inputMethodAI
+    }
+    public subscript(_ feature: Feature) -> Bool {
+        get {
+            switch feature {
+            case .voice: voice
+            case .selectionToolbar: selectionToolbar
+            case .selectionShortcuts: selectionShortcuts
+            case .screenshot: screenshot
+            case .screenshotHistory: screenshotHistory
+            case .pinning: pinning
+            case .inputMethodAI: inputMethodAI
+            }
+        }
+        set {
+            switch feature {
+            case .voice: voice = newValue
+            case .selectionToolbar: selectionToolbar = newValue
+            case .selectionShortcuts: selectionShortcuts = newValue
+            case .screenshot: screenshot = newValue
+            case .screenshotHistory: screenshotHistory = newValue
+            case .pinning: pinning = newValue
+            case .inputMethodAI: inputMethodAI = newValue
+            }
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case voice, selectionToolbar, selectionShortcuts, screenshot, screenshotHistory, pinning, inputMethodAI
+    }
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        voice = try values.decodeIfPresent(Bool.self, forKey: .voice) ?? true
+        selectionToolbar = try values.decodeIfPresent(Bool.self, forKey: .selectionToolbar) ?? true
+        selectionShortcuts = try values.decodeIfPresent(Bool.self, forKey: .selectionShortcuts) ?? true
+        screenshot = try values.decodeIfPresent(Bool.self, forKey: .screenshot) ?? true
+        screenshotHistory = try values.decodeIfPresent(Bool.self, forKey: .screenshotHistory) ?? true
+        pinning = try values.decodeIfPresent(Bool.self, forKey: .pinning) ?? true
+        inputMethodAI = try values.decodeIfPresent(Bool.self, forKey: .inputMethodAI) ?? true
+    }
 }
