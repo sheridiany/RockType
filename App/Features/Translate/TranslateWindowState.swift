@@ -6,6 +6,11 @@ import RoarkTCore
 /// Presentation-only translation editing. Transport, caches and text protection stay in the runner.
 @MainActor @Observable final class TranslateWindowState {
     let result: ResultWindowState
+    let sourceSpeaker: TextSpeaker
+    let translationSpeaker: TextSpeaker
+    private(set) var definition: WordLookup.Definition?
+    @ObservationIgnored private let wordLookup: WordLookup
+    @ObservationIgnored private var lookupTask: Task<Void, Never>?
     private(set) var original = ""
     private(set) var sourceLanguage = "auto"
     private(set) var targetLanguage = "zh-Hans"
@@ -43,11 +48,14 @@ import RoarkTCore
         return result.engine.isEmpty ? (engine == .ai ? "AI 翻译" : "Apple 优先") : result.engine
     }
     var originSnapshot: ContentSnapshot { snapshot }
-    var dictionaryInput: String { original } // T2/T8 slot; no lookup in phase A.
 
     init(request: OperationRequest, runner: any OperationRunner,
          settings: @escaping () -> AppSettings, rememberTarget: @escaping (String) -> Void = { _ in },
-         allowed: @escaping @MainActor () -> Bool, completed: @escaping @MainActor (OperationResult) -> Void = { _ in }, feedback: @escaping @MainActor (String) -> Void = { _ in }) {
+         allowed: @escaping @MainActor () -> Bool, completed: @escaping @MainActor (OperationResult) -> Void = { _ in }, feedback: @escaping @MainActor (String) -> Void = { _ in },
+         wordLookup: WordLookup? = nil, sourceSpeaker: TextSpeaker? = nil, translationSpeaker: TextSpeaker? = nil) {
+        self.wordLookup = wordLookup ?? WordLookup(allowed: allowed)
+        self.sourceSpeaker = sourceSpeaker ?? TextSpeaker(allowed: allowed)
+        self.translationSpeaker = translationSpeaker ?? TextSpeaker(allowed: allowed)
         self.settings = settings; self.rememberTarget = rememberTarget; self.allowed = allowed
         template = request.template; snapshot = request.session.snapshot; original = snapshot.text
         let configured = request.settings.translation.targetLanguage
@@ -56,11 +64,12 @@ import RoarkTCore
         result = ResultWindowState(runner: runner, readable: allowed, completed: completed, feedback: feedback)
         detectedLanguage = Self.detect(request.session.snapshot.text)
     }
-    func start(translate: Bool = true) { result.start(); if translate { submit() } }
-    func stop() { revision += 1; debounce?.cancel(); debounce = nil; result.stop(); original = ""; snapshot = .init(text: "", source: .init(pid: 0, applicationName: ""), method: .paste) }
+    func start(translate: Bool = true) { result.start(); if translate { submit() } else { refreshDefinition() } }
+    func stop() { clearLocalContent(); revision += 1; debounce?.cancel(); debounce = nil; result.stop(); original = ""; snapshot = .init(text: "", source: .init(pid: 0, applicationName: ""), method: .paste) }
 
     /// Marked text must not start a request. A committed edit cancels stale work immediately.
     func edit(_ text: String, composing: Bool = false) {
+        clearLocalContent()
         original = text; detectedLanguage = Self.detect(text); revision += 1; debounce?.cancel(); debounce = nil
         result.clear()
         guard allowed(), !composing, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
@@ -94,6 +103,8 @@ import RoarkTCore
         engine = .ai; detectedLanguage = Self.detect(original); rememberTarget(targetLanguage); submit()
     }
     func submit() {
+        clearLocalContent()
+        refreshDefinition()
         revision += 1; debounce?.cancel(); debounce = nil
         guard allowed() else { result.clear(); return }
         guard !original.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { result.clear(); return }
@@ -106,7 +117,26 @@ import RoarkTCore
         }
         result.show(.init(session: .init(snapshot: content), template: operation, settings: config))
     }
-    func ask() { result.ask(settings: settings()) }
-    func showCompleted(_ value: OperationResult) { result.show(value, template: template, settings: settings()) }
-    isolated deinit { debounce?.cancel() }
+    func ask() { translationSpeaker.stop(); result.ask(settings: settings()) }
+    func showCompleted(_ value: OperationResult) {
+        translationSpeaker.stop()
+        result.show(value, template: template, settings: settings())
+        refreshDefinition()
+    }
+    private func clearLocalContent() {
+        lookupTask?.cancel(); lookupTask = nil; definition = nil
+        sourceSpeaker.stop(); translationSpeaker.stop()
+    }
+    private func refreshDefinition() {
+        lookupTask?.cancel(); lookupTask = nil; definition = nil
+        guard allowed(), WordLookup.normalizedTerm(original) != nil else { return }
+        let text = original, lookup = wordLookup
+        lookupTask = Task { [weak self] in
+            let value = await lookup.lookup(text)
+            guard !Task.isCancelled, let self, self.allowed(), self.original == text else { return }
+            self.definition = value
+            self.lookupTask = nil
+        }
+    }
+    isolated deinit { debounce?.cancel(); lookupTask?.cancel(); sourceSpeaker.stop(); translationSpeaker.stop() }
 }
