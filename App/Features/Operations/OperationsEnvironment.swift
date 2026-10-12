@@ -6,6 +6,7 @@ import RoarkTPlatform
 @MainActor
 public final class OperationsEnvironment {
     public let recent = InMemoryRecentResults()
+    private let translationCache = TranslationResultCache()
     private struct WeakRunner { weak var value: DefaultOperationRunner? }
     private var runners: [WeakRunner] = []
     public init() {}
@@ -14,13 +15,13 @@ public final class OperationsEnvironment {
     public func clearCurrentContent() {
         runners.forEach { $0.value?.stop() }
         runners.removeAll { $0.value == nil }
-        recent.clear()
+        recent.clear(); translationCache.clear()
     }
     public func makeRunner(connectionID: String = "default", currentConnectionID: (@MainActor () -> String)? = nil) -> DefaultOperationRunner {
         let runner = DefaultOperationRunner(offline: TextTranslationXPCClient(),
             apiKey: { try Keychain().get(account: currentConnectionID?() ?? connectionID) ?? "" },
             isAllowed: { SecureInput.status() == .allowed },
-            providerKey: { try Keychain().get(account: $0) ?? "" })
+            providerKey: { try Keychain().get(account: $0) ?? "" }, translationCache: translationCache)
         runners.removeAll { $0.value == nil }; runners.append(WeakRunner(value: runner))
         return runner
     }
