@@ -25,10 +25,29 @@ final class AnnotationStyleTests: XCTestCase {
         XCTAssertEqual(ScreenshotTool.arrow.style(from: invalid).colorHex, "D84A2F")
         XCTAssertEqual(ScreenshotTool.text.style(from: invalid).width, 8)
     }
+    @MainActor func testProtectedCanvasRejectsStyleChanges() throws {
+        let context = try XCTUnwrap(CGContext(data: nil, width: 800, height: 600, bitsPerComponent: 8,
+            bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        let canvas = CaptureCanvas(frame: CGRect(x: 0, y: 0, width: 800, height: 600), image: try XCTUnwrap(context.makeImage()))
+        canvas.allowed = { false }
+        canvas.restore(CGRect(x: 20, y: 20, width: 500, height: 300)); canvas.selectTool(.arrow)
+        var cancellations = 0, changes = 0
+        canvas.onCancel = { cancellations += 1 }
+        canvas.onStyleChange = { _, _ in changes += 1 }
+        let toolbar = try XCTUnwrap(canvas.subviews.compactMap { $0 as? NSHostingView<CaptureToolbar> }.first)
+        let before = toolbar.rootView.style
+        toolbar.rootView.changeStyle(.init(colorHex: "388BEB", width: 9))
+        XCTAssertEqual(cancellations, 1)
+        XCTAssertEqual(changes, 0)
+        XCTAssertTrue(canvas.toolStyles.isEmpty)
+        XCTAssertEqual(toolbar.rootView.style, before)
+    }
+
     @MainActor func testToolbarStyleChangeIsRememberedOnlyForThatTool() throws {
         let context = try XCTUnwrap(CGContext(data: nil, width: 800, height: 600, bitsPerComponent: 8,
             bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
         let canvas = CaptureCanvas(frame: CGRect(x: 0, y: 0, width: 800, height: 600), image: try XCTUnwrap(context.makeImage()))
+        canvas.allowed = { true } // Synthetic pixels: isolate style behavior from live AX/Secure Input state.
         canvas.restore(CGRect(x: 20, y: 20, width: 500, height: 300))
         var changes: [ScreenshotTool] = []
         canvas.onStyleChange = { tool, _ in changes.append(tool) }
