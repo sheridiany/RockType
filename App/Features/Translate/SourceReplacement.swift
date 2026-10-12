@@ -208,12 +208,18 @@ struct SourceReplacementButton: View {
     let replacement: SourceReplacement
     let text: String
     var enabled = true
+    var compact = false
     let feedback: @MainActor (String) -> Void
     var body: some View {
+        Group {
+            if compact { actionButton.buttonStyle(TranslateIconButtonStyle()) }
+            else { actionButton.buttonStyle(.plain) }
+        }
+    }
+    private var actionButton: some View {
         Button { replacement.replace(text, feedback: feedback) } label: {
             Image(systemName: "arrow.turn.up.left")
         }
-        .buttonStyle(.plain)
         .disabled(!enabled || text.isEmpty || replacement.busy || replacement.unavailableReason != nil)
         .help(replacement.unavailableReason ?? "替换原文；发送粘贴后恢复剪贴板")
         .accessibilityLabel("替换原文")

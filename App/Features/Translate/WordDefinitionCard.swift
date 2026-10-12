@@ -3,12 +3,13 @@ import SwiftUI
 /// A compact, passive card. The owner controls lookup lifetime and whether it is present.
 struct WordDefinitionCard: View {
     let definition: WordLookup.Definition
+    var embedded = false
     @Environment(\.colorScheme) private var scheme
     @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         let p = Tokens.palette(scheme)
-        VStack(alignment: .leading, spacing: Tokens.Space.lg) {
+        VStack(alignment: .leading, spacing: embedded ? Tokens.Space.md : Tokens.Space.lg) {
             VStack(alignment: .leading, spacing: Tokens.Space.sm) {
                 HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.sm) {
                     Text(definition.term)
@@ -49,14 +50,14 @@ struct WordDefinitionCard: View {
                 }
             }
         }
-        .padding(Tokens.Space.lg)
+        .padding(embedded ? Tokens.Space.md : Tokens.Space.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
         .foregroundStyle(p.foreground)
         .background {
-            RoundedRectangle(cornerRadius: Tokens.Radius.window).fill(p.card)
-                .shadow(color: p.windowShadow.opacity(0.35), radius: Tokens.Shadow.secondaryRadius, y: Tokens.Shadow.secondaryY)
+            RoundedRectangle(cornerRadius: Tokens.Radius.window).fill(embedded ? p.canvas.opacity(0.45) : p.card)
+                .shadow(color: p.windowShadow.opacity(embedded ? 0 : 0.35), radius: Tokens.Shadow.secondaryRadius, y: Tokens.Shadow.secondaryY)
         }
         .overlay(RoundedRectangle(cornerRadius: Tokens.Radius.window)
-            .stroke(contrast == .increased ? p.secondary : p.line, lineWidth: Tokens.Size.hairline))
+            .stroke(contrast == .increased ? p.secondary : (embedded ? p.borderSubtle : p.line), lineWidth: Tokens.Size.hairline))
     }
 }

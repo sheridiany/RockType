@@ -6,11 +6,18 @@ struct SpeakButton: View {
     let speaker: TextSpeaker
     let text: String
     var language: String? = nil
+    var compact = false
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
+        Group {
+            if compact { playbackButton.buttonStyle(TranslateIconButtonStyle()) }
+            else { playbackButton.buttonStyle(DesignButtonStyle(variant: .ghost)) }
+        }
+    }
+    private var playbackButton: some View {
         let active = speaker.isActive
-        Button {
+        return Button {
             if speaker.isActive { speaker.stop() } else { speaker.speak(text, language: language) }
         } label: {
             Image(systemName: active ? "stop.fill" : speaker.notice == nil ? "speaker.wave.2" : "speaker.slash")
@@ -18,7 +25,6 @@ struct SpeakButton: View {
                 .frame(width: Tokens.Size.compactIcon, height: Tokens.Size.compactIcon)
                 .foregroundStyle(active ? Tokens.palette(scheme).accent : Tokens.palette(scheme).secondary)
         }
-        .buttonStyle(DesignButtonStyle(variant: .ghost))
         .disabled(!active && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         .help(active ? "停止朗读" : speaker.notice ?? "使用系统声音朗读")
         .accessibilityLabel(active ? "停止朗读" : "朗读文字")
